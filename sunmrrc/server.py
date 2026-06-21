@@ -2,7 +2,7 @@
 sunmrrc — SunSDR2 DX Mobile Web Control
 ========================================
 """
-import asyncio, json, logging, os, struct, sys, time, wave
+import asyncio, json, logging, os, re, struct, subprocess, sys, time, wave
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,8 +34,15 @@ audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
 
+# Recording state
+recording_active = False
+recording_buffer: list[bytes] = []  # raw Int16 PCM chunks at DSP_AUDIO_RATE
+recording_start_time = 0.0
+RECORDINGS_DIR = STATIC_DIR / "recordings"
+
 MIME = {".css":"text/css", ".js":"application/javascript", ".html":"text/html",
-        ".json":"application/json", ".png":"image/png", ".wasm":"application/wasm"}
+        ".json":"application/json", ".png":"image/png", ".wav":"audio/wav",
+        ".mp3":"audio/mpeg", ".wasm":"application/wasm"}
 
 
 # ── Lifespan ──────────────────────────────────────────────────────
@@ -70,9 +77,54 @@ def _load_tune_wav(path: Path) -> np.ndarray:
         return np.array([], dtype=np.float32)
 
 
+def _save_recording() -> str:
+    """Encode the recording buffer to MP3 via ffmpeg. Returns the filename."""
+    global recording_buffer, recording_start_time
+    if not recording_buffer:
+        return ""
+    # Concatenate all Int16 PCM chunks
+    raw = b''.join(recording_buffer)
+    recording_buffer = []
+    if len(raw) < 640:  # need at least ~20ms of audio
+        return ""
+    duration = len(raw) / (2 * DSP_AUDIO_RATE)  # 2 bytes per sample
+    ts = time.strftime("%Y%m%d_%H%M%S", time.localtime(recording_start_time))
+    filename = f"MRRC_{ts}_{duration:.0f}s.mp3"
+    filepath = RECORDINGS_DIR / filename
+
+    # Pipe raw Int16 PCM to ffmpeg → MP3
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error",
+             "-f", "s16le", "-ar", str(DSP_AUDIO_RATE), "-ac", "1",
+             "-i", "pipe:0",
+             "-c:a", "libmp3lame", "-b:a", "64k",
+             "-f", "mp3", "pipe:1"],
+            input=raw, capture_output=True, timeout=30)
+        if proc.returncode == 0 and proc.stdout:
+            filepath.write_bytes(proc.stdout)
+            out_size = len(proc.stdout)
+            logger.info(f"Recording saved: {filename} ({duration:.1f}s, {out_size} bytes MP3)")
+            return filename
+        else:
+            logger.error(f"ffmpeg MP3 encode failed: {proc.stderr.decode()[:200]}")
+            return ""
+    except FileNotFoundError:
+        logger.error("ffmpeg not found — cannot encode MP3")
+        return ""
+    except subprocess.TimeoutExpired:
+        logger.error("ffmpeg MP3 encode timed out")
+        return ""
+    except Exception as e:
+        logger.error(f"MP3 encode error: {e}")
+        return ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global dsp_proc
+    # Ensure recordings directory exists
+    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     ok = await radio.connect()
     logger.info(f"SunSDR2DX: {ok}")
     dsp_proc = StreamProcessor(
@@ -160,6 +212,58 @@ async def api_status():
             "spectrum": len(spectrum_clients),
         }
     }
+
+
+# ── Recordings API ─────────────────────────────────────────────────
+@app.get("/api/recordings")
+async def api_list_recordings():
+    """List saved recordings, newest first."""
+    files = []
+    if RECORDINGS_DIR.is_dir():
+        for f in sorted(RECORDINGS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+            sfx = f.suffix.lower()
+            if sfx in ('.mp3', '.wav'):
+                info = {
+                    "filename": f.name,
+                    "size": f.stat().st_size,
+                    "mtime": f.stat().st_mtime,
+                }
+                # Parse duration from filename "MRRC_YYYYMMDD_HHMMSS_Ns.mp3"
+                m = re.search(r'_(\d+)s\.\w+$', f.name)
+                if m:
+                    info["duration_s"] = float(m.group(1))
+                elif sfx == '.wav' and f.stat().st_size > 44:
+                    info["duration_s"] = round(f.stat().st_size / (2 * DSP_AUDIO_RATE), 1)
+                files.append(info)
+    return {"recordings": files}
+
+
+@app.get("/api/recordings/{filename}")
+async def api_download_recording(filename: str):
+    """Download a specific recording."""
+    # Sanitize filename to prevent path traversal
+    safe = Path(filename).name
+    fp = RECORDINGS_DIR / safe
+    if not fp.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    ext = fp.suffix.lower()
+    mime = "audio/mpeg" if ext == ".mp3" else "audio/wav"
+    return Response(
+        content=fp.read_bytes(),
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{safe}"'}
+    )
+
+
+@app.delete("/api/recordings/{filename}")
+async def api_delete_recording(filename: str):
+    """Delete a recording."""
+    safe = Path(filename).name
+    fp = RECORDINGS_DIR / safe
+    if fp.is_file():
+        fp.unlink()
+        return {"deleted": safe}
+    return JSONResponse({"error": "not found"}, status_code=404)
 
 
 # ── Static file serving (catch-all, must be LAST route) ───────────
@@ -357,6 +461,11 @@ async def _send_ctrl(msg: str):
 
 
 async def _broadcast_audio(pcm: bytes):
+    # Capture raw audio for recording (at native DSP_AUDIO_RATE, before resampling)
+    global recording_active, recording_buffer
+    if recording_active:
+        recording_buffer.append(pcm)
+
     if not audio_rx_clients: return
     arr = np.frombuffer(pcm, dtype='<i2').astype(np.float32)
     if len(arr) < 16: return
@@ -404,6 +513,7 @@ async def ws_spectrum(ws: WebSocket):
 # ── WebSocket: Control (/WSCTRX) ──────────────────────────────────
 @app.websocket("/WSCTRX")
 async def ws_ctrl(ws: WebSocket):
+    global recording_active, recording_buffer, recording_start_time
     await ws.accept(); ctrl_clients.add(ws)
     try:
         while True:
@@ -530,6 +640,24 @@ async def ws_ctrl(ws: WebSocket):
                 elif cmd in ("getWDSPStatus", "getWDSPNotches"):
                     status = dsp_proc.demodulator.get_wdsp_status() if dsp_proc else {}
                     await ws.send_text(f"wdspStatus:{json.dumps(status)}")
+                # ── Recording (server-side RX audio capture) ─────────
+                elif cmd == "startRecording":
+                    if not recording_active:
+                        recording_active = True
+                        recording_buffer = []
+                        recording_start_time = time.time()
+                        logger.info("Recording started")
+                    await _send_ctrl("recordingStatus:started")
+                elif cmd == "stopRecording":
+                    if recording_active:
+                        recording_active = False
+                        filename = _save_recording()
+                        if filename:
+                            logger.info(f"Recording stopped: {filename}")
+                            await _send_ctrl(f"recordingSaved:{filename}")
+                        else:
+                            logger.info("Recording stopped: no audio captured")
+                    await _send_ctrl("recordingStatus:stopped")
                 # ── Safety / misc ────────────────────────────────────
                 elif cmd == "s":
                     # TX-audio-channel backup PTT release: force RX.

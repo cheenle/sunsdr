@@ -20,6 +20,7 @@ py311_env/
 
 # ── Runtime data ───────────────────────────────────────────────────
 mem_channels.json
+sunmrrc/static/recordings/
 
 # ── OS ─────────────────────────────────────────────────────────────
 .DS_Store

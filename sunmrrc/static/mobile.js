@@ -4644,6 +4644,38 @@ function handleRecordingSaved(filename) {
     console.log('✅ 录音已保存:', filename);
     showRecordingStatus('已保存!', 'success');
     updateRecordingUI(false);
+    // Show download toast
+    showRecordingDownloadToast(filename);
+}
+
+/**
+ * Show a toast notification with download link for the saved recording.
+ */
+function showRecordingDownloadToast(filename) {
+    // Remove any existing recording toast
+    var existing = document.getElementById('recording-toast');
+    if (existing) existing.remove();
+
+    var downloadUrl = '/api/recordings/' + encodeURIComponent(filename);
+    var toast = document.createElement('div');
+    toast.id = 'recording-toast';
+    toast.style.cssText = 'position:fixed;bottom:120px;left:50%;transform:translateX(-50%);'
+        + 'background:#1e1e2a;color:#e0e0e0;padding:12px 20px;border-radius:12px;'
+        + 'z-index:10000;display:flex;align-items:center;gap:12px;'
+        + 'box-shadow:0 4px 20px rgba(0,0,0,0.5);font-size:14px;border:1px solid #333;';
+    toast.innerHTML = '<span style="color:#4caf50;">✅ 录音已保存</span>'
+        + '<span style="color:#888;font-size:12px;">' + filename + '</span>'
+        + '<a href="' + downloadUrl + '" download="' + filename + '" '
+        + 'style="background:#2196F3;color:white;padding:6px 14px;border-radius:8px;'
+        + 'text-decoration:none;font-size:13px;white-space:nowrap;">⬇ 下载</a>'
+        + '<button onclick="document.getElementById(\'recording-toast\').remove()" '
+        + 'style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px;">×</button>';
+    document.body.appendChild(toast);
+    // Auto-dismiss after 15 seconds
+    setTimeout(function() {
+        var t = document.getElementById('recording-toast');
+        if (t) t.remove();
+    }, 15000);
 }
 
 // 导出录音控制函数

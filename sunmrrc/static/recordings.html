@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Recordings — SunMRRC</title>
+    <link rel="stylesheet" href="mobile.css">
+    <style>
+        .recordings-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        .recordings-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #333;
+            margin-bottom: 16px;
+        }
+        .recordings-header h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #e0e0e0;
+        }
+        .back-btn {
+            background: #333;
+            color: #e0e0e0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .recording-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #1e1e2a;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #2a2a3a;
+        }
+        .recording-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .recording-name {
+            font-size: 14px;
+            color: #e0e0e0;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .recording-meta {
+            font-size: 12px;
+            color: #888;
+        }
+        .recording-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+        .action-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+        .btn-download {
+            background: #2196F3;
+            color: white;
+        }
+        .btn-delete {
+            background: #f44336;
+            color: white;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .refresh-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        .storage-info {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body style="background: var(--bg-primary, #0a0a0f); min-height: 100vh;">
+    <div class="recordings-container">
+        <div class="recordings-header">
+            <h1>📼 录音记录</h1>
+            <div style="display:flex;gap:8px;">
+                <button class="refresh-btn" onclick="loadRecordings()">🔄 刷新</button>
+                <a href="index.html" class="back-btn">← 返回</a>
+            </div>
+        </div>
+        <div id="recordings-list">
+            <div class="loading">加载中...</div>
+        </div>
+        <div class="storage-info" id="storage-info"></div>
+    </div>
+
+    <script>
+        async function loadRecordings() {
+            var list = document.getElementById('recordings-list');
+            list.innerHTML = '<div class="loading">加载中...</div>';
+
+            try {
+                var resp = await fetch('/api/recordings');
+                var data = await resp.json();
+                var recordings = data.recordings || [];
+
+                if (recordings.length === 0) {
+                    list.innerHTML = '<div class="empty-state">'
+                        + '<div class="icon">🎙️</div>'
+                        + '<p>还没有录音</p>'
+                        + '<p style="font-size:13px;">使用手机界面上的 REC 按钮开始录音</p>'
+                        + '</div>';
+                } else {
+                    var html = '';
+                    for (var i = 0; i < recordings.length; i++) {
+                        var r = recordings[i];
+                        var date = new Date(r.mtime * 1000);
+                        var dateStr = date.toLocaleString('zh-CN');
+                        var sizeStr = formatSize(r.size);
+                        html += '<div class="recording-item">'
+                            + '<div class="recording-info">'
+                            + '<div class="recording-name">' + escHtml(r.filename) + '</div>'
+                            + '<div class="recording-meta">' + dateStr + ' · ' + sizeStr + ' · ' + r.duration_s + 's</div>'
+                            + '</div>'
+                            + '<div class="recording-actions">'
+                            + '<a class="action-btn btn-download" href="/api/recordings/' + encodeURIComponent(r.filename) + '" download="' + escHtml(r.filename) + '">⬇ 下载</a>'
+                            + '<button class="action-btn btn-delete" onclick="deleteRecording(\'' + escJs(r.filename) + '\')">🗑</button>'
+                            + '</div>'
+                            + '</div>';
+                    }
+                    list.innerHTML = html;
+                }
+
+                // Update storage info
+                var totalSize = 0;
+                for (var j = 0; j < recordings.length; j++) {
+                    totalSize += recordings[j].size;
+                }
+                document.getElementById('storage-info').textContent =
+                    recordings.length + ' 个录音 · ' + formatSize(totalSize);
+            } catch (e) {
+                list.innerHTML = '<div class="empty-state">'
+                    + '<div class="icon">⚠️</div>'
+                    + '<p>加载失败</p><p style="font-size:13px;">' + escHtml(e.message) + '</p>'
+                    + '</div>';
+            }
+        }
+
+        async function deleteRecording(filename) {
+            if (!confirm('确定要删除 ' + filename + ' 吗？')) return;
+            try {
+                var resp = await fetch('/api/recordings/' + encodeURIComponent(filename), {
+                    method: 'DELETE'
+                });
+                if (resp.ok) {
+                    loadRecordings();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function escJs(s) {
+            return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        // Load on page ready
+        document.addEventListener('DOMContentLoaded', loadRecordings);
+    </script>
+</body>
+</html>
