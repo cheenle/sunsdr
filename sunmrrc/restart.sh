@@ -5,8 +5,8 @@
 # 然后后台重启，日志写到 sunmrrc/server.log。
 #
 # 用法:
-#   ./restart.sh            # 默认端口 8080
-#   WEB_PORT=8081 ./restart.sh
+#   ./restart.sh            # 默认端口 8889
+#   WEB_PORT=8889 ./restart.sh
 #   ./restart.sh -f         # 前台运行（Ctrl-C 退出，便于看实时日志）
 
 set -u

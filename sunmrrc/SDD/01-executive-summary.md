@@ -38,8 +38,8 @@ The current codebase is intentionally narrower than the older MRRC documentation
 | Capability | Boundary |
 |------------|----------|
 | TX voice | PTT and tune control exist, but microphone audio is not yet modulated into the SunSDR TX stream |
-| ATR-1000 | Frontend hooks and status placeholders exist, but no `/WSATR1000` server endpoint is implemented here |
-| Memory channels | Frontend service-oriented manager exists, but `/api/mem_channels` backend is absent |
+| ATR-1000 | Frontend hooks and status placeholders exist; `/WSATR1000` server endpoint exists as placeholder without hardware interface |
+| Memory channels | Frontend service-oriented manager exists; `/api/mem_channels` backend implemented (GET/POST with JSON persistence) |
 | CW/FT8/recordings | Navigation links exist, but target pages are not present in this repository snapshot |
 | Authentication | Cookie/callsign helpers exist; no server-side auth boundary is implemented in `server.py` |
 
@@ -61,4 +61,4 @@ Device Layer
 
 ## 1.6 Current Project Status
 
-As of 2026-06-21, the RX chain is healthy on local desktop and the mobile-side blocker was traced to iOS secure-context requirements. HTTPS/WSS startup is implemented and the expected mobile entry is `https://radio.vlsc.net:8080`. Control-network tuning and TX microphone modulation remain open engineering work.
+As of 2026-06-21, the RX chain is healthy on local desktop and the mobile-side blocker was traced to iOS secure-context requirements. HTTPS/WSS startup is implemented and the expected mobile entry is `https://radio.vlsc.net:8889`. Control-network tuning and TX microphone modulation remain open engineering work.

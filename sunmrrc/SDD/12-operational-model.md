@@ -4,7 +4,7 @@
 
 ```text
 Client Browser
-  -> https://radio.vlsc.net:8080
+  -> https://radio.vlsc.net:8889
   -> WSS endpoints on same host/port
 
 SunMRRC Host
@@ -25,7 +25,7 @@ SunSDR2 DX
 | Name | Default | Purpose |
 |------|---------|---------|
 | `DEVICE_HOST` | `192.168.16.200` | SunSDR2 DX control host for `SunSDR2DXClient` |
-| `WEB_PORT` | `8081` in `start.sh`, `8080` in `restart.sh`, `8081` in `server.py` default | Uvicorn listen port |
+| `WEB_PORT` | `8889` in `restart.sh` and `start.sh`, `8889` in `server.py` default | Uvicorn listen port |
 | `DISABLE_SSL` | unset | Set to `1` to force HTTP even when certs exist |
 | `BACKEND` | `direct` in scripts | Operational marker; current `server.py` uses direct client path |
 | `NO_PROXY` | `127.0.0.1,localhost` in `restart.sh` | Avoid local proxy interference |
@@ -34,8 +34,8 @@ SunSDR2 DX
 
 | Mode | Command | Behavior |
 |------|---------|----------|
-| Simple start | `./start.sh` | Activates `../venv` if present, defaults `WEB_PORT=8081`, execs `python3 server.py` |
-| Background restart | `./restart.sh` | Defaults `WEB_PORT=8080`, kills old cwd-matched server, clears listen port, writes `server.log` |
+| Simple start | `./start.sh` | Activates `../venv` if present, defaults `WEB_PORT=8889`, execs `python3 server.py` |
+| Background restart | `./restart.sh` | Defaults `WEB_PORT=8889`, kills old cwd-matched server, clears listen port, writes `server.log` |
 | Foreground restart | `./restart.sh -f` | Same cleanup, then runs foreground for live logs |
 | HTTP debug | `DISABLE_SSL=1 ./restart.sh` | Forces HTTP; not suitable for iOS mic/audio validation |
 
@@ -68,7 +68,7 @@ SunSDR2 DX
 |-----------|-------|
 | Verify HTTPS startup | Run `./restart.sh`; inspect `server.log` for HTTPS and TLS lines |
 | Verify radio connect | Inspect `server.log` for `SunSDR2DX: True` and `IQ: port 50002` |
-| Verify mobile entry | Open `https://radio.vlsc.net:8080` from iPhone with correct DNS/LAN routing |
+| Verify mobile entry | Open `https://radio.vlsc.net:8889` from iPhone with correct DNS/LAN routing |
 | Verify RX | Power on UI, confirm `/WSaudioRX` connected and audio/bitrate active |
 | Verify control | Change frequency/mode and confirm UI ack plus radio behavior |
 | Verify PTT safety | Press/release PTT; confirm `getPTT:false` after release |
@@ -86,7 +86,7 @@ SunSDR2 DX
 
 | Risk | Mitigation |
 |------|------------|
-| Wrong port default between scripts | Treat `restart.sh` as production path and set `WEB_PORT` explicitly when needed |
+| Wrong port default between scripts | Resolved — all scripts now default to `WEB_PORT=8889` |
 | iOS loaded over HTTP | Use HTTPS domain entry, not raw HTTP IP |
 | Fixed local UDP bind IP does not match host | Update `server.py` or host network before deployment |
 | Old JS cached | `sw.js` bypasses JS/HTML; version query strings also used on scripts |

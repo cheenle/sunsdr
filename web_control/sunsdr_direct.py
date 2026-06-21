@@ -251,7 +251,9 @@ class SunSDR2DXClient:
         self.antenna = max(1, min(3, port))
 
     async def set_tune(self, enable: bool):
-        pass
+        """Tune mode: engage PTT for carrier/wav playback through TX chain."""
+        self._tune_active = enable
+        await self.set_ptt(enable)
 
     # ── RIT / Split / Lock ─────────────────────────────────────
 

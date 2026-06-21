@@ -44,7 +44,7 @@
 | ID | Criterion | Verification |
 |----|-----------|--------------|
 | SC1 | HTTPS entry starts when certs exist | Server log shows `sunmrrc https://0.0.0.0:<port>` |
-| SC2 | iPhone can request microphone permissions | Page loaded from `https://radio.vlsc.net:8080` secure context |
+| SC2 | iPhone can request microphone permissions | Page loaded from `https://radio.vlsc.net:8889` secure context |
 | SC3 | RX audio arrives at browser | `/WSaudioRX` receives Int16 PCM frames and UI bitrate updates |
 | SC4 | Radio frequency control works | `setFreq:*` returns `getFreq:*` and radio state changes |
 | SC5 | DSP mode changes are local and explicit | `setMode:*` updates demodulator mode and returns `getMode:*` |
@@ -60,5 +60,5 @@
 | M3 | 2026-06 | Add HTTPS/WSS startup to satisfy iOS secure-context requirements |
 | M4 | 2026-06 | Consolidate WDSP controls into main mobile DSP panel |
 | M5 | Planned | Complete TX microphone modulation path |
-| M6 | Planned | Implement backend memory-channel API or remove frontend dependency |
+| M6 | 2026-06 | Implement backend memory-channel API (GET/POST `/api/mem_channels` with JSON persistence) |
 | M7 | Planned | Decide whether ATR/CW/FT8 links are in-scope for SunMRRC or should be removed |

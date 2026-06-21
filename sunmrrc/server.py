@@ -2,7 +2,7 @@
 sunmrrc — SunSDR2 DX Mobile Web Control
 ========================================
 """
-import asyncio, json, logging, os, struct, sys, time
+import asyncio, json, logging, os, struct, sys, time, wave
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,8 +11,8 @@ from sunsdr_direct import SunSDR2DXClient
 from dsp import StreamProcessor, SpectrumProcessor, AudioDemodulator, AUDIO_RATE as DSP_AUDIO_RATE
 import numpy as np
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response, HTMLResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import Response, HTMLResponse, JSONResponse
 import uvicorn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -20,7 +20,7 @@ logger = logging.getLogger("sunmrrc")
 
 # ── Config ────────────────────────────────────────────────────────
 DEVICE_HOST = os.environ.get("DEVICE_HOST", "192.168.16.200")
-WEB_PORT = int(os.environ.get("WEB_PORT", "8081"))
+WEB_PORT = int(os.environ.get("WEB_PORT", "8889"))
 STATIC_DIR = Path(__file__).parent / "static"
 
 # ── App ───────────────────────────────────────────────────────────
@@ -39,6 +39,37 @@ MIME = {".css":"text/css", ".js":"application/javascript", ".html":"text/html",
 
 
 # ── Lifespan ──────────────────────────────────────────────────────
+def _load_tune_wav(path: Path) -> np.ndarray:
+    """Load a mono WAV file and resample to DSP audio rate (15625 Hz).
+
+    Returns float32 array normalized to [-1, 1], or empty array on failure.
+    """
+    try:
+        with wave.open(str(path), 'rb') as wf:
+            nch = wf.getnchannels()
+            sw = wf.getsampwidth()
+            sr = wf.getframerate()
+            nf = wf.getnframes()
+            raw = wf.readframes(nf)
+        if sw == 2:
+            pcm = np.frombuffer(raw, dtype='<i2').astype(np.float32) / 32768.0
+        else:
+            logger.warning(f"Tune WAV: unsupported sample width {sw}")
+            return np.array([], dtype=np.float32)
+        if nch > 1:
+            pcm = pcm.reshape(-1, nch).mean(axis=1)  # downmix to mono
+        # Resample to DSP audio rate if needed
+        if sr != DSP_AUDIO_RATE:
+            out_len = int(len(pcm) * DSP_AUDIO_RATE / sr)
+            pcm = np.interp(np.linspace(0, len(pcm)-1, out_len),
+                            np.arange(len(pcm)), pcm).astype(np.float32)
+        logger.info(f"Tune WAV loaded: {len(pcm)} samples @ {DSP_AUDIO_RATE} Hz ({len(pcm)/DSP_AUDIO_RATE:.1f}s)")
+        return pcm
+    except Exception as e:
+        logger.warning(f"Tune WAV load failed: {e}")
+        return np.array([], dtype=np.float32)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global dsp_proc
@@ -47,6 +78,12 @@ async def lifespan(app: FastAPI):
     dsp_proc = StreamProcessor(
         spectrum=SpectrumProcessor(fft_size=2048),
         demodulator=AudioDemodulator())
+    # Pre-load tune.wav into modulator for tune-mode playback
+    tune_path = STATIC_DIR / "tune.wav"
+    if tune_path.is_file():
+        tune_data = _load_tune_wav(tune_path)
+        if len(tune_data) > 0 and dsp_proc.modulator:
+            dsp_proc.modulator.set_tune_wav(tune_data)
     asyncio.create_task(_heartbeat_task())
     asyncio.create_task(_process_iq_stream())
     yield
@@ -59,8 +96,73 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SunMRRC", lifespan=lifespan)
 
+# ── Memory channels persistence ───────────────────────────────────
+MEM_CHANNELS_FILE = Path(__file__).parent / "mem_channels.json"
 
-# ── Static file serving (catch-all, must be first route) ──────────
+def _load_mem_channels():
+    try:
+        if MEM_CHANNELS_FILE.is_file():
+            data = json.loads(MEM_CHANNELS_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("channels"), list):
+                return data
+    except Exception:
+        pass
+    return {"channels": [None] * 6}
+
+def _save_mem_channels(data):
+    try:
+        MEM_CHANNELS_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+# ── API routes (must be before static catch-all) ──────────────────
+@app.get("/api/mem_channels")
+async def api_get_mem_channels():
+    return _load_mem_channels()
+
+
+@app.post("/api/mem_channels")
+async def api_post_mem_channels(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    channels = payload.get("channels", [])
+    padded = []
+    for ch in (channels if isinstance(channels, list) else []):
+        if isinstance(ch, dict):
+            padded.append({
+                "freq": ch.get("freq", 0),
+                "mode": ch.get("mode", "USB"),
+                "label": str(ch.get("label", ""))[:32],
+            })
+        else:
+            padded.append(None)
+    while len(padded) < 6:
+        padded.append(None)
+    data = {"channels": padded[:6]}
+    _save_mem_channels(data)
+    return data
+
+
+@app.get("/api/status")
+async def api_status():
+    """Health-check endpoint."""
+    return {
+        "connected": radio.connected if radio else False,
+        "dsp": dsp_proc is not None,
+        "clients": {
+            "ctrl": len(ctrl_clients),
+            "audio_rx": len(audio_rx_clients),
+            "audio_tx": len(audio_tx_clients),
+            "spectrum": len(spectrum_clients),
+        }
+    }
+
+
+# ── Static file serving (catch-all, must be LAST route) ───────────
 @app.get("/{p:path}")
 async def serve_static(p: str):
     fp = STATIC_DIR / (p if p else "index.html")
@@ -105,13 +207,76 @@ async def _process_iq_stream():
     pkt_count = 0; iq_count = 0; spec_count = 0; audio_count = 0
     last_stats = time.monotonic()
     last_keepalive = time.monotonic()
+    TX_INTERVAL = 200.0 / 78125.0  # 0.00256 s per packet (390.6 Hz)
+    # TX state shared with _tx_pacer_thread
+    tx_thread = None
+    tx_thread_stop = False
+    tx_keepalive_due = False
+
+    def _build_one_tx_packet() -> bytes:
+        """Build a single 1210-byte TX IQ packet (header + payload)."""
+        global tx_counter
+        tx_counter += 0x10000
+        hdr = struct.pack("<HHIH", 0xFF32, 0xFFFD, tx_counter, 0x0102)
+        tx_data = dsp_proc.get_tx_iq() if dsp_proc else None
+        if tx_data is None:
+            tx_data = b'\x00' * 1200
+        if len(tx_data) < 1200:
+            tx_data = tx_data + b'\x00' * (1200 - len(tx_data))
+        elif len(tx_data) > 1200:
+            tx_data = tx_data[:1200]
+        return hdr + tx_data
+
+    def _tx_pacer_thread():
+        """Dedicated OS thread — uses time.sleep() for precise 2.56ms TX pacing."""
+        global tx_keepalive_due
+        next_pkt = time.monotonic()
+        while not tx_thread_stop and radio.connected:
+            try:
+                iq_sock.sendto(_build_one_tx_packet(), (DEVICE_HOST, 50002))
+            except Exception:
+                pass
+            # Precise interval via wall-clock tracking
+            next_pkt += TX_INTERVAL
+            now = time.monotonic()
+            delay = next_pkt - now
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                # Fell behind – reset clock
+                if delay < -0.005:
+                    tx_keepalive_due = True  # signal RX loop: we're behind, send keep-alive soon
+                next_pkt = now + TX_INTERVAL
+
+    import threading as th
+
     while radio.connected:
         if getattr(radio, '_ptt_active', False):
-            tx_counter += 0x10000
-            hdr = struct.pack("<HHIH", 0xFF32, 0xFFFD, tx_counter, 0x0102)
-            try: iq_sock.sendto(hdr + b'\x00'*1200, ("192.168.16.200", 50002))
-            except: pass
-            await asyncio.sleep(0.0022); loop_counter += 1; continue
+            # ── Start dedicated TX pacer thread ──────────────────
+            tx_thread_stop = False
+            tx_thread = th.Thread(target=_tx_pacer_thread, daemon=True)
+            tx_thread.start()
+            # Wait for PTT release
+            while getattr(radio, '_ptt_active', False) and radio.connected:
+                # Send 0xFFFE keep-alive during TX
+                now = time.monotonic()
+                if tx_keepalive_due or (now - last_keepalive >= 0.5):
+                    tx_counter += 0x10000
+                    ka_hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, tx_counter, 0x0001)
+                    try:
+                        iq_sock.sendto(ka_hdr + b'\x00' * 1200, (DEVICE_HOST, 50002))
+                    except Exception:
+                        pass
+                    last_keepalive = now
+                    tx_keepalive_due = False
+                await asyncio.sleep(0.1)
+            # PTT released – stop TX thread
+            tx_thread_stop = True
+            if tx_thread and tx_thread.is_alive():
+                tx_thread.join(timeout=1.0)
+            tx_thread = None
+            loop_counter += 1
+            continue
 
         # ── Send keep-alive / stream request even when idle ──────
         # The device needs periodic 0xFFFE packets to maintain the IQ stream.
@@ -185,7 +350,7 @@ async def _process_iq_stream():
 
 async def _send_ctrl(msg: str):
     dead = set()
-    for ws in ctrl_clients:
+    for ws in list(ctrl_clients):
         try: await ws.send_text(msg)
         except: dead.add(ws)
     ctrl_clients.difference_update(dead)
@@ -201,7 +366,7 @@ async def _broadcast_audio(pcm: bytes):
                     np.arange(len(arr)), arr).astype(np.int16)
     frame = out.tobytes()
     dead = set()
-    for ws in audio_rx_clients:
+    for ws in list(audio_rx_clients):
         try: await ws.send_bytes(frame)
         except: dead.add(ws)
     audio_rx_clients.difference_update(dead)
@@ -220,7 +385,7 @@ async def _broadcast_spectrum(spec):
     q = np.clip((arr + 120.0) * (255.0 / 120.0), 0, 255).astype(np.uint8)
     frame = q.tobytes()
     dead = set()
-    for ws in spectrum_clients:
+    for ws in list(spectrum_clients):
         try: await ws.send_bytes(frame)
         except: dead.add(ws)
     spectrum_clients.difference_update(dead)
@@ -275,7 +440,10 @@ async def ws_ctrl(ws: WebSocket):
                     if dsp_proc: dsp_proc.demodulator.set_ptt(tx)
                     await ws.send_text(f"getPTT:{str(tx).lower()}")
                 elif cmd == "tune":
-                    await radio.set_tune(val.lower() == "true")
+                    tune_on = val.lower() == "true"
+                    await radio.set_tune(tune_on)
+                    if dsp_proc and dsp_proc.modulator:
+                        dsp_proc.modulator.activate_tune(tune_on)
                 elif cmd == "setAFGain":
                     vol = float(val) / 100.0
                     if dsp_proc: dsp_proc.demodulator.set_volume(vol)

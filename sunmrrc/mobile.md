@@ -60,7 +60,7 @@
 ```bash
 cd sunmrrc
 /Users/cheenle/HAM/sunsdr/py311_env/bin/python server.py
-# 打开 http://localhost:8080
+# 打开 http://localhost:8889
 ```
 
 ## 依赖

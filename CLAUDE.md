@@ -80,7 +80,7 @@ Mode is DSP-owned (AD-003): `setMode` updates `AudioDemodulator`, hardware stays
 - **Packages**: `fastapi`, `uvicorn[standard]`, `numpy`, `scipy`, `websockets`
 - **Optional**: `libwdsp.dylib` at `/opt/homebrew/lib/` or `/usr/local/lib/` for NR2/AGC/noise blanker
 - **Network**: Must be on same subnet as SunSDR2 DX (192.168.16.0/24)
-- **TLS certs**: `sunmrrc/certs/fullchain.pem` + `radio.vlsc.net.key`
+- **TLS certs**: `sunmrrc/certs/fullchain.pem` + `sunmrrc/certs/radio.vlsc.net.key`
 
 Install missing packages:
 ```bash
@@ -125,5 +125,5 @@ See `SDD/08-architecture-decisions.md` for all 9 ADs with rationale. Key ones:
 
 - TX audio modulation not implemented (mic frames arrive but aren't consumed)
 - `/WSATR1000` accepts connections but doesn't interface with real tuner hardware
-- `/api/mem_channels` endpoint absent (memory manager uses client-side cache)
+- `/api/mem_channels` endpoint implemented (GET/POST with JSON persistence to `mem_channels.json`)
 - CW/FT8/Recordings page links in menu are dead

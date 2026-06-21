@@ -12,6 +12,7 @@ import math, logging, struct
 import numpy as np
 from collections import deque
 from dataclasses import dataclass
+from scipy.signal import hilbert
 
 logger = logging.getLogger(__name__)
 
@@ -350,17 +351,207 @@ class AudioDemodulator:
         return (np.clip(chunk * 32767, -32768, 32767).astype(np.int16)).tobytes()
 
 
+# ── TX IQ Modulator ────────────────────────────────────────────────
+
+class TXModulator:
+    """Audio → SSB IQ: upsampling + Hilbert analytic signal → 24-bit IQ packets.
+
+    Output matches the TX stream format (sub=0xFFFD, 200 samples × 6 bytes).
+    Supports USB, LSB, AM, FM, CW modes.
+    """
+
+    def __init__(self, audio_rate: int = AUDIO_RATE, iq_rate: int = IQ_SAMPLE_RATE):
+        self.audio_rate = audio_rate       # 15625 Hz
+        self.iq_rate = iq_rate             # 78125 Hz
+        self.mode = "USB"
+        self._audio_buf = np.array([], dtype=np.float32)
+        self._phase = 0.0
+        # Tune mode state
+        self._tune_active = False
+        self._tune_wav = np.array([], dtype=np.float32)  # pre-loaded WAV at audio_rate
+        self._tune_iq = np.array([], dtype=np.complex64)  # pre-computed IQ-rate analytic signal
+        self._tune_pos = 0
+
+    def set_mode(self, mode: str):
+        self.mode = mode.upper()
+
+    def set_tune_wav(self, data: np.ndarray):
+        """Pre-compute IQ-rate analytic signal for continuous TX playback.
+
+        Hilbert at audio rate → linear interpolation of complex analytic
+        signal to IQ rate.  No filter transients, phase-continuous.
+        The ~0.5% AM ripple from linear interpolation is at the audio
+        sample rate and inaudible after receiver filtering.
+        """
+        audio = np.asarray(data, dtype=np.float64)
+        if len(audio) < 40:
+            self._tune_iq = np.array([], dtype=np.complex64)
+            return
+
+        # Hilbert with internal zero-padding: transients land in the
+        # zero-padded region, leaving the original-length output clean.
+        pad = max(2048, len(audio) // 2)
+        analytic_audio = hilbert(audio, N=len(audio) + pad * 2)[:len(audio)]
+
+        # Upsample analytic signal to IQ rate (×5) via linear interpolation.
+        # Complex interpolation preserves the analytic property.
+        n_iq = len(audio) * 5
+        xp = np.linspace(0, 1, len(audio))
+        x  = np.linspace(0, 1, n_iq)
+        up_i = np.interp(x, xp, np.real(analytic_audio))
+        up_q = np.interp(x, xp, np.imag(analytic_audio))
+        iq = (up_i + 1j * up_q).astype(np.complex128)
+
+        # Cross-fade loop boundary: blend last ~200 samples into first ~200
+        # to eliminate the Hilbert edge discontinuity when looping.
+        fade_len = min(200, len(iq) // 10)
+        fade = np.linspace(0, 1, fade_len, dtype=np.float64)
+        iq[:fade_len] = iq[:fade_len] * (1 - fade) + iq[-fade_len:] * fade
+
+        # Normalize to 30% modulation
+        peak = np.max(np.abs(iq))
+        if peak > 1e-6:
+            iq = (iq / peak) * 0.3
+        self._tune_iq = iq.astype(np.complex64)
+        self._tune_pos = 0
+        self._tune_wav = np.asarray(data, dtype=np.float32)
+
+    def activate_tune(self, active: bool):
+        """Enable/disable tune playback mode."""
+        self._tune_active = active
+        if active:
+            self._tune_pos = 0
+            self._audio_buf = np.array([], dtype=np.float32)
+
+    def feed_audio(self, pcm: bytes, input_rate: int = 16000) -> bytes | None:
+        """Feed raw int16 PCM audio, returns 24-bit IQ packet bytes or None.
+
+        Audio is resampled from input_rate (default 16000) to self.audio_rate (15625).
+        """
+        audio = np.frombuffer(pcm, dtype='<i2').astype(np.float32) / 32768.0
+        self._audio_buf = np.concatenate([self._audio_buf, audio])
+
+        need = max(40, int(40 * input_rate / self.audio_rate))
+        if len(self._audio_buf) < need:
+            return None
+
+        chunk = self._audio_buf[:need]
+        self._audio_buf = self._audio_buf[need:]
+
+        if input_rate != self.audio_rate:
+            t_in = np.linspace(0, 1, len(chunk))
+            t_out = np.linspace(0, 1, 40)
+            chunk = np.interp(t_out, t_in, chunk).astype(np.float32)
+
+        iq = self._modulate(chunk)
+        if iq is None:
+            return None
+
+        return self._encode_iq(iq)
+
+    def get_tune_iq(self) -> bytes:
+        """Get next 200 IQ samples from the pre-computed continuous analytic signal.
+
+        Returns 1200 bytes (200 samples × 6 bytes 24-bit I/Q) or silence.
+        """
+        if len(self._tune_iq) == 0:
+            return b'\x00' * 1200
+
+        need = 200  # IQ samples per packet
+        total = len(self._tune_iq)
+        if self._tune_pos + need > total:
+            chunk = np.concatenate([
+                self._tune_iq[self._tune_pos:],
+                self._tune_iq[:need - (total - self._tune_pos)]
+            ])
+            self._tune_pos = need - (total - self._tune_pos)
+        else:
+            chunk = self._tune_iq[self._tune_pos:self._tune_pos + need]
+            self._tune_pos += need
+
+        return self._encode_iq(chunk)
+
+    def _modulate(self, audio: np.ndarray) -> np.ndarray | None:
+        """40 audio samples → 200 IQ samples via upsampling + Hilbert SSB."""
+        if len(audio) < 16:
+            return None
+
+        # Upsample: 40 audio samples → 200 IQ samples via linear interpolation
+        xp = np.linspace(0, 1, len(audio))
+        x  = np.linspace(0, 1, 200)
+        upsampled = np.interp(x, xp, audio).astype(np.float64)
+
+        mode = self.mode
+        if mode == "USB":
+            analytic = hilbert(upsampled)
+            iq = analytic.astype(np.complex128)
+        elif mode == "LSB":
+            analytic = hilbert(upsampled)
+            iq = np.conj(analytic).astype(np.complex128)
+        elif mode == "AM":
+            envelope = np.abs(upsampled)
+            envelope -= np.mean(envelope)
+            iq = envelope.astype(np.complex128)
+        elif mode in ("FM", "NFM"):
+            phase = np.cumsum(upsampled) * 0.3 / 200.0
+            iq = 0.3 * np.exp(1j * phase)
+        elif mode == "CW":
+            t = np.arange(200, dtype=np.float64) / self.iq_rate
+            iq = 0.3 * np.exp(2j * np.pi * 700.0 * t)
+        else:
+            return None
+
+        # Normalize to 30% modulation
+        peak = np.max(np.abs(iq))
+        if peak > 1e-6:
+            iq = (iq / peak) * 0.3
+
+        return iq.astype(np.complex64)
+
+    def _encode_iq(self, iq: np.ndarray) -> bytes:
+        """Pack 200 IQ samples as 24-bit LE bytes (1200 bytes total)."""
+        raw = b''
+        for i in range(len(iq)):
+            iv = int(np.clip(np.real(iq[i]) * 8388608, -8388608, 8388607))
+            qv = int(np.clip(np.imag(iq[i]) * 8388608, -8388608, 8388607))
+            raw += struct.pack('<i', iv)[:3]
+            raw += struct.pack('<i', qv)[:3]
+        return raw
+
+    def generate_test_tone(self, freq_hz: float = 700.0,
+                           duration_samples: int = 200) -> np.ndarray:
+        """Generate a pure-tone USB test signal (for TX verification)."""
+        t = np.arange(duration_samples) / self.iq_rate + self._phase
+        self._phase = t[-1] + 1.0 / self.iq_rate
+        iq = 0.3 * np.exp(2j * np.pi * freq_hz * t).astype(np.complex64)
+        return iq
+
+
+def encode_tx_iq_packet(iq: np.ndarray) -> bytes:
+    """Encode 200 IQ samples as 24-bit LE raw bytes for TX stream."""
+    raw = b''
+    for i in range(len(iq)):
+        iv = int(np.clip(np.real(iq[i]) * 8388608, -8388608, 8388607))
+        qv = int(np.clip(np.imag(iq[i]) * 8388608, -8388608, 8388607))
+        raw += struct.pack('<i', iv)[:3]
+        raw += struct.pack('<i', qv)[:3]
+    return raw
+
+
 # ── Stream Processor ───────────────────────────────────────────────
 
 @dataclass
 class StreamProcessor:
     spectrum: SpectrumProcessor
     demodulator: AudioDemodulator
+    modulator: TXModulator = None
     latest_spectrum: list | None = None
     audio_chunks: deque = None
 
     def __post_init__(self):
         self.audio_chunks = deque(maxlen=100)
+        if self.modulator is None:
+            self.modulator = TXModulator()
 
     def feed_iq(self, iq: np.ndarray):
         spec = self.spectrum.feed(iq)
@@ -374,3 +565,17 @@ class StreamProcessor:
 
     def get_audio(self) -> bytes | None:
         return self.audio_chunks.popleft() if self.audio_chunks else None
+
+    def get_tx_iq(self) -> bytes | None:
+        """Get one TX IQ packet. Priority: tune_WAV > test_tone > silence.
+
+        Returns 1200 bytes or None (caller should send silence if None).
+        """
+        if self.modulator is None:
+            return None
+        # 1. Tune mode: play pre-computed IQ signal
+        if self.modulator._tune_active and len(self.modulator._tune_iq) > 0:
+            return self.modulator.get_tune_iq()
+        # 2. Fallback: test tone for verification
+        iq = self.modulator.generate_test_tone(700.0, 200)
+        return encode_tx_iq_packet(iq)

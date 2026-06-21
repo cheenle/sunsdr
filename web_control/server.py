@@ -80,11 +80,15 @@ async def _process_iq():
     pkt_count = 0
 
     while radio.connected:
-        # PTT active?
+        # PTT active → send modulated TX IQ (not silence!)
         if getattr(radio, '_ptt_active', False):
             tx_ctr += 0x10000
+            # Get TX IQ data from modulator (700Hz test tone)
+            tx_data = dsp.get_tx_iq() if dsp else b'\x00' * 1200
+            if len(tx_data) < 1200:
+                tx_data = tx_data + b'\x00' * (1200 - len(tx_data))
             hdr = struct.pack("<HHIH", 0xFF32, 0xFFFD, tx_ctr, 0x0102)
-            try: iq_sock.sendto(hdr + b'\x00'*1200, (DEVICE_HOST, 50002))
+            try: iq_sock.sendto(hdr + tx_data[:1200], (DEVICE_HOST, 50002))
             except: pass
             await asyncio.sleep(0.0022)
             continue

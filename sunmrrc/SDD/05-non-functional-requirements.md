@@ -25,7 +25,7 @@
 
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
-| NFR-020 | Secure browser origin | HTTPS/WSS in mobile production | Critical | Load `https://radio.vlsc.net:8080` |
+| NFR-020 | Secure browser origin | HTTPS/WSS in mobile production | Critical | Load `https://radio.vlsc.net:8889` |
 | NFR-021 | TLS material isolation | Key files are referenced, never embedded in docs/code output | Critical | Repository and SDD review |
 | NFR-022 | HTTP fallback control | HTTP only when certs missing or `DISABLE_SSL=1` | High | Startup log review |
 | NFR-023 | Auth boundary clarity | No false claim of server-side auth | High | `server.py` route review |

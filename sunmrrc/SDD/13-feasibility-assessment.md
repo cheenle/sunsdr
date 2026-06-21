@@ -16,7 +16,7 @@
 
 | ID | Risk | Probability | Impact | Mitigation |
 |----|------|-------------|--------|------------|
-| R1 | iOS opens HTTP URL instead of HTTPS | Medium | High | Use `https://radio.vlsc.net:8080`; server logs warn on HTTP fallback |
+| R1 | iOS opens HTTP URL instead of HTTPS | Medium | High | Use `https://radio.vlsc.net:8889`; server logs warn on HTTP fallback |
 | R2 | Fixed local UDP bind IP differs from deployment host | Medium | High | Parameterize or update `server.py` network constants |
 | R3 | TX release command lost or socket half-open | Low-Medium | Critical | ACK retry, backup `s:`, watchdog, forced backend RX handler |
 | R4 | WDSP library unavailable | Medium | Medium | Optional initialization; built-in DSP path still runs |
@@ -44,7 +44,7 @@
 | I1 | iPhone HTTP secure-context failure | Critical | Resolved in code | HTTPS/WSS auto-start and frontend WSS selection |
 | I2 | TX microphone modulation missing | High | Open | Design and implement server-side TX audio/IQ path |
 | I3 | `/WSATR1000` missing | Medium | Open | Implement backend or disable frontend hooks |
-| I4 | `/api/mem_channels` missing | Medium | Open | Add FastAPI routes and persistence |
+| I4 | `/api/mem_channels` missing | Medium | Resolved | Added FastAPI routes with JSON persistence |
 | I5 | Fixed SunSDR local IPs | Medium | Open | Move bind/device stream addresses to env/config |
 | I6 | Duplicate `/WSspectrum` route declaration in `server.py` | Low | Resolved in code | Removed the duplicate `ws_spectrum` handler; one declaration remains |
 | I7 | `start.sh` still prints HTTP URL even when TLS may be used | Low | Present | Align script message with server TLS behavior |

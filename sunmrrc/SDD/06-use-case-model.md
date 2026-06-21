@@ -17,7 +17,7 @@
 |-------|-------------|
 | Goal | Open the mobile UI and establish control/RX/spectrum channels |
 | Preconditions | Server running, TLS configured for mobile production, browser can reach host |
-| Basic Flow | User opens `https://radio.vlsc.net:8080`; server returns `index.html`; scripts load; user powers on; frontend opens `/WSCTRX`, `/WSaudioRX`, `/WSaudioTX`; `Waterfall_start()` opens `/WSspectrum` (and `Waterfall_stop()` closes it on power off) |
+| Basic Flow | User opens `https://radio.vlsc.net:8889`; server returns `index.html`; scripts load; user powers on; frontend opens `/WSCTRX`, `/WSaudioRX`, `/WSaudioTX`; `Waterfall_start()` opens `/WSspectrum` (and `Waterfall_stop()` closes it on power off) |
 | Postconditions | UI displays connection state, frequency/mode, network bitrate/latency when available |
 | Exceptions | HTTP on iOS prevents reliable mic/audio permissions; stale service-worker cache must not serve old JS/HTML |
 
@@ -78,7 +78,7 @@
 | ID | Use Case | Current State |
 |----|----------|---------------|
 | UC-007 | Browser microphone TX audio | Frontend capture/EQ/Opus code exists; server modulation path open |
-| UC-008 | Memory channel save/recall | Frontend manager exists; backend `/api/mem_channels` missing |
+| UC-008 | Memory channel save/recall | Frontend manager exists; backend `/api/mem_channels` implemented |
 | UC-009 | ATR-1000 power/SWR | UI placeholders/hooks exist; backend `/WSATR1000` missing |
 | UC-010 | CW decoder | Menu link exists; page absent in current repository snapshot |
 | UC-011 | FT8 automation | Menu link exists; page absent in current repository snapshot |

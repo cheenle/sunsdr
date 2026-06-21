@@ -41,7 +41,7 @@ Runtime facts are derived from the current repository, primarily `server.py`, `s
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy |
 | Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API |
 | Transport | HTTPS/WSS for browser, UDP for SunSDR2 DX |
-| Default Production Entry | `https://radio.vlsc.net:8080` |
+| Default Production Entry | `https://radio.vlsc.net:8889` |
 
 ## System at a Glance
 
@@ -68,6 +68,6 @@ SunSDR2 DX hardware
 | WDSP controls | Implemented when libwdsp is available | NR2, NB, ANF, NF, AGC, notches |
 | HTTPS/WSS | Implemented | Auto-detects `certs/fullchain.pem` and `certs/radio.vlsc.net.key`; `DISABLE_SSL=1` for HTTP |
 | TX microphone modulation | Not yet complete | `/WSaudioTX` receives frames, but server-side audio modulation into SunSDR TX path is unresolved |
-| ATR-1000 | Frontend legacy/planned | UI references exist; backend `/WSATR1000` is not implemented in this codebase |
+| ATR-1000 | Frontend legacy/planned | UI references exist; backend `/WSATR1000` endpoint exists as placeholder (accepts connections, no hardware interface yet) |
 | CW/FT8/recordings links | Frontend legacy/planned | Menu links exist; corresponding pages are not present in this repository snapshot |
-| Memory channel API | Frontend planned | `MemoryChannelManager` expects `/api/mem_channels`; backend endpoint is not present |
+| Memory channel API | Implemented | `MemoryChannelManager` uses `/api/mem_channels` (GET/POST with JSON persistence) |
