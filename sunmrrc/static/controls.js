@@ -795,6 +795,7 @@ function wsControlTRXcrtol( msg ){
 	else if(action == "getMode"){showTRXmode(param);}
 	else if(action == "getSignalLevel"){SignalLevel=param;drawRXSmeter();}
 	else if(action == "getPTT"){updatePTTStatus(param === "true");}
+	else if(action == "getTXTelem"){updateTXTelem(param);}
 	else if(action == "pttError"){
 		console.error('🚨 PTT 错误:', param);
 		if(param === "tot_timeout"){
@@ -1249,6 +1250,56 @@ function initRXSmeter(){
 
 var SP = {0:0,1:25,2:37,3:50,4:62,5:73,6:84,7:98,8:110,9:123,5:134,10:144,15:154,20:164,25:172,30:180,35:191,40:202,45:212,50:221,55:231,60:240};
 var RIG_LEVEL_STRENGTH = {0:-54,1:-48,2:-42,3:-36,4:-30,5:-24,6:-18,7:-12,8:-6,9:0,5:5,10:10,15:15,20:20,25:25,30:30,35:35,40:40,45:45,50:50,55:55,60:60};
+// TX 功率/SWR/温度 遥测显示 (数据来自设备 0x1F00 包, 见 PROTOCOL.md §17.6)
+// 消息格式: getTXTelem:<watts>,<swr>,<temp_c>,<raw>
+// 真实设备 TX 遥测 (后端 getTXTelem:watts,swr,temp,raw — 来自 0x1F00 包)。
+// 复用 S 表下方已有的功率/SWR 显示区 (atr-power / atr-swr / bars)，
+// 该区原本由未实现的 ATR-1000 调谐器代理驱动，这里用真实数据接管。
+function updateTXTelem(param) {
+	if (!param) return;
+	var p = param.split(",");
+	var watts = parseFloat(p[0]);
+	var swr   = parseFloat(p[1]);
+	var temp  = parseFloat(p[2]);
+	if (isNaN(watts)) return;
+
+	var powerEl = document.getElementById("atr-power");
+	var swrEl   = document.getElementById("atr-swr");
+	var powerBar = document.getElementById("atr-power-bar");
+	var swrBar   = document.getElementById("atr-swr-bar");
+	var tempEl  = document.getElementById("txtelem-temp");
+	var MAX_W = 15;  // 显示满量程 (SunSDR2 DX 标称 ~10-15W)
+
+	if (powerEl) {
+		powerEl.textContent = watts.toFixed(1);
+		var hi = watts > MAX_W * 0.8, mid = watts > MAX_W * 0.5;
+		powerEl.style.color = hi ? '#f44336' : mid ? '#ff9800' : '#3b82f6';
+	}
+	if (powerBar) {
+		var pct = Math.max(0, Math.min(100, watts / MAX_W * 100));
+		powerBar.style.width = pct + "%";
+		powerBar.style.background = watts > MAX_W * 0.8 ? '#f44336'
+			: watts > MAX_W * 0.5 ? '#ff9800' : '#3b82f6';
+	}
+	if (swrEl && !isNaN(swr)) {
+		swrEl.textContent = swr.toFixed(2);
+		swrEl.style.color = swr >= 3 ? '#f44336' : swr >= 2 ? '#ff9800' : '#3b82f6';
+	}
+	if (swrBar && !isNaN(swr)) {
+		// SWR 1..3 映射到 0..100%
+		var spct = Math.max(0, Math.min(100, (swr - 1) / 2 * 100));
+		swrBar.style.width = spct + "%";
+		swrBar.style.background = swr >= 3 ? '#f44336' : swr >= 2 ? '#ff9800' : '#3b82f6';
+	}
+	if (tempEl) tempEl.textContent = (isNaN(temp) ? "--" : temp.toFixed(0) + "°C");
+
+	// 与 ATR1000 模块状态同步，避免它在 PTT 释放时把真实读数清掉
+	if (typeof ATR1000 !== 'undefined') {
+		ATR1000.lastPower = Math.round(watts);
+		ATR1000.lastSWR = isNaN(swr) ? 1.0 : Math.round(swr * 100) / 100;
+	}
+}
+
 function drawRXSmeter() {
 	// 添加canvas元素存在性检查以兼容移动端
 	if (!canvasRXsmeter || !ctxRXsmeter) {

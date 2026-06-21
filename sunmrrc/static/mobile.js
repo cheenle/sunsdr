@@ -1804,9 +1804,9 @@ function updateSMeter(level) {
     if (sValue > 19) sValue = 19;
 
     // 加权历史(指数平滑)：让指针稳定，不随每帧跳动。
-    // 上升快、下降慢 —— 信号来了立刻顶上去，消失后缓慢回落，读数更易读。
+    // 上升平缓、下降很慢 —— 5 Hz 后端推送 + 强平滑，指针稳如模拟表头
     var prev = (typeof mobileState.currentSMeter === 'number') ? mobileState.currentSMeter : sValue;
-    var alpha = (sValue > prev) ? 0.5 : 0.15;   // 攻击 0.5 / 释放 0.15
+    var alpha = (sValue > prev) ? 0.12 : 0.04;   // 攻击 0.12 / 释放 0.04
     sValue = prev + (sValue - prev) * alpha;
 
     mobileState.currentSMeter = sValue;
@@ -2018,9 +2018,10 @@ function updateSMeterFromAudio() {
     // 计算S值
     const sValue = calculateSMeterValue(dbFS);
     
-    // 平滑处理
-    mobileState.currentSMeter = mobileState.currentSMeter || sValue;
-    mobileState.currentSMeter = mobileState.currentSMeter * 0.5 + sValue * 0.5;
+    // 强指数平滑: 5 Hz 更新频率 + 大时间常数，模拟机械表头惯性
+    var prev = mobileState.currentSMeter || sValue;
+    var alpha = (sValue > prev) ? 0.10 : 0.03;
+    mobileState.currentSMeter = prev + (sValue - prev) * alpha;
     
     // 更新显示
     drawSMeterSDR(mobileState.currentSMeter);
@@ -2032,7 +2033,7 @@ function startSMeterMonitoring() {
     
     mobileState.sMeterInterval = setInterval(() => {
         updateSMeterFromAudio();
-    }, 100); // 100ms更新一次
+    }, 200); // 200ms更新一次，匹配后端5Hz推送
 }
 
 // 停止S表监测

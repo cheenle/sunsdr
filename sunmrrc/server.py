@@ -8,7 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "web_control"))
 from sunsdr_direct import SunSDR2DXClient
-from dsp import StreamProcessor, SpectrumProcessor, AudioDemodulator, AUDIO_RATE as DSP_AUDIO_RATE
+from dsp import (StreamProcessor, SpectrumProcessor, AudioDemodulator,
+                 AUDIO_RATE as DSP_AUDIO_RATE,
+                 TX_PACKET_INTERVAL_S, TX_SETTLE_PACKETS)
 import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -27,6 +29,30 @@ STATIC_DIR = Path(__file__).parent / "static"
 radio = SunSDR2DXClient(host=DEVICE_HOST)
 dsp_proc: StreamProcessor | None = None
 iq_sock = None; tx_counter = 0x04B0; loop_counter = 0
+import threading as _threading
+tx_counter_lock = _threading.Lock()  # 0xFFFD pacer thread + 0xFFFE keep-alive race on tx_counter
+
+
+def _next_tx_counter() -> int:
+    """Atomically advance the shared TX packet counter (+0x10000) and return it.
+
+    The 0xFFFD pacer thread and the 0xFFFE keep-alive (async loop) both increment
+    tx_counter; without this lock a lost +=  yields a non-monotonic / duplicate
+    counter, which the device drops → TX buffer underrun → periodic popping.
+    """
+    global tx_counter
+    with tx_counter_lock:
+        tx_counter += 0x10000
+        return tx_counter
+_last_smeter_ts = 0.0  # throttle S-meter broadcasts
+_last_telem_ts = 0.0   # throttle TX power/SWR telemetry broadcasts
+
+# TX telemetry calibration (0x1F00 off14 u16 → watts). Verified idle baseline
+# ~9, ~49 into a dummy load (~5 W per TXPLAN). Linear approximation; calibrate
+# TELEM_PWR_SCALE against a known TX power for accuracy.
+TELEM_PWR_BASELINE = 9.0
+TELEM_PWR_SCALE = 0.125   # (49-9)*0.125 ≈ 5.0 W
+_last_tlm_ts = 0.0     # throttle TX power/SWR telemetry broadcasts
 
 # Connected clients
 ctrl_clients: set[WebSocket] = set()
@@ -298,7 +324,7 @@ async def _heartbeat_task():
 
 
 async def _process_iq_stream():
-    global iq_sock, tx_counter, loop_counter
+    global iq_sock, tx_counter, loop_counter, _last_smeter_ts, _last_telem_ts
     import socket as sm
 
     iq_sock = sm.socket(sm.AF_INET, sm.SOCK_DGRAM)
@@ -311,17 +337,24 @@ async def _process_iq_stream():
     pkt_count = 0; iq_count = 0; spec_count = 0; audio_count = 0
     last_stats = time.monotonic()
     last_keepalive = time.monotonic()
-    TX_INTERVAL = 200.0 / 78125.0  # 0.00256 s per packet (390.6 Hz)
+    # Verified from device/captures/sunsdr_sdr_tx.pcap: ExpertSDR3 paces TX IQ
+    # at 5.12 ms/packet (39063 Hz, RX/2), NOT 2.56 ms. See PROTOCOL.md §17.
+    TX_INTERVAL = TX_PACKET_INTERVAL_S  # 0.00512 s per packet (195.3 Hz)
     # TX state shared with _tx_pacer_thread
     tx_thread = None
     tx_thread_stop = False
     tx_keepalive_due = False
 
-    def _build_one_tx_packet() -> bytes:
-        """Build a single 1210-byte TX IQ packet (header + payload)."""
-        global tx_counter
-        tx_counter += 0x10000
-        hdr = struct.pack("<HHIH", 0xFF32, 0xFFFD, tx_counter, 0x0102)
+    def _build_one_tx_packet(silent: bool = False) -> bytes:
+        """Build a single 1210-byte TX IQ packet (header + payload).
+
+        silent=True emits a zero-IQ packet (used for the PA/relay settling
+        pad after PTT assert; see PROTOCOL.md §17.5).
+        """
+        ctr = _next_tx_counter()
+        hdr = struct.pack("<HHIH", 0xFF32, 0xFFFD, ctr, 0x0102)
+        if silent:
+            return hdr + b'\x00' * 1200
         tx_data = dsp_proc.get_tx_iq() if dsp_proc else None
         if tx_data is None:
             tx_data = b'\x00' * 1200
@@ -332,12 +365,20 @@ async def _process_iq_stream():
         return hdr + tx_data
 
     def _tx_pacer_thread():
-        """Dedicated OS thread — uses time.sleep() for precise 2.56ms TX pacing."""
+        """Dedicated OS thread — time.sleep()-paced TX at TX_PACKET_INTERVAL_S
+        (5.12ms, 195 pkt/s, 39063 Hz) to match ExpertSDR3. See PROTOCOL.md §17."""
         global tx_keepalive_due
         next_pkt = time.monotonic()
+        # PA/relay settling pad: zero-IQ packets before real modulation.
+        settle_left = TX_SETTLE_PACKETS
         while not tx_thread_stop and radio.connected:
             try:
-                iq_sock.sendto(_build_one_tx_packet(), (DEVICE_HOST, 50002))
+                if settle_left > 0:
+                    iq_sock.sendto(_build_one_tx_packet(silent=True),
+                                   (DEVICE_HOST, 50002))
+                    settle_left -= 1
+                else:
+                    iq_sock.sendto(_build_one_tx_packet(), (DEVICE_HOST, 50002))
             except Exception:
                 pass
             # Precise interval via wall-clock tracking
@@ -357,6 +398,11 @@ async def _process_iq_stream():
     while radio.connected:
         if getattr(radio, '_ptt_active', False):
             # ── Start dedicated TX pacer thread ──────────────────
+            # Re-arm the amplitude ramp so the first packets of real IQ fade
+            # in 0→1, removing the hard step out of the zero-IQ settling pad.
+            if dsp_proc and dsp_proc.modulator:
+                dsp_proc.modulator.reset_tx_ramp()
+                dsp_proc.modulator.reset_mic()  # drop any stale pre-PTT mic queue
             tx_thread_stop = False
             tx_thread = th.Thread(target=_tx_pacer_thread, daemon=True)
             tx_thread.start()
@@ -365,8 +411,8 @@ async def _process_iq_stream():
                 # Send 0xFFFE keep-alive during TX
                 now = time.monotonic()
                 if tx_keepalive_due or (now - last_keepalive >= 0.5):
-                    tx_counter += 0x10000
-                    ka_hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, tx_counter, 0x0001)
+                    ctr = _next_tx_counter()
+                    ka_hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, ctr, 0x0001)
                     try:
                         iq_sock.sendto(ka_hdr + b'\x00' * 1200, (DEVICE_HOST, 50002))
                     except Exception:
@@ -387,8 +433,8 @@ async def _process_iq_stream():
         # Without this, the stream may stall and never start after boot.
         now = time.monotonic()
         if now - last_keepalive >= 0.5:
-            tx_counter += 0x10000
-            hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, tx_counter, 0x0001)
+            ctr = _next_tx_counter()
+            hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, ctr, 0x0001)
             try: iq_sock.sendto(hdr + b'\x00'*1200, ("192.168.16.200", 50002))
             except: pass
             last_keepalive = now
@@ -428,9 +474,14 @@ async def _process_iq_stream():
             if dsp_proc.latest_spectrum is not None:
                 spec_count += 1
                 spec = dsp_proc.latest_spectrum; dsp_proc.latest_spectrum = None
-                p90 = float(np.percentile(spec, 90))
-                s9 = max(0, min(60, int(9 + (p90 + 73)/6)))
-                asyncio.ensure_future(_send_ctrl(f"getSignalLevel:{s9}"))
+                # Throttle S-meter broadcasts to ~5 Hz (every 200ms)
+                global _last_smeter_ts
+                now_spec = time.monotonic()
+                if now_spec - _last_smeter_ts >= 0.2:
+                    _last_smeter_ts = now_spec
+                    p90 = float(np.percentile(spec, 90))
+                    s9 = max(0, min(60, int(9 + (p90 + 73)/6)))
+                    asyncio.ensure_future(_send_ctrl(f"getSignalLevel:{s9}"))
                 if spectrum_clients:
                     asyncio.ensure_future(_broadcast_spectrum(spec))
 
@@ -438,6 +489,28 @@ async def _process_iq_stream():
             if audio:
                 audio_count += 1
                 asyncio.ensure_future(_broadcast_audio(audio))
+
+        elif sub == 0x1F00 and len(raw) >= 30:
+            # Device→PC TX telemetry (verified from sunsdr_sdr_tx.pcap; see
+            # PROTOCOL.md §17.6 and device/data/tx_analysis.json):
+            #   off14 u16  = forward-power reading (idle ~9, TX into dummy ~49)
+            #   off18 f32  = PA temperature °C (~45)
+            #   off26 f32  = SWR (1.0 = matched)
+            now_t = time.monotonic()
+            if now_t - _last_telem_ts >= 0.2:  # throttle to ~5 Hz
+                _last_telem_ts = now_t
+                try:
+                    pwr_raw = struct.unpack_from('<H', raw, 14)[0]
+                    temp_c = struct.unpack_from('<f', raw, 18)[0]
+                    swr = struct.unpack_from('<f', raw, 26)[0]
+                    # Approximate watts: linear above an idle baseline.
+                    # Tunable — calibrate against a known TX power.
+                    watts = max(0.0, (pwr_raw - TELEM_PWR_BASELINE)
+                                * TELEM_PWR_SCALE)
+                    asyncio.ensure_future(_send_ctrl(
+                        f"getTXTelem:{watts:.1f},{swr:.2f},{temp_c:.0f},{pwr_raw}"))
+                except Exception:
+                    pass
 
         # Periodic stats (doesn't send keep-alive — that's handled above)
         now = time.monotonic()
@@ -542,7 +615,10 @@ async def ws_ctrl(ws: WebSocket):
                     # SDR: mode is purely a software DSP concept.
                     # Hardware gets no mode command — the IQ stream is mode-agnostic.
                     mode = val.upper()
-                    if dsp_proc: dsp_proc.demodulator.set_mode(mode)
+                    if dsp_proc:
+                        dsp_proc.demodulator.set_mode(mode)
+                        if dsp_proc.modulator:
+                            dsp_proc.modulator.set_mode(mode)  # TX uses same mode
                     await ws.send_text(f"getMode:{mode}")
                 elif cmd == "setPTT":
                     tx = val.lower() == "true"
@@ -712,11 +788,42 @@ async def ws_audio_rx(ws: WebSocket):
 
 @app.websocket("/WSaudioTX")
 async def ws_audio_tx(ws: WebSocket):
+    """Mic uplink. Binary frames are Int16 PCM (16 kHz mono, 320 samples/frame
+    from controls.js); text frames are control: 'm:rate,encode,...' settings,
+    's:' stop. PCM is fed to the TX modulator, which queues 0xFFFD IQ packets
+    for the TX pacer thread to drain. See PROTOCOL.md §17 and CLAUDE.md AD-009."""
     await ws.accept(); audio_tx_clients.add(ws)
+    tx_rate = 16000  # mic sample rate from controls.js (48k downsampled ×3)
     try:
-        while True: await ws.receive()
-    except (WebSocketDisconnect, RuntimeError): pass
-    finally: audio_tx_clients.discard(ws)
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            data = msg.get("bytes")
+            if data is not None:
+                # Int16 PCM mic frame → modulator queue
+                if dsp_proc and dsp_proc.modulator and getattr(radio, '_ptt_active', False):
+                    try:
+                        dsp_proc.modulator.feed_audio(data, input_rate=tx_rate)
+                    except Exception:
+                        pass
+                continue
+            text = msg.get("text")
+            if text:
+                if text.startswith("m:"):
+                    # settings: rate,encode,opusRate,opusFrameDur
+                    try:
+                        parts = text[2:].split(",")
+                        tx_rate = int(float(parts[0]))
+                    except Exception:
+                        pass
+                elif text.startswith("s:"):
+                    if dsp_proc and dsp_proc.modulator:
+                        dsp_proc.modulator.reset_mic()
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        audio_tx_clients.discard(ws)
 
 
 # ── Main ──────────────────────────────────────────────────────────

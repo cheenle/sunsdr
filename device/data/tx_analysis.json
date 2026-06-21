@@ -1,0 +1,168 @@
+{
+  "capture": "sunsdr_sdr_tx.pcap",
+  "stream_50002_histogram": {
+    "0xfffd flags=0x102 len=1210": 1106,
+    "0xfffe flags=0x1 len=1210": 1360
+  },
+  "tx_iq_packet": {
+    "total_fffd": 1106,
+    "total_fffe": 1360,
+    "header_hex_example": "32fffdffb00400000201000000000000",
+    "counter_first8": [
+      "0x4b0",
+      "0x104b0",
+      "0x204b0",
+      "0x304b0",
+      "0x404b0",
+      "0x504b0",
+      "0x604b0",
+      "0x704b0"
+    ],
+    "counter_diffs": [
+      "0x10000",
+      "0x10000",
+      "0x10000",
+      "0x10000",
+      "0x10000",
+      "0x10000",
+      "0x10000"
+    ],
+    "counter_step": "0x10000 (shared between 0xFFFD and 0xFFFE)",
+    "global_peak_iq": 0.09189
+  },
+  "bursts": [
+    {
+      "start_rel_s": 0.0,
+      "duration_s": 1.6533,
+      "n_packets": 324,
+      "rate_pkt_s": 196.0,
+      "implied_tx_sr_hz": 39194.0,
+      "iv_ms": {
+        "median": 5.121,
+        "mean": 5.119,
+        "min": 4.076,
+        "max": 5.74
+      },
+      "iq_level": {
+        "peak_max": 0.00184,
+        "rms_max": 0.00092,
+        "rms_mean": 4e-05
+      },
+      "leading_silence_pkts": 16
+    },
+    {
+      "start_rel_s": 3.1536,
+      "duration_s": 1.9969,
+      "n_packets": 391,
+      "rate_pkt_s": 195.8,
+      "implied_tx_sr_hz": 39160.0,
+      "iv_ms": {
+        "median": 5.12,
+        "mean": 5.12,
+        "min": 4.891,
+        "max": 5.31
+      },
+      "iq_level": {
+        "peak_max": 0.08562,
+        "rms_max": 0.04332,
+        "rms_mean": 0.00238
+      },
+      "leading_silence_pkts": 17
+    },
+    {
+      "start_rel_s": 6.6579,
+      "duration_s": 1.9967,
+      "n_packets": 391,
+      "rate_pkt_s": 195.8,
+      "implied_tx_sr_hz": 39164.0,
+      "iv_ms": {
+        "median": 5.118,
+        "mean": 5.12,
+        "min": 4.01,
+        "max": 6.23
+      },
+      "iq_level": {
+        "peak_max": 0.09189,
+        "rms_max": 0.03203,
+        "rms_mean": 0.00099
+      },
+      "leading_silence_pkts": 17
+    }
+  ],
+  "ctrl_50001_histogram": {
+    "0x5a": 10,
+    "0x18": 56,
+    "0xe": 1,
+    "0x10": 1,
+    "0x5f": 3,
+    "0x1d": 1,
+    "0x1b": 1,
+    "0x5": 1,
+    "0x19": 1,
+    "0x21": 1,
+    "0x1": 1,
+    "0x9": 2,
+    "0x8": 4,
+    "0x20": 12,
+    "0x6": 6,
+    "0x17": 1,
+    "0x1e": 1,
+    "0x15": 1,
+    "0x7": 1,
+    "0x24": 1,
+    "0x26": 1,
+    "0x27": 1,
+    "0x22": 1
+  },
+  "ptt_events": [
+    {
+      "ts": 1781935575.066,
+      "payload": "00000000",
+      "trailing": 1
+    },
+    {
+      "ts": 1781935576.729,
+      "payload": "00000000",
+      "trailing": 0
+    },
+    {
+      "ts": 1781935578.22,
+      "payload": "00000000",
+      "trailing": 1
+    },
+    {
+      "ts": 1781935580.226,
+      "payload": "00000000",
+      "trailing": 0
+    },
+    {
+      "ts": 1781935581.725,
+      "payload": "00000000",
+      "trailing": 1
+    },
+    {
+      "ts": 1781935583.73,
+      "payload": "00000000",
+      "trailing": 0
+    }
+  ],
+  "interleave_sample": "EEEEEEEEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+  "findings": {
+    "tx_sample_rate_hz": 39063,
+    "tx_sample_rate_note": "VERIFIED: TX runs at 39063 Hz (5^7/2 = RX/2), the LOWEST of the manual's 39;78;156;312 kHz rates. Median inter-frame interval 5.12ms across all 3 PTT bursts (195.8 pkt/s x 200 samples). Counter resets to 0x04B0 each PTT.",
+    "rx_sample_rate_hz": 78125,
+    "rx_sample_rate_note": "RX (0xFFFE device->PC) measured 2.554ms/pkt = 78125 Hz.",
+    "tx_iq_peak_observed": 0.09189,
+    "code_assumed_peak": 0.3,
+    "code_assumed_tx_interval_ms": 2.56,
+    "code_assumed_tx_interval_note": "server.py TX_INTERVAL=200/78125=2.56ms is 2x TOO FAST. Device consumes TX IQ at 5.12ms/pkt. Overfeeding likely causes buffer overrun / periodic popping.",
+    "note_level": "ExpertSDR3 TX IQ peaks ~0.09, NOT 0.3. 0.3 likely triggers hardware ALC/clipping (popping artifacts).",
+    "note_silence": "~17 leading zero packets (~87ms @ 5.12ms/pkt) before audio = PA/relay settling time.",
+    "note_counter": "Stream-packet bytes 4-7 are a packet COUNTER, not data_len as documented for control packets.",
+    "note_interleave": "~8x 0xFFFD per 1x 0xFFFE keep-alive during TX.",
+    "device_telemetry": {
+      "sub_0x1F00": "34B device->PC, floats e.g. 45.0 @off18, 1.0 @off26 - likely PA temp/fwd power/SWR",
+      "sub_0x1F01": "22B device->PC, mostly zeros - TX status flags"
+    }
+  }
+}

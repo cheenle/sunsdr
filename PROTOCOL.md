@@ -23,6 +23,9 @@
 14. [Full Lifecycle](#14-full-lifecycle)
 15. [Data Rate Summary](#15-data-rate-summary)
 16. [Hex Reference](#16-hex-reference)
+17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
+17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
+17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
 
 ---
 
@@ -1061,6 +1064,167 @@ Field:  magic─┘ cmd─┘ data_len──┘ index──────┘ res�
 
 ---
 
+## 17. TX Chain — Verified from Capture
+
+> Source: `device/captures/sunsdr_sdr_tx.pcap` (genuine ExpertSDR3 1.0.17 transmit, 3 PTT
+> bursts). Analysis scripts and machine-readable results in `device/`. These findings
+> **correct and extend** the earlier sections, which were reverse-engineered before a TX
+> capture was available.
+
+### 17.1 What flows during transmit
+
+When PTT is engaged, the PC streams two packet types to **device port 50002**, interleaved
+roughly **8× `0xFFFD` per 1× `0xFFFE`**:
+
+| Sub-type | Flags | Role | Payload |
+|----------|-------|------|---------|
+| `0xFFFD` | `0x0102` | **TX IQ data** — the modulated signal to transmit | 200 samples × 6 bytes (24-bit I/Q) |
+| `0xFFFE` | `0x0001` | RX stream keep-alive (continues during TX) | 1200 zero bytes |
+
+Observed wire counts in the reference: 1106 × `0xFFFD`, 1360 × `0xFFFE`.
+
+PTT itself is the `0x0006` control packet on port 50001 (trailing `1`=TX / `0`=RX), exactly
+as documented in §5.2 — confirmed by 6 PTT events in the capture (3 on/off pairs).
+
+### 17.2 TX IQ packet format (16-byte header + 1200-byte payload)
+
+```
+Byte offset | Size   | Field    | Value
+0-1         | uint16 | magic    | 0xFF32
+2-3         | uint16 | sub_type | 0xFFFD
+4-7         | uint32 | counter  | starts 0x04B0, += 0x10000 per packet
+8-9         | uint16 | flags    | 0x0102
+10..1209    | bytes  | IQ       | 200 × (3B I + 3B Q), signed 24-bit LE
+```
+
+Example header (wire): `32 ff fd ff b0 04 13 00 02 01`
+
+> **Doc correction:** §16.5 and the generic anatomy (§16.6) label bytes 4-7 as `data_len`.
+> That is true for **control** packets on 50001, but in **stream** packets on 50002 (both
+> `0xFFFD` and `0xFFFE`) bytes 4-7 are a **packet counter**. The counter is shared between
+> the two sub-types and **resets to `0x04B0` at each PTT press**.
+
+### 17.3 TX sample rate = 39,063 Hz (RX/2) — corrected
+
+Measured median inter-frame interval is **5.12 ms** across all three bursts (195.8 pkt/s ×
+200 samples):
+
+| Burst | Packets | Duration | Rate | Implied SR |
+|-------|---------|----------|------|-----------|
+| 1 | 324 | 1.653 s | 196.0 pkt/s | 39.2 kHz |
+| 2 | 391 | 1.997 s | 195.8 pkt/s | 39.2 kHz |
+| 3 | 391 | 1.997 s | 195.8 pkt/s | 39.2 kHz |
+
+**TX IQ runs at 39,063 Hz (5⁷ / 2)** — the *lowest* of the manual's `39; 78; 156; 312 kHz`
+rate options. RX in the same capture runs at the full **78,125 Hz** (2.554 ms/pkt). TX is
+therefore **half** the RX rate.
+
+> **Doc/code correction:** `server.py` uses `TX_INTERVAL = 200/78125 = 2.56 ms`, which is
+> **2× too fast**. The device consumes TX IQ at 5.12 ms/pkt. Overfeeding overruns the
+> hardware TX buffer and is a likely source of the periodic popping noted in `TXPLAN.md`.
+> ExpertSDR3 sends in tight bursts (sub-ms gaps) but the *average* rate holds at 195.8 pkt/s.
+
+### 17.4 TX IQ level — peak ≈ 0.09, NOT 0.3
+
+The genuine ExpertSDR3 TX IQ never exceeds **|IQ| ≈ 0.092** (24-bit normalized), with
+per-packet RMS in the **0.002–0.043** range:
+
+```
+global peak |IQ| = 0.09189
+per-packet RMS   = 0.002 … 0.043 (mean 0.024 in the voice burst)
+```
+
+> **Code correction:** `dsp.py` normalizes modulation to `0.3` (`_modulate`,
+> `generate_test_tone`, `set_tune_wav`). This is **~3.3× hotter** than the reference and,
+> with the manual confirming **ALC is not yet supported in firmware**, there is no hardware
+> limiter to catch it — the over-level IQ clips in the PA. Target a **~0.09 peak** and scale
+> below that with a drive control. This is the single largest divergence between the code
+> and the capture.
+
+### 17.5 Leading silence before audio (PA settling)
+
+Each burst begins with **~17 all-zero IQ packets (~87 ms @ 5.12 ms/pkt)** before any audio
+energy appears. This matches the manual (§ "开始发射前…使用单独的EXT_CTRL控制该继电器…可调
+PTT切换延迟"): the PA / antenna relay needs settling time. Implementation should send a short
+run of zero-IQ packets immediately after asserting PTT, before feeding real modulation.
+
+### 17.6 Device → PC TX telemetry (newly observed)
+
+During TX the device sends two small telemetry sub-types back on 50002 (836 + 7 frames in
+the reference):
+
+| Sub-type | Size | Content |
+|----------|------|---------|
+| `0x1F00` | 34 B | Floats (e.g. `45.0`, `1.0`) — likely PA temp / forward power / SWR |
+| `0x1F01` | 22 B | Mostly zeros — TX status flags |
+
+These are not yet decoded or consumed by the server. They are the probable source for a real
+TX power/SWR meter. Captured for future analysis in `device/`.
+
+### 17.7 Corrected summary vs. current code
+
+| Item | Code (`dsp.py`/`server.py`) | Capture (verified) | Action |
+|------|------------------------------|--------------------|--------|
+| TX IQ peak level | `0.3` | `~0.09` | Lower to ~0.09 + drive scaling |
+| TX packet interval | `2.56 ms` (200/78125) | `5.12 ms` (200/39063) | Halve the rate |
+| TX sample rate | implied 78,125 Hz | **39,063 Hz** | Modulate at 39 kHz |
+| Pre-TX silence | none | ~17 zero packets | Send settling pad after PTT |
+| Stream byte 4-7 | n/a | packet counter (resets per PTT) | (doc) |
+
+### 17.8 TX chain — as implemented
+
+The voice/tune TX path is now wired end-to-end. Summary of the implementation
+(`web_control/dsp.py`, `sunmrrc/server.py`, `sunmrrc/static/`):
+
+**Packet counter (race fixed).** `tx_counter` is shared between the 0xFFFD pacer
+thread and the 0xFFFE keep-alive sender. A `threading.Lock` (`_next_tx_counter()`)
+now guards every `+= 0x10000`, keeping the on-wire counter strictly monotonic as
+the capture requires (a lost non-atomic `+=` previously produced duplicate/
+non-monotonic counters → device packet drop → periodic clicking).
+
+**TX IQ level.** `TX_IQ_PEAK` is the single normalization ceiling for all paths
+(voice, tune, test tone). Set to `0.4` for bench testing — the capture reference
+is `~0.09`, so this is ~4.4× hotter; with firmware ALC unsupported it can clip in
+the PA, so recalibrate against measured output power. `drive` (0..1) scales below
+this ceiling.
+
+**Start ramp.** `TX_RAMP_SAMPLES` (~1 packet) applies a linear 0→1 amplitude ramp
+to the first IQ after PTT, removing the hard step from the zero-IQ settling pad
+to full-amplitude modulation (a click source). Re-armed via `reset_tx_ramp()` on
+each PTT assert.
+
+**Mic uplink (PCM, not Opus).** The frontend `#encode` checkbox now defaults
+**unchecked** → mic frames are sent as raw **Int16 PCM** (16 kHz mono, 320
+samples/frame), matching the backend (AD-004; Opus was removed). With `encode`
+checked the browser sent compressed Opus bytes that the backend decoded as PCM →
+garbage audio. `/WSaudioTX` feeds binary frames to `TXModulator.feed_audio()`.
+
+**Mic → IQ pipeline** (`feed_audio`, all phase-continuous across bursty 20 ms WS
+frames):
+1. Continuous fractional resampler `input_rate → 15625 Hz` with a persistent
+   input buffer + fractional read cursor (no per-frame reset → no seam buzz).
+2. Overlap-save Hilbert SSB in 80-sample (5.12 ms) hops, keeping
+   `TX_HILBERT_MARGIN` (256) samples of context each side so block edges stay
+   clean. `USB = hilbert`, `LSB = conj(hilbert)`, `AM = envelope`.
+3. Fixed-gain scale `TX_IQ_PEAK × drive` (no per-chunk peak normalization, so
+   voice dynamics survive) → 200 IQ samples → one 0xFFFD packet.
+
+**Jitter buffer.** `get_mic_iq()` stays un-primed (emits silence) until
+`TX_MIC_PRIME_PKTS` (12) packets accumulate, then drains one per pacer tick. On
+underflow it re-primes, so a momentary WS stall yields continuous silence rather
+than a mid-stream gap (click). The bursty 20 ms producer vs. 5.12 ms consumer
+mismatch was the primary clicking cause.
+
+**TX priority.** `get_tx_iq()`: tune WAV → live mic → silence. There is
+intentionally **no 700 Hz test-tone fallback** — PTT with no queued audio emits
+silence, not a carrier.
+
+**Tune sideband.** `set_tune_wav()` honors mode (`LSB = conj`); `set_mode()`
+recomputes the cached tune IQ when a WAV is loaded so a USB→LSB switch takes
+effect on the next playback.
+
+---
+
 ## References
 
 - Implementation: `web_control/sunsdr_direct.py` (UDP client), `web_control/dsp.py` (DSP)
@@ -1069,3 +1233,4 @@ Field:  magic─┘ cmd─┘ data_len──┘ index──────┘ res�
 - Filters: `web_control/gr4_filters.py` (GNU Radio 4.0 FIR design)
 - Architecture: `SDD/08-architecture-decisions.md`, `SDD/09-architecture-overview.md`
 - Frontend: `sunmrrc/static/controls.js`, `sunmrrc/static/mobile.js`
+- **TX capture & analysis: `device/` (pcaps, scripts, `data/tx_analysis.json`)**

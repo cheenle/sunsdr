@@ -31,8 +31,9 @@
     <!-- 音频增益和静噪隐藏元素 -->
     <input type="range" id="C_af" min="0" max="1000" value="500" style="display:none;">
     <input type="range" id="SQUELCH" min="0" max="100" value="0" style="display:none;">
-    <!-- Opus编码开关（移动端默认启用） -->
-    <input type="checkbox" id="encode" class="none" alt="Encode TX with opus codec" checked style="display:none;">
+    <!-- Opus编码开关：默认关闭。后端只接受 Int16 PCM（CLAUDE.md AD-004，
+         Opus 协商已移除）。勾选会发 Opus 压缩流，后端按 PCM 解码 → 噪声。 -->
+    <input type="checkbox" id="encode" class="none" alt="Encode TX with opus codec" style="display:none;">
     
     <!-- Main container with bottom navigation -->
     <div class="mobile-modern-container">
@@ -111,6 +112,9 @@
                         <div class="atr-under-bar">
                             <div class="atr-swr-bar-compact" id="atr-swr-bar"></div>
                         </div>
+                        <span class="atr-under-divider">|</span>
+                        <span class="atr-under-label">TEMP</span>
+                        <span class="atr-under-value" id="txtelem-temp">--</span>
                     </div>
                 </div>
             </div>
