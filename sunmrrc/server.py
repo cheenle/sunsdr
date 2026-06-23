@@ -843,6 +843,15 @@ async def ws_ctrl(ws: WebSocket):
                         if dsp_proc.modulator:
                             dsp_proc.modulator.set_mode(mode)  # TX uses same mode
                     await ws.send_text(f"getMode:{mode}")
+                elif cmd == "setSampleRate":
+                    # Spectrum/IQ width selector (39k/78k/156k/312k) — the
+                    # far-left sample-rate dropdown. Re-sends 0x0020 STREAM_CTRL.
+                    # NOTE: rate-field mapping is unconfirmed; only "78k" is
+                    # known-good today, others fall back with a warning until a
+                    # multi-rate capture proves the field (see sunsdr_direct.py).
+                    ok = await radio.set_sample_rate(val.lower())
+                    if ok:
+                        await _send_ctrl(f"setSampleRate:{val.lower()}")
                 elif cmd == "setPTT":
                     tx = val.lower() == "true"
                     await radio.set_ptt(tx)

@@ -34,6 +34,77 @@ IQ_PORT = 50002
 IF_OFFSET = 30500.0   # RX DDS = VFO + IF_OFFSET (verified from pcap)
 SESSION_ID = 0x04B0   # low 16 bits of stream counter
 
+# ── Spectrum / IQ sample rate ──────────────────────────────────────
+# The manual's left-corner indicator (39/78/156/312 kHz) selects the RX IQ
+# stream rate. These are multiples of 5^7 (78125):
+#   39 kHz  = 78125 / 2     (5^7 / 2)
+#   78 kHz  = 78125         (5^7, the verified default)
+#   156 kHz = 78125 * 2
+#   312 kHz = 78125 * 4
+# The device is told which rate to use via the 0x0020 STREAM_CTRL packet.
+#
+# ⚠ WHICH payload field carries the rate enum is NOT yet confirmed. We only
+# have a single 78 kHz ExpertSDR3 capture. The default packet below is a
+# byte-for-byte reproduction of that capture (78 kHz). To confirm the field,
+# capture 0x0020 at each of the 4 settings in ExpertSDR3 and diff offsets
+# 32 / 36 / 40 (the unexplained config words) — then fill in STREAM_RATE_FIELD
+# below. Until then, only the 78 kHz default is known-good.
+SAMPLE_RATE_78K = 78125
+SAMPLE_RATES = {
+    "39k":  78125 // 2,    # 39062
+    "78k":  78125,         # default, verified
+    "156k": 78125 * 2,     # 156250
+    "312k": 78125 * 4,     # 312500
+}
+
+# Default STREAM_CTRL (0x0020) payload — verified byte-for-byte against the
+# 78 kHz ExpertSDR3 capture. 13 little-endian u32 words.
+#   idx  value  current interpretation (PROTOCOL.md §4.6)
+#    0   0      RX channel
+#    1   1      TX channel
+#    2   0
+#    3   0
+#    4   0
+#    5   100    last octet of PC IP?
+#    6   0
+#    7   0
+#    8   30     ← candidate rate/config field
+#    9   700    ← candidate rate/config field (most suspicious)
+#   10   7      ← candidate rate/config field
+#   11   100
+#   12   300
+STREAM_CTRL_WORDS_78K = [0, 0, 1, 0, 0, 100, 0, 0, 30, 700, 7, 100, 300]
+STREAM_CTRL_TRAILING = 0x64  # 100
+
+# Placeholder: index into STREAM_CTRL_WORDS_78K that encodes the rate enum,
+# and the per-rate value to write there. UNCONFIRMED — leave None so we keep
+# emitting the known-good 78 kHz packet until a multi-rate capture proves the
+# mapping. Once confirmed, e.g. STREAM_RATE_FIELD = 9 and fill STREAM_RATE_ENUM.
+STREAM_RATE_FIELD = None
+STREAM_RATE_ENUM = {
+    # "39k": <value>, "78k": 700, "156k": <value>, "312k": <value>,
+}
+
+
+def build_stream_ctrl(sample_rate_key: str = "78k") -> bytes:
+    """Build the 0x0020 STREAM_CTRL packet.
+
+    With STREAM_RATE_FIELD unset (the current state), this always reproduces
+    the verified 78 kHz packet regardless of sample_rate_key, so behaviour is
+    unchanged from the old hardcoded hex. Once the rate field is confirmed,
+    set STREAM_RATE_FIELD / STREAM_RATE_ENUM and this starts honouring the key.
+    """
+    words = list(STREAM_CTRL_WORDS_78K)
+    if STREAM_RATE_FIELD is not None and sample_rate_key in STREAM_RATE_ENUM:
+        words[STREAM_RATE_FIELD] = STREAM_RATE_ENUM[sample_rate_key]
+    elif sample_rate_key != "78k":
+        logger.warning(
+            "Sample rate %s requested but rate field unconfirmed — "
+            "emitting 78 kHz STREAM_CTRL. Capture 0x0020 at each rate to map it.",
+            sample_rate_key)
+    payload = struct.pack("<%dI" % len(words), *words)
+    return build_packet(CmdID.STREAM_CTRL, payload, trailing=STREAM_CTRL_TRAILING)
+
 # ── Per-band TX power (drive %) ─────────────────────────────────────
 # EDIT THESE to set max output power per band. drive % maps to the 0x0017
 # byte via a square-root taper: byte = round(255 * sqrt(drive/100)).
@@ -154,6 +225,7 @@ class SunSDR2DXClient:
         self.vfo_lock: bool = False
         self.antenna: int = 1
         self.serial: str = ""
+        self.sample_rate_key: str = "78k"   # spectrum/IQ rate selector
 
     @property
     def connected(self) -> bool:
@@ -233,14 +305,17 @@ class SunSDR2DXClient:
             "32ff1500040000000000010000000000000001000000",
             "32ff07001a000000000001000000000000000000000000000000000000000000000000000000000000000000",
             "32ff2400040000000000010000000000000000000000",
-            "32ff20003400000000000100000000000000000000000100000000000000000000006400000000000000000000001e000000bc02000007000000640000002c01000064000000",
+            "STREAM_CTRL",  # 0x0020 — built dynamically from self.sample_rate_key
             "32ff1800040000000000010000000000000000000000",
             "32ff2600040000000000010000000000000000000000",
             "32ff27001000000000000100000000000000dc460300b6d20000dc460300b6d20000",
             "32ff22000c00000000000100000000000000000000000084d71700000000",
         ]
         for h in post_hex:
-            await self._send_raw(bytes.fromhex(h))
+            if h == "STREAM_CTRL":
+                await self._send_raw(build_stream_ctrl(self.sample_rate_key))
+            else:
+                await self._send_raw(bytes.fromhex(h))
             await asyncio.sleep(0.03)
 
         logger.info("Boot sequence complete")
@@ -283,6 +358,24 @@ class SunSDR2DXClient:
         self._ptt_active = tx
         await self._send_raw(
             build_packet(CmdID.PTT, struct.pack("<I", 0), trailing=1 if tx else 0))
+
+    # ── Sample rate (spectrum/IQ width) ────────────────────────
+
+    async def set_sample_rate(self, key: str) -> bool:
+        """Switch the spectrum/IQ sample rate (39k/78k/156k/312k).
+
+        Re-sends 0x0020 STREAM_CTRL with the rate field set. NOTE: the rate
+        field mapping is unconfirmed (see STREAM_RATE_FIELD) — until a
+        multi-rate capture proves it, only "78k" actually changes hardware
+        behaviour; other keys log a warning and re-send the 78 kHz packet.
+        Returns True if the key is valid."""
+        if key not in SAMPLE_RATES:
+            logger.warning("Unknown sample rate key: %s", key)
+            return False
+        self.sample_rate_key = key
+        await self._send_raw(build_stream_ctrl(key))
+        logger.info("Sample rate set to %s (%d Hz)", key, SAMPLE_RATES[key])
+        return True
 
     # ── Mode / Filter / AGC ───────────────────────────────────
 
