@@ -121,6 +121,7 @@ var mobileState = {
     currentFrequency: 7053000,
     currentMode: 'USB',
     currentVFO: 'VFO-A',
+    currentSampleRate: '78k',  // 频谱/IQ 采样率档位 (39k/78k/156k/312k)
     isTransmitting: false,
     tuneStep: 1,  // 默认步进 1kHz
     tuneStepIndex: 1,  // 当前步进索引 (1kHz在数组中的位置)
@@ -2239,6 +2240,9 @@ function handleMenuItem(action) {
         case 'bandpower':
             showBandPowerPanel();
             break;
+        case 'samplerate':
+            showSampleRateSelector();
+            break;
         case 'audio':
             showAudioPanel();
             break;
@@ -2371,6 +2375,32 @@ function selectMode(mode) {
     sendWebSocketMessage("setMode:" + mobileState.currentMode);
     console.log('选择模式:', mobileState.currentMode);
     
+    closeModalPanel();
+}
+
+// 采样率（频谱带宽）选择器 — 39/78/156/312 kHz
+// 对应 SunSDR2 的 0x0020 STREAM_CTRL 采样率档位（5^7 的 1/2、1、2、4 倍）。
+// 注意：后端目前只确认了 78k 档位，其它档位会回退到 78k（见 sunsdr_direct.py
+// 的 STREAM_RATE_FIELD），抓包确认字段后即可全部生效。
+var SAMPLE_RATE_OPTIONS = ['39k', '78k', '156k', '312k'];
+function showSampleRateSelector() {
+    const current = mobileState.currentSampleRate || '78k';
+    let html = '<div class="modal-panel"><h3>采样率 / 频谱带宽</h3><div class="mode-grid">';
+    SAMPLE_RATE_OPTIONS.forEach(rate => {
+        const active = current === rate ? 'active' : '';
+        const label = rate.replace('k', ' kHz');
+        html += `<button class="mode-select-btn ${active}" onclick="selectSampleRate('${rate}')">${label}</button>`;
+    });
+    html += '</div><p style="font-size:12px;opacity:0.7;margin-top:8px;">目前仅 78 kHz 已校准，其它档位待抓包确认后生效。</p>';
+    html += '<button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';
+
+    showModalPanel(html);
+}
+
+function selectSampleRate(rate) {
+    mobileState.currentSampleRate = rate;
+    sendWebSocketMessage("setSampleRate:" + rate);
+    console.log('选择采样率:', rate);
     closeModalPanel();
 }
 
