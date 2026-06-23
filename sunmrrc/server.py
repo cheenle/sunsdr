@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "web_control"))
+import sunsdr_direct
 from sunsdr_direct import SunSDR2DXClient
 from dsp import (StreamProcessor, SpectrumProcessor, AudioDemodulator,
                  AUDIO_RATE as DSP_AUDIO_RATE,
@@ -53,6 +54,9 @@ _last_telem_ts = 0.0   # throttle TX power/SWR telemetry broadcasts
 TELEM_PWR_BASELINE = 9.0
 TELEM_PWR_SCALE = 0.125   # (49-9)*0.125 ≈ 5.0 W
 _last_tlm_ts = 0.0     # throttle TX power/SWR telemetry broadcasts
+_last_pwr_log_ts = 0.0  # throttle TX power logger to 1 Hz
+_last_1f01_log_ts = 0.0  # throttle 0x1F01 TX-frame logger to 1 Hz
+_seen_sub_ids: set = set()   # diagnostic: unique (sub-id, length) tuples from device
 
 # Connected clients
 ctrl_clients: set[WebSocket] = set()
@@ -153,6 +157,12 @@ async def lifespan(app: FastAPI):
     RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     ok = await radio.connect()
     logger.info(f"SunSDR2DX: {ok}")
+    # Load persisted per-band TX power and push it into sunsdr_direct so
+    # set_frequency() applies the user's configured power on every QSY.
+    try:
+        _apply_band_power(_load_band_power())
+    except Exception as e:
+        logger.warning(f"band_power load failed: {e}")
     dsp_proc = StreamProcessor(
         spectrum=SpectrumProcessor(fft_size=2048),
         demodulator=AudioDemodulator())
@@ -222,6 +232,91 @@ async def api_post_mem_channels(request: Request):
         padded.append(None)
     data = {"channels": padded[:6]}
     _save_mem_channels(data)
+    return data
+
+
+# ── Per-band TX power persistence ─────────────────────────────────
+# Runtime-editable per-band drive %. Persisted to band_power.json and pushed
+# into sunsdr_direct via set_band_power() so set_frequency() applies the right
+# power on every QSY. The frontend reads/writes it via /api/band_power.
+BAND_POWER_FILE = Path(__file__).parent / "band_power.json"
+
+def _default_band_power():
+    """Build the default config dict from sunsdr_direct's built-in table."""
+    return {
+        "bands": [
+            {"low": lo, "high": hi, "power": pct}
+            for (lo, hi, pct) in sunsdr_direct.BAND_POWER
+        ],
+        "default": sunsdr_direct.BAND_POWER_DEFAULT,
+    }
+
+def _load_band_power():
+    try:
+        if BAND_POWER_FILE.is_file():
+            data = json.loads(BAND_POWER_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("bands"), list):
+                return data
+    except Exception:
+        pass
+    return _default_band_power()
+
+def _save_band_power(data):
+    try:
+        BAND_POWER_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+def _apply_band_power(data):
+    """Push a band-power config dict into sunsdr_direct's runtime table."""
+    try:
+        table = [(int(b["low"]), int(b["high"]), int(b["power"]))
+                 for b in data.get("bands", []) if isinstance(b, dict)]
+        default = data.get("default", sunsdr_direct.BAND_POWER_DEFAULT)
+        sunsdr_direct.set_band_power(table, default)
+    except Exception as e:
+        logger.warning(f"apply band_power failed: {e}")
+
+
+@app.get("/api/band_power")
+async def api_get_band_power():
+    return _load_band_power()
+
+
+@app.post("/api/band_power")
+async def api_post_band_power(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    bands = []
+    for b in (payload.get("bands", []) if isinstance(payload, dict) else []):
+        if isinstance(b, dict) and "low" in b and "high" in b and "power" in b:
+            try:
+                bands.append({
+                    "low": int(b["low"]),
+                    "high": int(b["high"]),
+                    "power": max(0, min(100, int(b["power"]))),
+                })
+            except (ValueError, TypeError):
+                continue
+    default = sunsdr_direct.BAND_POWER_DEFAULT
+    try:
+        default = max(0, min(100, int(payload.get("default", default))))
+    except (ValueError, TypeError):
+        pass
+    data = {"bands": bands, "default": default}
+    _save_band_power(data)
+    _apply_band_power(data)
+    # Re-apply to the current frequency immediately so the change takes effect
+    # without waiting for the next QSY.
+    try:
+        if radio.rx_freq:
+            radio.drive = sunsdr_direct.band_power_for(radio.rx_freq)
+            await radio._send_drive_byte()
+    except Exception:
+        pass
     return data
 
 
@@ -366,23 +461,92 @@ async def _process_iq_stream():
 
     def _tx_pacer_thread():
         """Dedicated OS thread — time.sleep()-paced TX at TX_PACKET_INTERVAL_S
-        (5.12ms, 195 pkt/s, 39063 Hz) to match ExpertSDR3. See PROTOCOL.md §17."""
+        (5.12ms, 195 pkt/s, 39063 Hz) to match ExpertSDR3. See PROTOCOL.md §17.
+
+        ADAPTIVE PACING: the browser produces mic frames at a rate slightly
+        below the fixed pacer consumption (measured ≈43 vs ≈49 pkt/s on the
+        test session, a ~5 pkt/s deficit). A fixed cadence would drain a 120 ms
+        buffer in ~17 s, causing periodic underflow/stutter. So the pacer
+        tracks an EMA of queue depth and scales the per-packet interval
+        within ±15%: when the queue is below target it slows down, letting
+        production refill it; when above target it speeds back up to nominal.
+        A deeper 1024-pkt buffer absorbs the short-term jitter (see dsp.py).
+        """
         global tx_keepalive_due
+        # Adaptive pacing state
+        _Q_TARGET = 50.0                     # aim to hover around 50 queued packets
+        _ADAPTIVE_ALPHA = 0.08               # EMA over ~12 packets (~60 ms)
+        _ADAPTIVE_MAX = 0.15                 # never deviate more than ±15% from nominal
+        _q_ema = _Q_TARGET                   # start at target to avoid transient
+        # Diagnostic probe: every 20th packet (~10 Hz) write a CSV row with
+        # actual send interval, queue depth, silence flag, and whether the
+        # pacer fell behind. Keeps overhead low while capturing real per-
+        # packet timing from the pacer thread itself.
+        _PROBE_PATH = "/tmp/tx_probe.csv"
+        _PROBE_EVERY = 20
+        _probe_cnt = 0
+        _probe_last = time.monotonic()
+        try:
+            _probe_file = open(_PROBE_PATH, "a", buffering=1)  # line-buffered
+        except Exception:
+            _probe_file = None
+        if _probe_file and _probe_cnt == 0:
+            _probe_file.write("mono_ts,interval_ms,q_depth,silent,behind_ms\n")
+        # TX IQ power probe accumulators (see inline comment below).
+        _pwr_sum_sq = 0.0
+        _pwr_peak = 0.0
+        _pwr_n = 0
+        _pwr_n_pkts = 0
+        _pwr_log_last = time.monotonic()
         next_pkt = time.monotonic()
         # PA/relay settling pad: zero-IQ packets before real modulation.
         settle_left = TX_SETTLE_PACKETS
         while not tx_thread_stop and radio.connected:
+            silent_flag = False
             try:
                 if settle_left > 0:
                     iq_sock.sendto(_build_one_tx_packet(silent=True),
                                    (DEVICE_HOST, 50002))
                     settle_left -= 1
+                    silent_flag = True
                 else:
-                    iq_sock.sendto(_build_one_tx_packet(), (DEVICE_HOST, 50002))
+                    pkt = _build_one_tx_packet()
+                    iq_sock.sendto(pkt, (DEVICE_HOST, 50002))
+                    silent_flag = (pkt[10:12] == b'\x00\x00' and pkt[12:14] == b'\x00\x00')
+                    # ── TX IQ power probe: decode first 20 IQ samples of
+                    # every non-silent packet, accumulate peak/RMS, log 1 Hz.
+                    # The firmware has no ALC, so IQ amplitude we send is
+                    # what the PA actually transmits. Once the user provides
+                    # a known power reading (e.g. from a wattmeter during
+                    # tune), a linear calibration turns IQ magnitude → watts.
+                    if not silent_flag and len(pkt) >= 130:
+                        _pwr_n_pkts += 1
+                        payload = pkt[10:]
+                        for _i in range(20):
+                            _o = _i * 6
+                            _iv = int.from_bytes(payload[_o:_o+3], 'little', signed=True)
+                            _qv = int.from_bytes(payload[_o+3:_o+6], 'little', signed=True)
+                            _mag = ((_iv * _iv + _qv * _qv) ** 0.5) / 8388608.0
+                            _pwr_sum_sq += _mag * _mag
+                            _pwr_n += 1
+                            if _mag > _pwr_peak:
+                                _pwr_peak = _mag
             except Exception:
                 pass
-            # Precise interval via wall-clock tracking
-            next_pkt += TX_INTERVAL
+            # Adaptive interval: EMA of queue depth, scale within ±15%.
+            try:
+                if dsp_proc and dsp_proc.modulator is not None:
+                    with dsp_proc.modulator._mic_lock:
+                        _q_now = float(len(dsp_proc.modulator._mic_iq))
+                else:
+                    _q_now = _Q_TARGET
+            except Exception:
+                _q_now = _Q_TARGET
+            _q_ema = _ADAPTIVE_ALPHA * _q_now + (1 - _ADAPTIVE_ALPHA) * _q_ema
+            err = (_q_ema - _Q_TARGET) / _Q_TARGET          # -1..+1 range
+            scale = 1.0 - max(-_ADAPTIVE_MAX, min(_ADAPTIVE_MAX, err))
+            adaptive_iv = TX_INTERVAL * scale
+            next_pkt += adaptive_iv
             now = time.monotonic()
             delay = next_pkt - now
             if delay > 0:
@@ -391,7 +555,36 @@ async def _process_iq_stream():
                 # Fell behind – reset clock
                 if delay < -0.005:
                     tx_keepalive_due = True  # signal RX loop: we're behind, send keep-alive soon
-                next_pkt = now + TX_INTERVAL
+                next_pkt = now + adaptive_iv
+            # Probe (every Nth packet): record timing, queue depth, flags
+            _probe_cnt += 1
+            if _probe_file and (_probe_cnt % _PROBE_EVERY == 0):
+                interval_ms = (now - _probe_last) * 1000.0
+                behind_ms = max(0.0, -(next_pkt - now - adaptive_iv) * 1000.0)
+                q_depth = int(_q_now)
+                try:
+                    _probe_file.write(
+                        f"{now:.6f},{interval_ms:.3f},{q_depth},"
+                        f"{1 if silent_flag else 0},{behind_ms:.3f}\n")
+                except Exception:
+                    pass
+                _probe_last = now
+            # 1 Hz: flush the TX IQ power accumulator to server.log.
+            if _pwr_n > 0 and (now - _pwr_log_last) >= 1.0:
+                _rms = (_pwr_sum_sq / _pwr_n) ** 0.5
+                logger.info(
+                    f"TX IQ pwr: peak={_pwr_peak:.4f}  rms={_rms:.4f}  "
+                    f"n={_pwr_n}  pkts={_pwr_n_pkts}")
+                _pwr_sum_sq = 0.0
+                _pwr_peak = 0.0
+                _pwr_n = 0
+                _pwr_n_pkts = 0
+                _pwr_log_last = now
+        if _probe_file:
+            try:
+                _probe_file.close()
+            except Exception:
+                pass
 
     import threading as th
 
@@ -459,6 +652,16 @@ async def _process_iq_stream():
             continue
         sub = struct.unpack('<H', raw[2:4])[0]
 
+        # ── One-off sub-ID census: log every unique (sub, length) combo once
+        # so we can verify what telemetry sub-IDs the device actually sends.
+        # Remove after the diagnostic session.
+        global _seen_sub_ids
+        key = (sub, len(raw))
+        if key not in _seen_sub_ids:
+            _seen_sub_ids.add(key)
+            logger.info(f"DEVICE SUB-ID: 0x{sub:04X} len={len(raw)} "
+                        f"(raw[:16]={raw[:16].hex()})")
+
         if sub == 0xFFFE and len(raw) >= 1200:
             iq_count += 1
             payload = raw[10:]; n = min(200, len(payload)//6)
@@ -491,13 +694,10 @@ async def _process_iq_stream():
                 asyncio.ensure_future(_broadcast_audio(audio))
 
         elif sub == 0x1F00 and len(raw) >= 30:
-            # Device→PC TX telemetry (verified from sunsdr_sdr_tx.pcap; see
-            # PROTOCOL.md §17.6 and device/data/tx_analysis.json):
-            #   off14 u16  = forward-power reading (idle ~9, TX into dummy ~49)
-            #   off18 f32  = PA temperature °C (~45)
-            #   off26 f32  = SWR (1.0 = matched)
+            # Device→PC TX telemetry (sub-ID verified by live probe 2026-06-22:
+            # 0x1F00 len=34, payload=24B).
             now_t = time.monotonic()
-            if now_t - _last_telem_ts >= 0.2:  # throttle to ~5 Hz
+            if now_t - _last_telem_ts >= 0.1:  # throttle to ~10 Hz
                 _last_telem_ts = now_t
                 try:
                     pwr_raw = struct.unpack_from('<H', raw, 14)[0]
@@ -509,8 +709,31 @@ async def _process_iq_stream():
                                 * TELEM_PWR_SCALE)
                     asyncio.ensure_future(_send_ctrl(
                         f"getTXTelem:{watts:.1f},{swr:.2f},{temp_c:.0f},{pwr_raw}"))
+                    # Log only during TX, at 1 Hz. The device STOPS sending
+                    # 0x1F00 while keying (verified: zero [TX] frames in any
+                    # capture), so this fires only on the idle->RX baseline.
+                    # Forward power is read from the ATR-1000 tuner, not here.
+                    global _last_pwr_log_ts
+                    if (getattr(radio, '_ptt_active', False)
+                            and now_t - _last_pwr_log_ts >= 1.0):
+                        _last_pwr_log_ts = now_t
+                        logger.info(
+                            f"[TX] 0x1F00 raw={pwr_raw} W={watts:.1f} "
+                            f"SWR={swr:.2f} T={temp_c:.0f}C")
                 except Exception:
                     pass
+
+        elif sub == 0x1F01 and len(raw) >= 22:
+            # Device→PC frame seen during TX (0x1F00 goes silent while keyed).
+            # Log it at 1 Hz while keyed so we can locate the forward-power
+            # field here if the device carries it. Throttled, TX-only.
+            if getattr(radio, '_ptt_active', False):
+                now_t = time.monotonic()
+                global _last_1f01_log_ts
+                if now_t - _last_1f01_log_ts >= 1.0:
+                    _last_1f01_log_ts = now_t
+                    logger.info(f"[TX] 0x1F01 len={len(raw)} "
+                                f"payload={raw[10:].hex()}")
 
         # Periodic stats (doesn't send keep-alive — that's handled above)
         now = time.monotonic()
@@ -624,12 +847,23 @@ async def ws_ctrl(ws: WebSocket):
                     tx = val.lower() == "true"
                     await radio.set_ptt(tx)
                     if dsp_proc: dsp_proc.demodulator.set_ptt(tx)
+                    logger.info(f"PTT {'ON ' if tx else 'OFF'}")
                     await ws.send_text(f"getPTT:{str(tx).lower()}")
                 elif cmd == "tune":
                     tune_on = val.lower() == "true"
                     await radio.set_tune(tune_on)
                     if dsp_proc and dsp_proc.modulator:
                         dsp_proc.modulator.activate_tune(tune_on)
+                elif cmd == "setDrive":
+                    # Hardware TX power: the slider (0-100) now drives the DEVICE
+                    # via 0x0017 (set_drive sends the sqrt-taper byte). This is the
+                    # real PA power control — the device has no ALC, so this is how
+                    # ExpertSDR3's Drive slider works too. The software modulator
+                    # make-up gain stays fixed; overdriving it was the old broken
+                    # workaround that caused the "broken/splattery" audio.
+                    pct = max(0, min(100, int(float(val))))
+                    await radio.set_drive(pct)
+                    await _send_ctrl(f"setDrive:{pct}")
                 elif cmd == "setAFGain":
                     vol = float(val) / 100.0
                     if dsp_proc: dsp_proc.demodulator.set_volume(vol)
@@ -794,17 +1028,71 @@ async def ws_audio_tx(ws: WebSocket):
     for the TX pacer thread to drain. See PROTOCOL.md §17 and CLAUDE.md AD-009."""
     await ws.accept(); audio_tx_clients.add(ws)
     tx_rate = 16000  # mic sample rate from controls.js (48k downsampled ×3)
+    loop = asyncio.get_running_loop()
+    _lvl_log_last = time.monotonic()  # 1 Hz throttle for the TX chain level probe
+    # Probe: record browser mic frame arrival timestamps + sizes to see
+    # whether the WS stream itself is jittery (WiFi/bursty) or steady.
+    _RX_PROBE = "/tmp/tx_rx_probe.csv"
+    try:
+        _rx_probe = open(_RX_PROBE, "a", buffering=1)
+        _rx_probe.write("mono_ts,interval_ms,bytes,ptt\n")
+    except Exception:
+        _rx_probe = None
+    _rx_last = time.monotonic()
     try:
         while True:
             msg = await ws.receive()
             if msg.get("type") == "websocket.disconnect":
                 break
+            _rx_now = time.monotonic()
             data = msg.get("bytes")
             if data is not None:
-                # Int16 PCM mic frame → modulator queue
+                if _rx_probe:
+                    ptt = 1 if getattr(radio, '_ptt_active', False) else 0
+                    try:
+                        _rx_probe.write(
+                            f"{_rx_now:.6f},{(_rx_now - _rx_last)*1000:.3f},"
+                            f"{len(data)},{ptt}\n")
+                    except Exception:
+                        pass
+                    _rx_last = _rx_now
+                # Int16 PCM mic frame → modulator queue.
+                # feed_audio() does Hilbert SSB + 24-bit packing per frame.
+                # Run it in the default executor so the asyncio event loop
+                # stays free to broadcast RX audio/spectrum and the GIL isn't
+                # held on the loop thread (which used to jitter the TX pacer's
+                # 5.12 ms cadence → trembling voice at the far end). Awaiting
+                # here keeps per-connection frames strictly serial, so the
+                # modulator's non-thread-safe streaming state stays consistent.
                 if dsp_proc and dsp_proc.modulator and getattr(radio, '_ptt_active', False):
                     try:
-                        dsp_proc.modulator.feed_audio(data, input_rate=tx_rate)
+                        await loop.run_in_executor(
+                            None, dsp_proc.modulator.feed_audio, data, tx_rate)
+                    except Exception:
+                        pass
+                    # ── End-to-end TX chain level probe (1 Hz) ──
+                    # Reads the per-stage accumulators from the modulator and
+                    # prints RMS/peak at input / analytic / post-drive / post-
+                    # limiter. Lets us map mic level → final IQ amplitude
+                    # without re-instrumenting.
+                    try:
+                        _now_lvl = time.monotonic()
+                        if _now_lvl - _lvl_log_last >= 1.0:
+                            _lvl_log_last = _now_lvl
+                            _s = dsp_proc.modulator.snapshot_levels()
+                            def _rms(sq, n): return (sq/n)**0.5 if n else 0.0
+                            logger.info(
+                                f"TX chain in : rms={_rms(_s['in_sq'],_s['in_n']):.4f} "
+                                f"peak={_s['in_pk']:.4f} n={_s['in_n']}")
+                            logger.info(
+                                f"TX chain an : rms={_rms(_s['an_sq'],_s['an_n']):.4f} "
+                                f"peak={_s['an_pk']:.4f} n={_s['an_n']}")
+                            logger.info(
+                                f"TX chain drv: rms={_rms(_s['drv_sq'],_s['drv_n']):.4f} "
+                                f"peak={_s['drv_pk']:.4f} n={_s['drv_n']}")
+                            logger.info(
+                                f"TX chain lim: rms={_rms(_s['lim_sq'],_s['lim_n']):.4f} "
+                                f"peak={_s['lim_pk']:.4f} n={_s['lim_n']}")
                     except Exception:
                         pass
                 continue

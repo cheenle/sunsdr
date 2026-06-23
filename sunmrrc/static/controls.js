@@ -1698,6 +1698,27 @@ OpusEncoderProcessor.prototype.onAudioProcess = function( e )
 
 }
 
+// ── AudioWorklet mode: forward pre-formatted Int16 frames from the
+// tx-capture worklet (runs on the audio thread) to the /WSaudioTX socket.
+// The worklet already did downsampling (48k→16k), 20 ms accumulation, and
+// Int16 conversion, so the main thread just sends — keeping the main-thread
+// footprint tiny so the audio thread is never blocked.
+OpusEncoderProcessor.prototype.onWorkletFrame = function( int16Frame )
+{
+    if (!int16Frame || !int16Frame.byteLength) {
+        return;
+    }
+    if (!this.wsh || this.wsh.readyState !== WebSocket.OPEN) {
+        return;
+    }
+    if (!isRecording) {
+        return;
+    }
+    if (!window.__txBytes) { window.__txBytes = 0; }
+    window.__txBytes += int16Frame.byteLength;
+    this.wsh.send( int16Frame );
+};
+
 var MediaHandler = function( audioProcessor )
 {
     console.log('🎤 MediaHandler: 创建TX音频上下文...');
@@ -1766,7 +1787,7 @@ var AudioTX_analyser = "";
 // TX EQ 均衡器已提取到 modules/tx_audio_eq.js
 
 
-MediaHandler.prototype.callback = function( stream )
+MediaHandler.prototype.callback = async function( stream )
 {
     console.log( '🎤 MediaHandler.callback: 开始设置麦克风...' );
 
@@ -1784,8 +1805,44 @@ MediaHandler.prototype.callback = function( stream )
         AudioTX_analyser = this.context.createAnalyser();
         this.gain_node = this.context.createGain();
         this.micSource = this.context.createMediaStreamSource( stream );
-        this.processor = this.context.createScriptProcessor( this.audioProcessor.bufferSize, 1, 1 );
-        this.processor.onaudioprocess = this.audioProcessor.onAudioProcess.bind( this.audioProcessor );
+
+        // ── TX capture: prefer AudioWorklet over ScriptProcessor ──
+        // AudioWorklet runs on a dedicated audio thread (not the main thread),
+        // so iOS Safari cannot stall the microphone stream when the main
+        // thread is busy — this was the dominant cause of mid-call dropouts
+        // the far end heard after the server-side adaptive pacing fix.
+        // Fallback to ScriptProcessorNode for iOS <14.5 / ancient browsers.
+        var useTXWorklet = !!(this.context.audioWorklet);
+        this.txWorkletNode = null;
+        if (useTXWorklet) {
+            try {
+                await this.context.audioWorklet.addModule('tx_capture_worklet.js');
+                this.txWorkletNode = new AudioWorkletNode(this.context, 'tx-capture', {
+                    numberOfInputs: 1,
+                    numberOfOutputs: 0,
+                    channelCount: 1,
+                    channelCountMode: 'explicit',
+                    channelInterpretation: 'speakers'
+                });
+                // Worklet posts Int16 frames back via MessagePort; forward them
+                // to the /WSaudioTX socket through the OpusEncoderProcessor.
+                this.txWorkletNode.port.onmessage = (ev) => {
+                    if (this.audioProcessor && typeof this.audioProcessor.onWorkletFrame === 'function') {
+                        this.audioProcessor.onWorkletFrame(ev.data);
+                    }
+                };
+                this.processor = this.txWorkletNode;
+                console.log('✅ TX AudioWorklet 模式已启用 (独立音频线程)');
+            } catch (e) {
+                console.warn('⚠️ TX AudioWorklet 失败，回退到 ScriptProcessor:', e);
+                useTXWorklet = false;
+                this.txWorkletNode = null;
+            }
+        }
+        if (!useTXWorklet) {
+            this.processor = this.context.createScriptProcessor( this.audioProcessor.bufferSize, 1, 1 );
+            this.processor.onaudioprocess = this.audioProcessor.onAudioProcess.bind( this.audioProcessor );
+        }
 
         // 初始化 TX EQ
         initTX_EQ(this.context);
@@ -1805,14 +1862,15 @@ MediaHandler.prototype.callback = function( stream )
         AudioTX_noiseGate.connect(this.gain_node);
         this.gain_node.connect( this.processor );
 
-        // 关键：ScriptProcessorNode 需要连接到输出才能触发 onaudioprocess
-        // 但直接连接 destination 会导致回声自激
-        // 解决方案：连接到静音节点（gain=0），再连接到 destination
-        // 这样处理器能工作，但不会有声音输出到扬声器
-        this.muteNode = this.context.createGain();
-        this.muteNode.gain.value = 0;  // 静音
-        this.processor.connect(this.muteNode);
-        this.muteNode.connect(this.context.destination);
+        // ScriptProcessorNode 需要连接到输出才能触发 onaudioprocess。
+        // AudioWorklet 不需要（它是 sink），但连接也没害。为了回声安全，
+        // 仅在 ScriptProcessor 模式时才连接到静音 destination。
+        if (!useTXWorklet) {
+            this.muteNode = this.context.createGain();
+            this.muteNode.gain.value = 0;  // 静音
+            this.processor.connect(this.muteNode);
+            this.muteNode.connect(this.context.destination);
+        }
 
         this.gain_node.connect( AudioTX_analyser );
     } catch (e) {

@@ -24,8 +24,7 @@
 15. [Data Rate Summary](#15-data-rate-summary)
 16. [Hex Reference](#16-hex-reference)
 17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
-17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
-17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
+18. [TX Drive / Power Control (0x0017) — Verified On-Air](#18-tx-drive--power-control-0x0017--verified-on-air)
 
 ---
 
@@ -129,7 +128,7 @@ Maximum tested payload: 68 bytes (HW_INIT).
 | `0x000E` | INFO_QUERY | 0 | 0 | PC→Dev | Device info query. **486-byte response.** |
 | `0x0010` | CALIB_QUERY | 0 | 0 | PC→Dev | Calibration data query. **486-byte response.** |
 | `0x0015` | SET_PARAM_15 | 4 (`uint32`) | 0 | PC→Dev | Post-init param. Value `1` at boot. |
-| `0x0017` | SET_PARAM_17 | 4 (`uint32`) | 0 | PC→Dev | Parameter set. Value `0xDC` at boot. |
+| `0x0017` | **DRIVE** | 4 (`uint32 0`) | **drive byte** | PC→Dev | **TX power / drive.** Trailing word = `round(255·√(drive%/100))`. Boot byte `0xDC`; re-sent per-band on QSY and before each PTT. See §18. |
 | `0x0018` | HEARTBEAT | 4 (`uint32 0`) | 0 | PC→Dev | **Keep-alive every 0.5s.** ~8 min session timeout. |
 | `0x0019` | SET_PARAM_19 | 4 (`uint32`) | 0 | PC→Dev | Parameter set. Value `0xBB` at boot. |
 | `0x001B` | SET_PARAM_1B | 4 (`uint32 0`) | 0 | PC→Dev | Parameter set. |
@@ -223,7 +222,7 @@ RX_FREQ: 32ff08000800000000000100000000000000000000008dcb430000000000
 ### 4.5 Phase 5: Post-init + stream start (10 packets)
 
 ```
-0x0017  32ff17000400000000000100000000000000dc000000                 # SET_PARAM_17 (0xDC)
+0x0017  32ff17000400000000000100000000000000dc000000                 # DRIVE (boot=0xDC; re-sent per-band at runtime, see §18)
 0x001E  32ff1e00040000000000010000000000000000000000                 # SET_PARAM_1E
 0x0015  32ff1500040000000000010000000000000001000000                 # SET_PARAM_15 (value=1)
 0x0007  32ff07001a00000000000100000000000000                         # SET_PARAM_7 (26B zeros)
@@ -312,9 +311,27 @@ hb_sock.sendto(bytes.fromhex(
 
 These are maintained as client state but do not generate hardware UDP packets in the DIRECT backend:
 
-`set_mode`, `set_filter`, `set_agc_mode`, `set_volume`, `set_drive`, `set_rf_gain`, `set_preamp`, `set_attenuator`, `set_antenna`, `set_tune`, `set_rit_enable`, `set_rit_offset`, `set_split`, `set_vfo_lock`
+`set_mode`, `set_filter`, `set_agc_mode`, `set_volume`, `set_rf_gain`, `set_preamp`, `set_attenuator`, `set_antenna`, `set_tune`, `set_rit_enable`, `set_rit_offset`, `set_split`, `set_vfo_lock`
 
 Mode, filter, and AGC are handled purely in the software DSP layer (`AudioDemodulator`), not the hardware. The SunSDR2 DX digitizes the entire band as IQ — mode selection is a DSP concept.
+
+> **Note:** `set_drive` is **not** client-only — it sends the `0x0017` DRIVE command to
+> hardware. See §5.5 and §18.
+
+### 5.5 TX drive / power (0x0017)
+
+```python
+# Set drive 0..100%; byte uses a square-root taper (verified vs ExpertSDR3):
+byte = round(255 * (drive / 100.0) ** 0.5)
+build_packet(0x0017, struct.pack("<I", 0), trailing=byte)   # drive byte in TRAILING word
+```
+
+The drive byte goes in the **trailing word**, payload is `uint32 0`. It is re-sent:
+- before each PTT assert (`set_ptt(True)`),
+- on every QSY (`set_frequency()` → per-band value),
+- on `setDrive:` from the UI (`set_drive()`).
+
+Full detail, byte mapping, and the per-band power table in **§18**.
 
 ---
 
@@ -1134,12 +1151,15 @@ global peak |IQ| = 0.09189
 per-packet RMS   = 0.002 … 0.043 (mean 0.024 in the voice burst)
 ```
 
-> **Code correction:** `dsp.py` normalizes modulation to `0.3` (`_modulate`,
-> `generate_test_tone`, `set_tune_wav`). This is **~3.3× hotter** than the reference and,
-> with the manual confirming **ALC is not yet supported in firmware**, there is no hardware
-> limiter to catch it — the over-level IQ clips in the PA. Target a **~0.09 peak** and scale
-> below that with a drive control. This is the single largest divergence between the code
-> and the capture.
+> **Superseded by on-air testing (2026-06-23):** the `~0.09` reference peak was the
+> *modulation depth ExpertSDR3 happened to use at its drive setting* — it is NOT an absolute
+> ceiling. Output power is controlled by the **DRIVE command (0x0017)**, not by IQ peak (see
+> §18). With drive doing the power scaling, the software IQ peak only needs to be a clean
+> level that doesn't engage the tanh soft-limiter. Current code runs `TX_IQ_PEAK = 0.5`,
+> `TX_DRIVE_GAIN = 2.5`; on-air this produces clean SSB with Tune ~12 W and voice 30–40 W PEP
+> (ATR-1000 reading) at 100 % drive. The earlier "lower to 0.09 or it clips the PA" guidance
+> was wrong — the real low-power cause was the DRIVE byte being placed in the payload instead
+> of the trailing word (§18), so the device received drive=0.
 
 ### 17.5 Leading silence before audio (PA settling)
 
@@ -1148,28 +1168,38 @@ energy appears. This matches the manual (§ "开始发射前…使用单独的EX
 PTT切换延迟"): the PA / antenna relay needs settling time. Implementation should send a short
 run of zero-IQ packets immediately after asserting PTT, before feeding real modulation.
 
-### 17.6 Device → PC TX telemetry (newly observed)
+### 17.6 Device → PC TX telemetry (decoded + on-air findings)
 
 During TX the device sends two small telemetry sub-types back on 50002 (836 + 7 frames in
 the reference):
 
 | Sub-type | Size | Content |
 |----------|------|---------|
-| `0x1F00` | 34 B | Floats (e.g. `45.0`, `1.0`) — likely PA temp / forward power / SWR |
+| `0x1F00` | 34 B | `off14` u16 raw level, `off18` f32 temp °C, `off26` f32 SWR |
 | `0x1F01` | 22 B | Mostly zeros — TX status flags |
 
-These are not yet decoded or consumed by the server. They are the probable source for a real
-TX power/SWR meter. Captured for future analysis in `device/`.
+`server.py` decodes `0x1F00` into `getTXTelem:watts,swr,temp,raw` for the UI (temp and SWR
+are reliable; the watts field is a rough linear approximation pending wattmeter calibration).
+
+> **On-air finding (2026-06-23):** the device **stops sending `0x1F00` entirely while keyed** —
+> verified across multiple PTT windows, zero `0x1F00` frames arrive between PTT-ON and PTT-OFF.
+> The `0x1F00` values the server logs are therefore the **idle/RX baseline only**, NOT forward
+> power. A `W=0.0` line during TX is a *measurement blind spot*, not zero output. Real forward
+> power must be read from the **ATR-1000 tuner** (or an external wattmeter). `0x1F01` is logged
+> TX-only at 1 Hz as a candidate location for an in-stream forward-power field, but it has not
+> yet been seen carrying one.
 
 ### 17.7 Corrected summary vs. current code
 
-| Item | Code (`dsp.py`/`server.py`) | Capture (verified) | Action |
-|------|------------------------------|--------------------|--------|
-| TX IQ peak level | `0.3` | `~0.09` | Lower to ~0.09 + drive scaling |
-| TX packet interval | `2.56 ms` (200/78125) | `5.12 ms` (200/39063) | Halve the rate |
-| TX sample rate | implied 78,125 Hz | **39,063 Hz** | Modulate at 39 kHz |
-| Pre-TX silence | none | ~17 zero packets | Send settling pad after PTT |
-| Stream byte 4-7 | n/a | packet counter (resets per PTT) | (doc) |
+| Item | Original code | Verified / fixed | Status |
+|------|---------------|------------------|--------|
+| TX power control | software IQ gain only | **device DRIVE 0x0017** (trailing word) | ✅ fixed — see §18 |
+| TX IQ peak level | `0.3` | `TX_IQ_PEAK=0.5` clean SSB; power via drive | ✅ gentle, tanh barely engages |
+| TX packet interval | `2.56 ms` (200/78125) | `5.12 ms` (200/39063) | ✅ fixed — adaptive pacer |
+| TX sample rate | implied 78,125 Hz | **39,063 Hz** | ✅ modulate at 39 kHz |
+| Pre-TX silence | none | ~17 zero packets | ✅ settling pad after PTT |
+| Stream byte 4-7 | n/a | packet counter (resets per PTT) | ✅ documented |
+| TX power telemetry | assumed 0x1F00 | **device stops 0x1F00 while keyed** | ⚠️ read from ATR-1000 |
 
 ### 17.8 TX chain — as implemented
 
@@ -1222,6 +1252,106 @@ silence, not a carrier.
 **Tune sideband.** `set_tune_wav()` honors mode (`LSB = conj`); `set_mode()`
 recomputes the cached tune IQ when a WAV is loaded so a USB→LSB switch takes
 effect on the next playback.
+
+---
+
+## 18. TX Drive / Power Control (0x0017) — Verified On-Air
+
+> Decoded byte-for-byte against an ExpertSDR3 TCI capture and confirmed on-air
+> (2026-06-23): Tune ~12 W, SSB voice 30–40 W PEP read from the ATR-1000 tuner.
+> This section supersedes the earlier "SET_PARAM_17 / value 0xDC" placeholder in
+> §3.1 and §4.5.
+
+### 18.1 The command
+
+`0x0017` is the **DRIVE** (TX power) command — NOT a generic parameter set. Output
+power is controlled entirely by this command; **software IQ amplitude does not set
+power** (it only shapes a clean SSB envelope). SunSDR2 firmware does not support
+ALC, so per-band drive is the only power lever.
+
+```python
+byte = round(255 * (drive_pct / 100.0) ** 0.5)     # square-root taper
+build_packet(0x0017, struct.pack("<I", 0), trailing=byte)
+```
+
+| drive % | byte | | drive % | byte |
+|---------|------|-|---------|------|
+| 10 | 0x50 | | 70 | 0xd5 |
+| 30 | 0x8b | | 90 | 0xf1 |
+| 50 | 0xb4 | | 100 | 0xff |
+
+### 18.2 Packet layout — the critical gotcha
+
+The drive byte lives in the **trailing word**, with a `uint32 0` payload:
+
+```
+generated: 32ff17000400000000000100000000000000dc000000   (drive→0xDC example)
+captured : 32ff17000400000000000100000000000000dc000000   ← byte-for-byte match
+           └ hdr (cmd=0x17, len=4) ┘└ payload=0 ┘└ trail=0xDC ┘
+```
+
+Putting the byte in the **payload** instead (the original bug) sends drive=0 to the
+device → it transmits at near-zero power. This was the root cause of the long-standing
+"low TX power" symptom: `set_drive()` either never sent the command, or sent it with
+the byte in the wrong field.
+
+### 18.3 When drive is (re)sent
+
+The device **resets 0x0017 to a per-band factory calibration value on every frequency
+change**, so drive must be re-asserted. ExpertSDR3 does this; the implementation mirrors it:
+
+| Trigger | Code path | Value sent |
+|---------|-----------|-----------|
+| PTT assert | `set_ptt(True)` → `_send_drive_byte()` before keying | current `self.drive` |
+| QSY / band change | `set_frequency()` → `band_power_for(freq)` → `_send_drive_byte()` | per-band % |
+| UI slider | `setDrive:` → `set_drive()` | UI value |
+
+### 18.4 Per-band power (runtime-configurable)
+
+Per-band drive % is **user-editable and persisted**, not hardcoded:
+
+- **Storage:** `sunmrrc/band_power.json` — `{"bands":[{"low","high","power"},…], "default":N}`.
+- **API:** `GET/POST /api/band_power`. POST validates, saves, pushes the table into
+  `sunsdr_direct.set_band_power()`, and re-applies drive to the current frequency immediately.
+- **Frontend:** Menu → **Band Power** panel (`showBandPowerPanel()` in `mobile.js`) — one
+  0–100% slider per band + an out-of-band default.
+- **Lookup:** `band_power_for(freq_hz)` resolves the % for the active frequency;
+  `BAND_POWER_DEFAULT` (100) covers frequencies outside any defined band.
+
+Captured per-band calibration reference values (TCI, from ExpertSDR3): 3.5 MHz→0xC8 (62%),
+7 MHz→0xFF (100%), 14 MHz→0xDC (74%), 21 MHz→0xC5 (60%), 28 MHz→0xDA (73%).
+
+### 18.5 TX power telemetry blind spot
+
+**The device stops sending `0x1F00` telemetry while keyed** (verified: zero TX-tagged
+0x1F00 frames across all captures and live logs). Consequently:
+
+- `W=` in `server.log` reflects only the idle/RX baseline — `W=0.0` during TX is a
+  **measurement blind spot, not zero output**. Do not use it to judge TX power.
+- Forward power must be read from the **ATR-1000 tuner** or an external wattmeter.
+- `0x1F01` (22 B) is logged TX-only at 1 Hz as a candidate location for an in-stream
+  forward-power field, but no usable power figure has been decoded from it yet.
+
+### 18.6 Software IQ level (decoupled from power)
+
+With power on the device side, `dsp.py` software gain stays **gentle** so the SSB envelope
+is clean and the `tanh` soft-limiter barely engages:
+
+```
+TX_IQ_PEAK    = 0.5     # IQ normalization ceiling (envelope shaping, not power)
+TX_DRIVE_GAIN = 2.5     # mic→IQ make-up gain
+```
+
+These are envelope/quality knobs only. **Raising them does not raise output power** —
+it just drives the signal into the soft-limiter and degrades the SSB. Use the per-band
+**drive %** to set power.
+
+### 18.7 Safety
+
+The PA is rated **~100 W PEP**. 100% drive on a band equals that band's factory-safe
+ceiling (the same value ExpertSDR3 writes), so it will not overdrive the PA on its own —
+but before sustained high-power TX, verify forward power and SWR on a wattmeter / dummy
+load, since the in-stream telemetry is unavailable while keyed (§18.5).
 
 ---
 

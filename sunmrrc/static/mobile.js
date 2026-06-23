@@ -815,7 +815,7 @@ function loadAudioSettingsFromCookies() {
         var micCookie = '50'; // 默认值
         try {
             if (typeof loadUserAudioSetting === 'function') {
-                micCookie = loadUserAudioSetting('mobile_mic_gain', '50');
+                micCookie = loadUserAudioSetting('mobile_mic_gain', '150');
             } else if (typeof getCookie === 'function') {
                 var c = getCookie('mobile_mic_gain');
                 if (c) micCookie = c;
@@ -890,6 +890,24 @@ function setMainAFGain(value) {
     }
 
     // console.log('🔊 AF 增益:', value + '%');
+}
+
+// 软件 TX 功率（驱动）：发送 setDrive 给后端，调制器 IQ 电平 0..100。
+// 硬件不参与，全部在 DSP 调制器里缩放（见 dsp.py TX_DRIVE_GAIN）。
+function setTXDrive(value) {
+    var driveValue = document.getElementById('main-tx-drive-value');
+    if (driveValue) {
+        driveValue.textContent = value + '%';
+    }
+    if (typeof wsControlTRX !== 'undefined' && wsControlTRX &&
+        wsControlTRX.readyState === WebSocket.OPEN) {
+        wsControlTRX.send('setDrive:' + parseInt(value));
+    }
+    if (typeof saveUserAudioSetting === 'function') {
+        saveUserAudioSetting('TX_DRIVE', parseInt(value), 180);
+    } else if (typeof setCookie === 'function') {
+        setCookie('TX_DRIVE', parseInt(value), 180);
+    }
 }
 
 // 设置菜单项点击事件
@@ -2218,6 +2236,9 @@ function handleMenuItem(action) {
         case 'settings':
             showSettingsPanel();
             break;
+        case 'bandpower':
+            showBandPowerPanel();
+            break;
         case 'audio':
             showAudioPanel();
             break;
@@ -2532,6 +2553,105 @@ function showSettingsPanel() {
 
     html += '<button class="close-panel-btn" onclick="closeModalPanel()">Close</button></div>';
     showModalPanel(html);
+}
+
+////////////////////////////////////////////////////////////
+// 每频段发射功率面板 — 后端 /api/band_power（band_power.json 持久化）
+// 设备 drive(0x0017) 按频段重发；这里编辑 0-100% 并保存到后端。
+////////////////////////////////////////////////////////////
+
+var bandPowerState = { bands: [], default: 80 };
+
+function bandLabel(lo, hi) {
+    var center = (lo + hi) / 2 / 1e6;
+    var meters = Math.round(300 / center);
+    return meters + 'm (' + (lo / 1e6).toFixed(1) + '-' + (hi / 1e6).toFixed(1) + ' MHz)';
+}
+
+function showBandPowerPanel() {
+    var html = '<div class="modal-panel"><h3>📡 Band Power</h3>';
+    html += '<p style="font-size:12px;color:#888;margin-bottom:12px;">每频段发射功率（设备 drive，0-100%）。修改后点保存。</p>';
+    html += '<div id="band-power-body" style="max-height:55vh;overflow-y:auto;">加载中...</div>';
+    html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+    html += '<button class="close-panel-btn" style="flex:1;background:#2a7;" onclick="saveBandPower()">保存</button>';
+    html += '<button class="close-panel-btn" style="flex:1;" onclick="closeModalPanel()">关闭</button>';
+    html += '</div></div>';
+    showModalPanel(html);
+
+    fetch('/api/band_power')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            bandPowerState.bands = (data.bands || []).map(function (b) {
+                return { low: b.low, high: b.high, power: b.power };
+            });
+            bandPowerState.default = (typeof data.default === 'number') ? data.default : 80;
+            renderBandPowerBody();
+        })
+        .catch(function (e) {
+            var body = document.getElementById('band-power-body');
+            if (body) body.innerHTML = '<p style="color:#e55;">加载失败: ' + e + '</p>';
+        });
+}
+
+function renderBandPowerBody() {
+    var body = document.getElementById('band-power-body');
+    if (!body) return;
+    var html = '';
+    bandPowerState.bands.forEach(function (b, i) {
+        html += '<div class="setting-item">';
+        html += '<label>' + bandLabel(b.low, b.high) +
+                ': <span id="bp-val-' + i + '">' + b.power + '%</span></label>';
+        html += '<input type="range" min="0" max="100" value="' + b.power + '" ' +
+                'oninput="onBandPowerInput(' + i + ', this.value)">';
+        html += '</div>';
+    });
+    // 带外默认
+    html += '<div class="setting-item" style="border-top:1px solid #333;padding-top:10px;">';
+    html += '<label>带外默认: <span id="bp-default-val">' + bandPowerState.default + '%</span></label>';
+    html += '<input type="range" min="0" max="100" value="' + bandPowerState.default + '" ' +
+            'oninput="onBandPowerDefaultInput(this.value)">';
+    html += '</div>';
+    body.innerHTML = html;
+}
+
+function onBandPowerInput(i, value) {
+    var v = parseInt(value);
+    bandPowerState.bands[i].power = v;
+    var span = document.getElementById('bp-val-' + i);
+    if (span) span.textContent = v + '%';
+}
+
+function onBandPowerDefaultInput(value) {
+    var v = parseInt(value);
+    bandPowerState.default = v;
+    var span = document.getElementById('bp-default-val');
+    if (span) span.textContent = v + '%';
+}
+
+function saveBandPower() {
+    var payload = {
+        bands: bandPowerState.bands.map(function (b) {
+            return { low: b.low, high: b.high, power: b.power };
+        }),
+        default: bandPowerState.default
+    };
+    fetch('/api/band_power', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+        .then(function (r) { return r.json(); })
+        .then(function () {
+            if (typeof showNotification === 'function') {
+                showNotification('功率设置已保存并应用', 'success');
+            }
+            closeModalPanel();
+        })
+        .catch(function (e) {
+            if (typeof showNotification === 'function') {
+                showNotification('保存失败: ' + e, 'error');
+            }
+        });
 }
 
 // 设置 NR2 Level（主 DSP 面板 NR2 强度循环调用）

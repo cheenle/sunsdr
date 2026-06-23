@@ -34,6 +34,55 @@ IQ_PORT = 50002
 IF_OFFSET = 30500.0   # RX DDS = VFO + IF_OFFSET (verified from pcap)
 SESSION_ID = 0x04B0   # low 16 bits of stream counter
 
+# ── Per-band TX power (drive %) ─────────────────────────────────────
+# EDIT THESE to set max output power per band. drive % maps to the 0x0017
+# byte via a square-root taper: byte = round(255 * sqrt(drive/100)).
+#
+# Defaults are derived from the band-calibration values ExpertSDR3 wrote
+# at each frequency (captured via TCI): byte -> drive% = (byte/255)^2 * 100
+#   3.5 MHz  0xC8(200) -> 62%      14 MHz  0xDC(220) -> 74%
+#   7   MHz  0xFF(255) -> 100%     21 MHz  0xC5(197) -> 60%
+#                                  28 MHz  0xDA(218) -> 73%
+# Each entry: (low_hz, high_hz, drive_percent). First matching range wins.
+# Frequencies outside every range fall back to BAND_POWER_DEFAULT.
+#
+# This is a runtime-editable setting, NOT a hardcoded constant: the server
+# loads band_power.json on startup and calls set_band_power() to override this
+# table, and the /api/band_power endpoint lets the frontend read/write it.
+# The list below is only the fallback default when no JSON config exists.
+BAND_POWER = [
+    (1_800_000,   2_000_000,   100),  # 160m
+    (3_500_000,   4_000_000,    62),  # 80m
+    (5_000_000,   5_500_000,    80),  # 60m
+    (7_000_000,   7_300_000,   100),  # 40m
+    (10_100_000,  10_150_000,   90),  # 30m
+    (14_000_000,  14_350_000,   74),  # 20m
+    (18_068_000,  18_168_000,   80),  # 17m
+    (21_000_000,  21_450_000,   60),  # 15m
+    (24_890_000,  24_990_000,   70),  # 12m
+    (28_000_000,  29_700_000,   73),  # 10m
+]
+BAND_POWER_DEFAULT = 80   # drive % for frequencies not in any band above
+
+
+def set_band_power(table, default=None):
+    """Replace the per-band power table at runtime (called by the server after
+    loading band_power.json). `table` is a list of (low_hz, high_hz, pct)."""
+    global BAND_POWER, BAND_POWER_DEFAULT
+    if table is not None:
+        BAND_POWER = [(int(lo), int(hi), int(pct)) for lo, hi, pct in table]
+    if default is not None:
+        BAND_POWER_DEFAULT = int(default)
+
+
+def band_power_for(freq_hz: float) -> int:
+    """Return the configured drive % for the band containing freq_hz."""
+    for lo, hi, pct in BAND_POWER:
+        if lo <= freq_hz <= hi:
+            return pct
+    return BAND_POWER_DEFAULT
+
+
 # ── Command IDs ────────────────────────────────────────────────────
 
 class CmdID:
@@ -47,6 +96,10 @@ class CmdID:
     INFO_QUERY   = 0x000E  # Device info (486-byte response)
     CALIB_QUERY  = 0x0010  # Calibration data (486-byte response)
     SET_PARAM_15 = 0x0015  # Parameter set
+    DRIVE        = 0x0017  # TX drive/power. uint32 byte = 255*(drive%/100)^0.5
+                           # (verified via TCI capture: 10%->0x50, 50%->0xb4,
+                           # 100%->0xff). Square-root taper. ExpertSDR3 also
+                           # sends this per-band at freq change (band power cal).
     HEARTBEAT    = 0x0018  # Keepalive (every 0.5s)
     SET_PARAM_19 = 0x0019  # Parameter set
     SET_PARAM_1B = 0x001B  # Parameter set
@@ -87,7 +140,7 @@ class SunSDR2DXClient:
         self.tx_freq: float = 7_074_000.0
         self.mode: str = "USB"
         self.ptt: bool = False
-        self.drive: int = 50
+        self.drive: int = 100
         self.volume: float = 0.5
         self.preamp: bool = False
         self.attenuator: int = 0
@@ -208,11 +261,24 @@ class SunSDR2DXClient:
     async def set_frequency(self, freq_hz: float):
         await self.set_rx_frequency(freq_hz)
         await self.set_tx_frequency(freq_hz)
+        # ExpertSDR3 re-sends 0x0017 (drive) on every band/frequency change —
+        # the device resets it to a per-band calibration value otherwise. Mirror
+        # that, but use OUR configurable per-band power (BAND_POWER) so each band
+        # transmits at the level the user set (verified via TCI capture).
+        self.drive = band_power_for(freq_hz)
+        await self._send_drive_byte()
 
     # ── PTT ────────────────────────────────────────────────────
 
     async def set_ptt(self, tx: bool):
-        """PTT: payload=0, trailing word=1(TX)/0(RX)."""
+        """PTT: payload=0, trailing word=1(TX)/0(RX).
+
+        On TX assert, (re)send the current drive (0x0017) first — ExpertSDR3
+        does the same, and it guards against the device having reset 0x0017 to
+        a band-calibration value on the last frequency change. Without this the
+        far end heard very low power because drive was stuck at the boot byte."""
+        if tx:
+            await self._send_drive_byte()
         self.ptt = tx
         self._ptt_active = tx
         await self._send_raw(
@@ -236,7 +302,34 @@ class SunSDR2DXClient:
         self.volume = max(0.0, min(1.0, value))
 
     async def set_drive(self, value: int):
+        """Set TX drive/power 0..100%. Sends 0x0017 to the device with a
+        square-root taper byte (verified via TCI capture against ExpertSDR3):
+
+            byte = round(255 * sqrt(drive/100))
+
+        Mapping: 10%->0x50, 30%->0x8b, 50%->0xb4, 70%->0xd5, 90%->0xf1,
+        100%->0xff. This is the SAME field ExpertSDR3 writes per-band at
+        frequency change (band power calibration), so 100% == that band's
+        factory-safe ceiling — it will not overdrive the PA.
+
+        Previously this only set self.drive locally and never told the device,
+        so drive was stuck at the boot value (0xDC) regardless of the UI."""
         self.drive = max(0, min(100, value))
+        await self._send_drive_byte()
+
+    async def _send_drive_byte(self):
+        """Send the current self.drive as a 0x0017 command (sqrt taper byte).
+
+        WIRE FORMAT (verified byte-for-byte against TCI capture):
+            32ff1700 04000000 00000100 0000  00000000  dc000000
+            └ header (cmd=0x17, len=4) ────┘ └ data=0 ┘ └ trailing=drive ┘
+        The drive byte lives in the TRAILING word, NOT the data payload.
+        data is 4 zero bytes; trailing carries the value. (Earlier bug put
+        the byte in data with trailing=0 → device read drive=0 → W=0.0.)"""
+        byte = int(round(255 * (self.drive / 100.0) ** 0.5))
+        byte = max(0, min(255, byte))
+        await self._send_raw(
+            build_packet(CmdID.DRIVE, struct.pack("<I", 0), trailing=byte))
 
     async def set_rf_gain(self, value: float):
         self.rf_gain = max(0.0, min(1.0, value))

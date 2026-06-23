@@ -20,7 +20,15 @@ py311_env/
 
 # ── Runtime data ───────────────────────────────────────────────────
 mem_channels.json
+band_power.json
 sunmrrc/static/recordings/
+sunmrrc/*.mp3
+sunmrrc/cq.wav
+
+# ── Scratch / dev-only ─────────────────────────────────────────────
+web_control/_tx_*.py
+web_control/_tx_test_out/
+device/_tci_session_backup/
 
 # ── OS ─────────────────────────────────────────────────────────────
 .DS_Store

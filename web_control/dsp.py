@@ -37,7 +37,15 @@ TX_AUDIO_PER_PKT = round(TX_PACKET_SAMPLES * AUDIO_RATE / TX_IQ_SAMPLE_RATE)  # 
 # Genuine ExpertSDR3 TX IQ peaks at ~0.092 (24-bit normalized); RMS 0.002–0.043.
 # The old 0.3 target was ~3.3× hotter and, with firmware ALC unsupported, clipped
 # in the PA (periodic popping). Drive scales 0..1 below this ceiling.
-TX_IQ_PEAK = 0.4
+# NOTE (2026-06-22 v3): RF power is now controlled at the DEVICE via the
+# 0x0017 drive command (see sunsdr_direct.set_drive / BAND_POWER), NOT by
+# inflating the digital IQ level. So this ceiling goes back to a moderate
+# digital-domain safety knee: the software stage only needs to produce a CLEAN
+# SSB envelope that the device's DAC + drive scaling then amplify. With the
+# moderate TX_DRIVE_GAIN below, normal speech peaks land well under this knee
+# so the tanh soft-limiter almost never engages (no compression distortion).
+# The device drive (0..100%) is the real power control.
+TX_IQ_PEAK = 0.5
 # Leading zero-IQ packets after PTT assert, covering PA/relay settling
 # (~17 zero packets observed before audio energy in the reference burst).
 TX_SETTLE_PACKETS = 17
@@ -45,16 +53,50 @@ TX_SETTLE_PACKETS = 17
 # zero-IQ settling pad to full-amplitude modulation (one source of the click).
 # ~1 packet (200 samples @ 39063 Hz ≈ 5.1 ms).
 TX_RAMP_SAMPLES = 200
-# Mic jitter buffer: WS delivers ~20 ms voice frames in bursts, but the TX
-# pacer drains one 5.12 ms packet at a time. Without buffering, the queue
-# oscillates near empty and underflows on any scheduling jitter — each
-# underflow inserts silence and steps the amplitude to 0 (periodic clicking).
-# Hold this many packets (~60 ms) before draining starts / resumes.
-TX_MIC_PRIME_PKTS = 12
+# Mic jitter buffer: WS delivers ~20 ms voice frames in bursts (and the
+# browser ScriptProcessor fires every ~43 ms), but the TX pacer drains one
+# 5.12 ms packet at a time. Without buffering, the queue oscillates near empty
+# and underflows on any WiFi/GC/scheduling jitter — each underflow inserts
+# silence and steps the amplitude to 0 (periodic clicking / stutter).
+#
+# Two-level hysteresis:
+#   - First fill must reach TX_MIC_PRIME_PKTS (~120 ms) before draining starts.
+#     A 120 ms cushion absorbs a single 40–60 ms late burst without hitting 0.
+#   - After an underflow we only re-fill to TX_MIC_REPRIME_PKTS (~60 ms), so a
+#     momentary stall costs a 60 ms re-buffer, not a full 120 ms gap. The old
+#     code force-refilled the FULL prime depth on every underflow, which
+#     amplified a 20 ms network hiccup into a 60 ms silence hole — the dropout
+#     the far end heard as a "stutter".
+TX_MIC_PRIME_PKTS = 24       # ~120 ms high watermark: initial fill before drain
+TX_MIC_REPRIME_PKTS = 12     # ~60 ms: cheaper re-fill after an underflow
 # Audio-rate samples carried across feed_audio() calls so each streaming
 # Hilbert transform has history/look-ahead context and no per-chunk edge
 # transient (buzz). Trimmed off both ends after the transform.
 TX_HILBERT_MARGIN = 256
+# Mic TX make-up gain: phone mic audio (post browser EQ/compression) lands
+# around 0.1–0.3 peak, so a flat ×TX_IQ_PEAK gain alone transmits at a
+# fraction of full power. We apply a FIXED linear make-up gain scaled by the
+# drive control (0..1), then a hard safety clip at the TX_IQ_PEAK ceiling.
+#
+# NOTE: a per-hop tracking AGC used to live here. It re-scaled amplitude every
+# 5.12 ms hop (~195×/sec), which amplitude-modulated the SSB carrier and made
+# the far end hear a trembling/quivering voice. It has been removed — a flat
+# gain is constant-envelope-preserving, so the audio sounds clean. The drive
+# slider is now the only level control.
+# NOTE 2: the safety limit is now a SOFT tanh knee, NOT a hard magnitude clip.
+# A hard clip on IQ magnitude is a non-linear corner that splatters energy
+# across the whole passband (the broadband "noise" the far end heard). tanh
+# compresses transients smoothly with far less out-of-band splatter. The
+# ceiling is fixed at TX_IQ_PEAK and does NOT scale with drive, so drive moves
+# the level under a constant clip point instead of moving the clip point too
+# (the old bug that guaranteed ~7× overdrive at every drive setting).
+TX_DRIVE_GAIN = 2.5           # fixed make-up gain. RF power is set at the
+# DEVICE now (0x0017 drive), so this only needs to lift typical phone-mic
+# audio (~0.1–0.3 peak) into a healthy digital level (~0.3–0.5 peak) WITHOUT
+# slamming the tanh knee. Normal speech peaks land around 0.3–0.4 (under the
+# 0.5 ceiling), so the soft-limiter rarely engages and the far end hears clean
+# SSB. Turn the DEVICE drive up for more power, not this.
+# Average TX power ~15 W into a 100 W PA — well below saturation.
 
 # ── IQ Decoder ─────────────────────────────────────────────────────
 
@@ -385,6 +427,36 @@ class AudioDemodulator:
 
 # ── TX IQ Modulator ────────────────────────────────────────────────
 
+def _pack_iq_24bit(iq: np.ndarray) -> bytes:
+    """Vectorized 24-bit signed LE I/Q packing.
+
+    Replaces the per-sample struct.pack loop (200 samples × 2 = 400 pure-Python
+    pack calls per packet, ~3000/burst) that held the GIL on the asyncio thread
+    long enough to starve the TX pacer thread and jitter the 5.12 ms packet
+    cadence (heard as a trembling/quivering voice at the far end). Now the whole
+    packet is built with a handful of numpy ops that release the GIL.
+
+    Layout per sample (6 bytes): I[0:3] then Q[0:3], each 24-bit signed LE.
+    """
+    n = len(iq)
+    if n == 0:
+        return b''
+    # Interleave I,Q into one real array: [I0,Q0,I1,Q1,...]
+    inter = np.empty(2 * n, dtype=np.float64)
+    inter[0::2] = np.real(iq)
+    inter[1::2] = np.imag(iq)
+    # Scale to 24-bit full scale, clip to signed 24-bit range, then truncate
+    # toward zero — matching the original int(np.clip(...)) per-sample behavior
+    # exactly so the TX signal is byte-identical to the verified reference.
+    vals = np.trunc(np.clip(inter * 8388608.0, -8388608, 8388607)).astype(np.int32)
+    # Take the low 3 bytes of each int32 (little-endian): view as bytes, drop
+    # the high byte of each 4-byte group. int32 LE byte order is b0 b1 b2 b3,
+    # and for values in [-2^23, 2^23) the low 3 bytes are the correct 24-bit LE
+    # two's-complement representation.
+    b4 = vals.view(np.uint8).reshape(-1, 4)
+    return b4[:, :3].tobytes()
+
+
 class TXModulator:
     """Audio → SSB IQ: upsampling + Hilbert analytic signal → 24-bit IQ packets.
 
@@ -412,11 +484,14 @@ class TXModulator:
         # Live mic IQ queue: WS thread pushes encoded packets via feed_audio();
         # the TX pacer thread (different OS thread) pops via get_mic_iq().
         self._mic_lock = threading.Lock()
-        self._mic_iq = deque(maxlen=128)  # ~0.65 s of 5.12 ms packets before drop
+        self._mic_iq = deque(maxlen=1024)  # ~5 s of 5.12 ms packets; deep enough
+        # to absorb the ~5 pkt/s production/consumption mismatch (browser ≈43
+        # pkt/s, pacer ≈49 pkt/s) for a 3-minute session before overflowing.
         # Jitter buffer: don't start draining until TX_MIC_PRIME_PKTS are queued,
         # so bursty 20 ms WS frames can't underflow the 5.12 ms pacer (the cause
         # of the periodic clicking). Re-primes after any underflow.
         self._mic_primed = False
+        self._first_prime = True          # first fill uses the high watermark
         self._mic_underruns = 0           # diagnostic counter
         # Continuous input→audio_rate resampler state (avoids per-frame
         # boundary discontinuities). _in_buf holds raw input-rate samples;
@@ -424,6 +499,17 @@ class TXModulator:
         self._in_buf = np.array([], dtype=np.float32)
         self._rs_phase = 0.0
         self._in_rate = 16000
+        # TX uses a flat drive-scaled make-up gain (TX_DRIVE_GAIN) — no mic AGC.
+        # A tracking AGC here used to pump the envelope and make the far end
+        # hear a trembling voice; it has been removed.
+        # ── End-to-end level probes (1 Hz summary to server.log) ──
+        # Captures RMS + peak at four stages so we can map mic level → final
+        # IQ amplitude and identify the dominant gain/loss step. Reset each
+        # PTT cycle via reset_mic(); server.py reads + flushes at 1 Hz.
+        self._lvl_in_sum_sq = 0.0;     self._lvl_in_peak = 0.0;  self._lvl_in_n = 0
+        self._lvl_an_sum_sq = 0.0;      self._lvl_an_peak = 0.0;  self._lvl_an_n = 0
+        self._lvl_drv_sum_sq = 0.0;     self._lvl_drv_peak = 0.0; self._lvl_drv_n = 0
+        self._lvl_lim_sum_sq = 0.0;     self._lvl_lim_peak = 0.0; self._lvl_lim_n = 0
 
     def set_drive(self, value: float):
         """Set TX drive 0..1 (linear scale below the TX_IQ_PEAK ceiling)."""
@@ -534,7 +620,8 @@ class TXModulator:
         # ── 2/3. Overlap-save SSB → IQ packets ──
         M = TX_HILBERT_MARGIN
         N = TX_AUDIO_PER_PKT
-        scale = TX_IQ_PEAK * self.drive
+        ceiling = TX_IQ_PEAK                        # FIXED soft-limit knee (drive-independent)
+        gain = TX_DRIVE_GAIN * self.drive          # flat make-up gain (no AGC)
         queued = 0
         while len(self._audio_buf) >= 2 * M + N:
             block = self._audio_buf[:2 * M + N]
@@ -555,7 +642,50 @@ class TXModulator:
             xq = np.linspace(0.0, 1.0, TX_PACKET_SAMPLES)
             iq = (np.interp(xq, xp, np.real(center))
                   + 1j * np.interp(xq, xp, np.imag(center)))
-            iq = (iq * scale).astype(np.complex64)    # fixed gain — preserves dynamics
+
+            # ── Flat make-up gain (NO AGC) ──
+            # A fixed drive-scaled gain preserves the envelope, so the far end
+            # hears a clean, steady voice. The per-hop tracking AGC that used
+            # to live here was the source of the trembling/quivering audio.
+            iq = iq * gain
+            # Soft limiter (tanh) on magnitude — NOT a hard clip. A hard
+            # magnitude clip puts a sharp corner on every syllable, which
+            # generates wideband splatter across the whole passband (the
+            # "mostly noise" the far end heard). tanh saturates smoothly toward
+            # the ceiling, so transients round off instead of squaring off.
+            mag = np.abs(iq)
+            nz = mag > 1e-9
+            iq_pre_lim = iq.copy()                 # probe: capture pre-tanh
+            if np.any(nz):
+                limited = ceiling * np.tanh(mag[nz] / ceiling)
+                iq[nz] = iq[nz] / mag[nz] * limited
+            iq = iq.astype(np.complex64)
+
+            # ── End-to-end level probes (accumulate per-hop, log 1 Hz) ──
+            # Four stages: input audio / analytic / post-drive / post-limiter.
+            # All computed on the 200-sample packet for consistency. The input
+            # and analytic probes are the pre-drive magnitude divided back
+            # by `gain`, so we see the signal level at each stage.
+            try:
+                inv_g = 1.0 / gain if gain > 0 else 0.0
+                in_mag = np.abs(np.real(iq_pre_lim)) * inv_g
+                an_mag = np.abs(iq_pre_lim) * inv_g
+                drv_mag = np.abs(iq_pre_lim)
+                lim_mag = np.abs(iq).astype(np.float64)
+                self._lvl_in_sum_sq  += float(np.sum(in_mag * in_mag))
+                self._lvl_in_peak     = max(self._lvl_in_peak,  float(np.max(in_mag)))
+                self._lvl_in_n       += len(in_mag)
+                self._lvl_an_sum_sq  += float(np.sum(an_mag * an_mag))
+                self._lvl_an_peak     = max(self._lvl_an_peak,  float(np.max(an_mag)))
+                self._lvl_an_n       += len(an_mag)
+                self._lvl_drv_sum_sq += float(np.sum(drv_mag * drv_mag))
+                self._lvl_drv_peak    = max(self._lvl_drv_peak, float(np.max(drv_mag)))
+                self._lvl_drv_n      += len(drv_mag)
+                self._lvl_lim_sum_sq += float(np.sum(lim_mag * lim_mag))
+                self._lvl_lim_peak    = max(self._lvl_lim_peak, float(np.max(lim_mag)))
+                self._lvl_lim_n      += len(lim_mag)
+            except Exception:
+                pass
 
             pkt = self._encode_iq(iq)
             with self._mic_lock:
@@ -567,20 +697,27 @@ class TXModulator:
     def get_mic_iq(self) -> bytes | None:
         """Pop one queued mic TX IQ packet (1200 bytes), or None.
 
-        Jitter-buffered: stays un-primed (returns None → caller sends silence)
-        until TX_MIC_PRIME_PKTS have accumulated, then drains 1/call. On
-        underflow it re-primes, so a momentary WS stall produces continuous
-        silence rather than a gap mid-stream (no click). Called from the TX
-        pacer thread; thread-safe against feed_audio."""
+        Jitter-buffered with two-level hysteresis (see TX_MIC_PRIME_PKTS):
+        stays un-primed (returns None → caller sends silence) until the high
+        watermark TX_MIC_PRIME_PKTS is reached on first fill, then drains 1
+        packet/call. On underflow it re-primes only to the lower
+        TX_MIC_REPRIME_PKTS watermark, so a momentary WS stall costs a short
+        re-buffer rather than a full prime-depth silence hole. Called from the
+        TX pacer thread; thread-safe against feed_audio."""
         with self._mic_lock:
             if not self._mic_primed:
-                if len(self._mic_iq) >= TX_MIC_PRIME_PKTS:
+                # Use the high watermark for the very first fill, the lower
+                # watermark for re-fills after an underflow.
+                want = (TX_MIC_PRIME_PKTS if self._first_prime
+                        else TX_MIC_REPRIME_PKTS)
+                if len(self._mic_iq) >= want:
                     self._mic_primed = True
+                    self._first_prime = False
                 else:
                     return None                       # still filling — emit silence
             if self._mic_iq:
                 return self._mic_iq.popleft()
-            # Underflow: re-prime so we re-buffer before resuming.
+            # Underflow: re-prime (to the cheaper low watermark) before resuming.
             self._mic_primed = False
             self._mic_underruns += 1
             return None
@@ -593,6 +730,27 @@ class TXModulator:
         with self._mic_lock:
             self._mic_iq.clear()
             self._mic_primed = False
+            self._first_prime = True      # PTT restart re-arms the deep prime
+        # Reset the end-to-end level probe accumulators (PTT cycle boundary).
+        self._lvl_in_sum_sq = 0.0;  self._lvl_in_peak = 0.0;  self._lvl_in_n = 0
+        self._lvl_an_sum_sq = 0.0;  self._lvl_an_peak = 0.0;  self._lvl_an_n = 0
+        self._lvl_drv_sum_sq = 0.0; self._lvl_drv_peak = 0.0; self._lvl_drv_n = 0
+        self._lvl_lim_sum_sq = 0.0; self._lvl_lim_peak = 0.0; self._lvl_lim_n = 0
+
+    def snapshot_levels(self) -> dict:
+        """Return + reset the per-stage level accumulators. Called by server.py
+        at 1 Hz to log end-to-end gain across the TX chain."""
+        out = dict(
+            in_sq=self._lvl_in_sum_sq, in_pk=self._lvl_in_peak, in_n=self._lvl_in_n,
+            an_sq=self._lvl_an_sum_sq, an_pk=self._lvl_an_peak, an_n=self._lvl_an_n,
+            drv_sq=self._lvl_drv_sum_sq, drv_pk=self._lvl_drv_peak, drv_n=self._lvl_drv_n,
+            lim_sq=self._lvl_lim_sum_sq, lim_pk=self._lvl_lim_peak, lim_n=self._lvl_lim_n,
+        )
+        self._lvl_in_sum_sq = 0.0;  self._lvl_in_peak = 0.0;  self._lvl_in_n = 0
+        self._lvl_an_sum_sq = 0.0;  self._lvl_an_peak = 0.0;  self._lvl_an_n = 0
+        self._lvl_drv_sum_sq = 0.0; self._lvl_drv_peak = 0.0; self._lvl_drv_n = 0
+        self._lvl_lim_sum_sq = 0.0; self._lvl_lim_peak = 0.0; self._lvl_lim_n = 0
+        return out
 
     def get_tune_iq(self) -> bytes:
         """Get next 200 IQ samples from the pre-computed continuous analytic signal.
@@ -673,13 +831,7 @@ class TXModulator:
     def _encode_iq(self, iq: np.ndarray) -> bytes:
         """Pack 200 IQ samples as 24-bit LE bytes (1200 bytes total)."""
         iq = self._apply_ramp(iq)
-        raw = b''
-        for i in range(len(iq)):
-            iv = int(np.clip(np.real(iq[i]) * 8388608, -8388608, 8388607))
-            qv = int(np.clip(np.imag(iq[i]) * 8388608, -8388608, 8388607))
-            raw += struct.pack('<i', iv)[:3]
-            raw += struct.pack('<i', qv)[:3]
-        return raw
+        return _pack_iq_24bit(iq)
 
     def generate_test_tone(self, freq_hz: float = 700.0,
                            duration_samples: int = 200) -> np.ndarray:
@@ -692,13 +844,7 @@ class TXModulator:
 
 def encode_tx_iq_packet(iq: np.ndarray) -> bytes:
     """Encode 200 IQ samples as 24-bit LE raw bytes for TX stream."""
-    raw = b''
-    for i in range(len(iq)):
-        iv = int(np.clip(np.real(iq[i]) * 8388608, -8388608, 8388607))
-        qv = int(np.clip(np.imag(iq[i]) * 8388608, -8388608, 8388607))
-        raw += struct.pack('<i', iv)[:3]
-        raw += struct.pack('<i', qv)[:3]
-    return raw
+    return _pack_iq_24bit(iq)
 
 
 # ── Stream Processor ───────────────────────────────────────────────

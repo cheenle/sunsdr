@@ -74,6 +74,20 @@ Browser sends "setFreq:7074000" over /WSCTRX
 
 Mode is DSP-owned (AD-003): `setMode` updates `AudioDemodulator`, hardware stays mode-agnostic. Frequency is split into RX DDS (VFO + 30500 Hz IF offset) and TX VFO.
 
+## TX power / drive (0x0017)
+
+TX output power is set by the **DRIVE command (0x0017)**, NOT by software IQ gain. ALC is not supported on SunSDR2 firmware, so per-band drive is the only power control.
+
+- **Byte mapping** (verified byte-for-byte against ExpertSDR3 TCI capture): `byte = round(255 × √(drive%/100))` — a square-root taper. 10%→0x50, 50%→0xb4, 100%→0xff.
+- **Packet layout is the gotcha**: the drive byte goes in the **trailing word**, not the payload. `build_packet(CmdID.DRIVE, data=b"\0\0\0\0", trailing=byte)`. Putting it in the payload sends drive=0 (device transmits at near-zero power — this was the original "low power" bug).
+- **Re-sent on every QSY**: ExpertSDR3 (and now `set_frequency()`) re-sends 0x0017 on each frequency change, because the device resets drive to a per-band calibration value otherwise. `set_ptt(tx=True)` also re-sends it just before keying as a guard.
+- **Per-band power is user-configurable**, persisted to `band_power.json`, edited via `/api/band_power` and the **Band Power** menu panel. `band_power_for(freq_hz)` looks up the % for the current band; `BAND_POWER_DEFAULT` (100) covers out-of-band frequencies.
+- **Software IQ gain stays gentle** (`dsp.py` `TX_DRIVE_GAIN=2.5`, `TX_IQ_PEAK=0.5`): the software layer only produces clean SSB that barely engages the tanh soft-limiter; the device drive does the power scaling.
+
+### TX power telemetry blind spot
+
+The device **stops sending 0x1F00 telemetry while keyed** (verified: zero TX-tagged 0x1F00 frames in any capture). So `W=` in the server log reflects only the idle/RX baseline, not forward power. **Read actual TX power from the ATR-1000 tuner** (or a wattmeter). Confirmed working values: Tune ~12W, SSB voice 30–40W PEP into the tuner. The 0x1F01 frame is logged (TX-only, 1 Hz) as a candidate location for a forward-power field.
+
 ## Dependencies
 
 - **Python 3.12** virtualenv at `py311_env/` (symlinked as `venv/`)
@@ -123,7 +137,8 @@ See `SDD/08-architecture-decisions.md` for all 9 ADs with rationale. Key ones:
 
 ## Known gaps (AD-009)
 
-- TX audio modulation not implemented (mic frames arrive but aren't consumed)
+- TX SSB modulation **works** — mic frames are consumed, Hilbert-modulated to IQ, and transmitted (confirmed on-air: Tune ~12W, voice 30–40W PEP via ATR-1000)
 - `/WSATR1000` accepts connections but doesn't interface with real tuner hardware
-- `/api/mem_channels` endpoint implemented (GET/POST with JSON persistence to `mem_channels.json`)
-- CW/FT8/Recordings page links in menu are dead
+- `/api/mem_channels` implemented (GET/POST with JSON persistence to `mem_channels.json`)
+- `/api/band_power` implemented (GET/POST with JSON persistence to `band_power.json`; frontend **Band Power** menu panel edits per-band drive %)
+- Spectrum bandwidth fixed at 78 kHz (156 kHz switch deferred — would require parameterizing the whole RX decimation chain + a fresh 0x0020 capture; low benefit for SSB)

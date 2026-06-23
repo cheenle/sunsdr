@@ -126,7 +126,6 @@
                     <button class="quick-btn band-btn" id="band-btn">20m</button>
                     <button class="quick-btn filter-btn" id="filter-btn">MID</button>
                     <button class="quick-btn agc-btn" id="agc-btn" title="点按切换 AGC">AGC</button>
-                    <button class="quick-btn ft8-btn" id="ft8-btn" onclick="window.location.href='ft8_ultron.html'">FT8</button>
                 </div>
             </section>
 
@@ -174,6 +173,15 @@
                     <span class="volume-icon-small">&#x1F50A;</span>
                     <input type="range" id="main-af-gain" class="volume-slider-compact" min="0" max="100" value="50" oninput="setMainAFGain(this.value)">
                     <span class="volume-value-small" id="main-af-value">50%</span>
+                </div>
+            </section>
+
+            <!-- TX Drive (软件发射功率) - 精简版 -->
+            <section class="volume-control-compact">
+                <div class="volume-row-compact">
+                    <span class="volume-icon-small">&#x1F4E1;</span>
+                    <input type="range" id="main-tx-drive" class="volume-slider-compact" min="0" max="100" value="50" oninput="setTXDrive(this.value)">
+                    <span class="volume-value-small" id="main-tx-drive-value">50%</span>
                 </div>
             </section>
             
@@ -239,11 +247,8 @@
                 <li><a href="#" class="menu-item" data-action="settings">Radio Settings</a></li>
                 <li><a href="#" class="menu-item" data-action="audio">Audio Controls</a></li>
                 <li><a href="#" class="menu-item" data-action="txeq">TX Equalizer</a></li>
-                <li><a href="#" class="menu-item" data-action="digital">Digital Modes</a></li>
-                <li><a href="cw_live.html" class="menu-item">CW Decoder</a></li>
-                <li><a href="ft8_ultron.html" class="menu-item">FT8</a></li>
+                <li><a href="#" class="menu-item" data-action="bandpower">Band Power</a></li>
                 <li><a href="recordings.html" class="menu-item">Recordings</a></li>
-                <li><a href="#" class="menu-item" data-action="logbook">Logbook</a></li>
                 <li><a href="#" class="menu-item" data-action="about">About</a></li>
                 <li><a href="#" class="menu-item" id="fullscreen-btn" data-action="fullscreen">Fullscreen</a></li>
             </ul>
@@ -268,7 +273,7 @@
     <script src="/modules/tx_audio_eq.js"></script>
     <script src="/modules/ptt_manager.js"></script>
     <script src="/modules/tune_cq.js"></script>
-    <script src="/mobile.js?v=5.5.0"></script>
+    <script src="/mobile.js?v=5.6.0"></script>
     <script src="/tx_button.js"></script>
 </body>
 </html>
