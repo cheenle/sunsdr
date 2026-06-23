@@ -118,13 +118,27 @@
 |-----------|-------|
 | Type | Product/Architecture |
 | Status | Active |
-| Decision | Do not claim ATR, memory API, CW/FT8 pages, or TX modulation as complete until backends exist |
+| Decision | Do not claim ATR or CW/FT8 pages as complete until backends exist; TX modulation and the memory-channel API are now implemented and no longer gated |
 
 **Problem**: The frontend contains inherited/planned hooks from broader MRRC work.
 
 **Rationale**: Removing them may be premature, but overstating them causes design drift.
 
-**Consequences**: SDD explicitly separates implemented, transport-only, and planned capabilities.
+**Consequences**: SDD explicitly separates implemented, transport-only, and planned capabilities. As of 2026-06, TX voice modulation and `/api/mem_channels` graduated from gated to implemented; ATR backend and CW/FT8/recording pages remain the only outstanding gated hooks.
+
+## AD-010: Control TX Power via the Device DRIVE Command (0x0017)
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Architecture |
+| Status | Implemented |
+| Decision | Set TX output power with the device DRIVE command (`0x0017`), not software IQ amplitude. Drive % is runtime-configurable per band and persisted. |
+
+**Problem**: Early TX produced very low output. Root cause: software scaled IQ amplitude for "power" while the drive byte was either never sent or placed in the wrong packet field (payload instead of the trailing word), so the device received drive=0.
+
+**Rationale**: SunSDR2 firmware does not support ALC, so per-band drive is the only real power lever. The drive byte uses a square-root taper (`round(255·√(drive%/100))`) and must sit in the packet **trailing word** (verified byte-for-byte against an ExpertSDR3 TCI capture). The device resets drive to a per-band calibration value on every QSY, so it is re-sent on frequency change and before each PTT assert.
+
+**Consequences**: Software IQ gain stays gentle (clean SSB envelope only); power is owned by the device. Per-band power is user-editable via `/api/band_power` (persisted to `band_power.json`) and the Band Power menu panel. On-air verified: Tune ~12 W, voice 30–40 W PEP. Note: the device stops sending `0x1F00` telemetry while keyed, so forward power must be read from the ATR-1000 tuner or a wattmeter, not the in-stream telemetry.
 
 ## 8.10 Decision Summary
 
@@ -139,3 +153,4 @@
 | AD-007 | PTT release safety flow | Implemented |
 | AD-008 | Optional WDSP | Implemented |
 | AD-009 | Explicit frontend/backend gap tracking | Active |
+| AD-010 | TX power via device DRIVE (0x0017) | Implemented |

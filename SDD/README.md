@@ -33,8 +33,8 @@ Runtime facts are derived from the current repository, primarily `server.py`, `s
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-SUNMRRC-2026-001 |
-| SDD Version | V3.0 |
-| Baseline Date | 2026-06-21 |
+| SDD Version | V3.2 |
+| Baseline Date | 2026-06-23 |
 | Status | Living design baseline |
 | Project | SunMRRC |
 | Primary Radio | SunSDR2 DX |
@@ -67,7 +67,8 @@ SunSDR2 DX hardware
 | Radio control | Implemented | Frequency, DSP mode, PTT, tune, gain, filter, AGC/preamp controls |
 | WDSP controls | Implemented when libwdsp is available | NR2, NB, ANF, NF, AGC, notches |
 | HTTPS/WSS | Implemented | Auto-detects `certs/fullchain.pem` and `certs/radio.vlsc.net.key`; `DISABLE_SSL=1` for HTTP |
-| TX microphone modulation | Not yet complete | `/WSaudioTX` receives frames, but server-side audio modulation into SunSDR TX path is unresolved |
+| TX voice modulation | Implemented | `/WSaudioTX` mic PCM → Hilbert SSB → 24-bit IQ → `0xFFFD` TX stream; on-air verified (Tune ~12 W, voice 30–40 W PEP) |
+| TX power / drive | Implemented | Device DRIVE command (`0x0017`), runtime per-band power via `/api/band_power` + Band Power menu panel (persisted to `band_power.json`) |
+| Memory channel API | Implemented | `/api/mem_channels` GET/POST with JSON persistence (`mem_channels.json`) |
 | ATR-1000 | Frontend legacy/planned | UI references exist; backend `/WSATR1000` is not implemented in this codebase |
-| CW/FT8/recordings links | Frontend legacy/planned | Menu links exist; corresponding pages are not present in this repository snapshot |
-| Memory channel API | Frontend planned | `MemoryChannelManager` expects `/api/mem_channels`; backend endpoint is not present |
+| CW/FT8 menu links | Removed | Dead links cleaned from the menu; pages not present in this repository snapshot. Recordings page is present (`recordings.html`) |

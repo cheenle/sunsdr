@@ -14,7 +14,10 @@
 | StaticServer | Backend support | `server.py` | Serves files from `static/` with MIME map |
 | ControlWebSocket | Backend core | `server.py` | `/WSCTRX` command loop |
 | RXAudioWebSocket | Backend core | `server.py` | `/WSaudioRX` client set and binary fan-out |
-| TXAudioWebSocket | Backend placeholder | `server.py` | `/WSaudioTX` connection tracking only |
+| TXAudioWebSocket | Backend core | `server.py` | `/WSaudioTX` mic-frame ingress → `TXModulator.feed_audio()` |
+| TXModulator | Shared DSP | `../web_control/dsp.py` | Mic PCM → fractional resample → Hilbert SSB → 24-bit IQ → `0xFFFD` TX packets |
+| TXPacer | Backend core | `server.py` | Drains queued TX IQ at 5.12 ms/pkt; sends `0xFFFD` to device:50002 |
+| BandPowerAPI | Backend core | `server.py` | `/api/band_power` GET/POST; persists to `band_power.json`; applies per-band DRIVE |
 | SpectrumWebSocket | Backend core | `server.py` | `/WSspectrum` binary fan-out |
 | TLSLocator | Backend support | `server.py` | Cert/key discovery and HTTP fallback |
 | MobileHTML | Frontend core | `static/index.html` | UI structure and script composition |
@@ -28,6 +31,9 @@
 | SettingsManager | Frontend support | `static/modules/settings_manager.js` | Cookie preferences and saved frequency helpers |
 | OpusCodec | Frontend audio | `static/modules/opus_codec.js`, `opus_wasm.js` | Browser-side Opus support for TX pipeline |
 | RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | Queue-based AudioWorklet playback processor |
+| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | Dedicated-thread mic capture AudioWorklet (ScriptProcessor fallback) feeding `/WSaudioTX` |
+| TXModulator | Shared DSP | `../web_control/dsp.py` | Consume `/WSaudioTX` PCM, resample, Hilbert SSB modulate to 24-bit IQ, queue `0xFFFD` TX packets |
+| BandPowerAPI | Backend core | `server.py` | `/api/band_power` GET/POST; persist per-band drive % to `band_power.json`; apply to device |
 | ServiceWorker | Frontend support | `static/sw.js` | Static asset cache with JS/HTML bypass |
 | RestartScript | Operations | `restart.sh` | Safe restart, port cleanup, log redirection |
 | StartScript | Operations | `start.sh` | Simple foreground launcher with default port |
@@ -82,6 +88,8 @@ controls.js
 | Spectrum | `server.py`, `../web_control/dsp.py`, `static/controls.js` (server quantizes; `controls.js` accumulates/contrast-stretches the waterfall) |
 | Frequency/mode/control | `server.py`, `../web_control/sunsdr_direct.py`, `static/controls.js`, `static/mobile.js` |
 | PTT safety | `server.py`, `static/modules/ptt_manager.js`, `static/tx_button.js` |
+| TX voice modulation | `server.py`, `../web_control/dsp.py` (`TXModulator`), `static/controls.js`, `static/tx_capture_worklet.js` |
+| TX power / per-band drive | `server.py` (`/api/band_power`), `../web_control/sunsdr_direct.py` (`0x0017`), `static/mobile.js` (Band Power panel), `band_power.json` |
 | WDSP controls | `server.py`, `../web_control/dsp.py`, `../web_control/wdsp_wrapper.py`, `static/mobile.js` |
 | Browser TX EQ | `static/modules/tx_audio_eq.js`, `static/controls.js` |
 | Restart/ops | `restart.sh`, `start.sh`, `server.log` |
@@ -90,8 +98,6 @@ controls.js
 
 | Missing/Incomplete Component | Expected Responsibility |
 |------------------------------|-------------------------|
-| TXModulator | Consume `/WSaudioTX` microphone frames and drive SunSDR TX audio/IQ path |
 | ATRWebSocketHandler | Implement `/WSATR1000` for power/SWR and tuner control |
-| MemoryChannelAPI | Implement `/api/mem_channels` load/save/sync |
 | CWPage/FT8Page/RecordingsPage | Provide targets currently linked by menu |
 | AuthBackend | Replace cookie-only callsign prompt with real server-side identity if required |

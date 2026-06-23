@@ -19,8 +19,10 @@
 - Serve a mobile-first web UI from `static/`.
 - Maintain WebSocket control channel `/WSCTRX`.
 - Maintain RX audio channel `/WSaudioRX` using Int16 PCM frames.
-- Maintain placeholder TX audio socket `/WSaudioTX` for browser microphone pipeline integration.
+- Maintain TX audio socket `/WSaudioTX` for browser microphone uplink (PCM frames modulated to SunSDR TX IQ).
 - Maintain waterfall channel `/WSspectrum` with compact FFT frames.
+- Control TX output power via the device DRIVE command (`0x0017`) with runtime-configurable per-band power (`/api/band_power`).
+- Persist and serve memory channels via `/api/mem_channels`.
 - Connect to SunSDR2 DX over direct UDP protocol.
 - Receive and parse IQ stream packets from local bind address `192.168.16.100:50002`.
 - Demodulate IQ to audio and compute spectrum through shared DSP components.
@@ -34,7 +36,6 @@
 - Native iOS/Android application.
 - Cloud-hosted multi-tenant service.
 - Full authentication/authorization backend.
-- Complete TX microphone modulation into SunSDR TX IQ/audio path.
 - ATR-1000 backend endpoint and proxy in this repository.
 - CW, FT8, recordings, and logbook pages unless added later.
 - General Hamlib rig abstraction; this codebase is SunSDR2 DX direct-control oriented.
@@ -50,6 +51,8 @@
 | SC5 | DSP mode changes are local and explicit | `setMode:*` updates demodulator mode and returns `getMode:*` |
 | SC6 | PTT release cannot silently stick indefinitely | Release ACK retry, backup `s:`, watchdog, and backend forced RX path exist |
 | SC7 | Waterfall stream remains lightweight | `/WSspectrum` sends 512-byte quantized rows |
+| SC8 | TX voice produces RF output | PTT + mic yields measurable power (Tune ~12 W, voice 30–40 W PEP on ATR-1000) |
+| SC9 | TX power is configurable per band | Band Power panel / `/api/band_power` sets drive, applied on QSY and PTT |
 
 ## 3.5 Major Milestones
 
@@ -59,6 +62,8 @@
 | M2 | 2026-06 | Stabilize RX chain with shared SunSDR DSP import |
 | M3 | 2026-06 | Add HTTPS/WSS startup to satisfy iOS secure-context requirements |
 | M4 | 2026-06 | Consolidate WDSP controls into main mobile DSP panel |
-| M5 | Planned | Complete TX microphone modulation path |
-| M6 | Planned | Implement backend memory-channel API or remove frontend dependency |
-| M7 | Planned | Decide whether ATR/CW/FT8 links are in-scope for SunMRRC or should be removed |
+| M5 | 2026-06 | Complete TX microphone modulation path (Hilbert SSB → IQ → 0xFFFD) |
+| M6 | 2026-06 | Device DRIVE (0x0017) TX power control + per-band power API/UI |
+| M7 | 2026-06 | Implement backend memory-channel API (`/api/mem_channels`) |
+| M8 | 2026-06 | Remove dead CW/FT8 menu links |
+| M9 | Planned | Decide whether ATR-1000 backend is in-scope for SunMRRC |

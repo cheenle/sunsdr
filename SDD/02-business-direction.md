@@ -16,7 +16,7 @@ Deliver a pragmatic, browser-native remote radio control surface for HAM operati
 | G2 | Safe remote control | Frequency, mode, PTT, tune, gain, and DSP controls behave predictably |
 | G3 | Minimal deployment | Single Python process serves UI, WebSockets, TLS, and radio bridge |
 | G4 | Design continuity | SDD records implementation facts, decisions, risks, and future work |
-| G5 | Incremental extensibility | Preserve hooks for TX modulation, ATR, memory channels, and digital modes without overstating completion |
+| G5 | Incremental extensibility | Preserve hooks for ATR and digital modes without overstating completion |
 
 ## 2.4 Objectives
 
@@ -27,8 +27,9 @@ Deliver a pragmatic, browser-native remote radio control surface for HAM operati
 | O3 | Control-plane liveness | `PING`/`PONG`, state query and command response | Implemented |
 | O4 | PTT release safety | Multiple release safeguards | Implemented in frontend and backend backup command |
 | O5 | Spectrum visibility | Compact waterfall stream | Implemented |
-| O6 | TX voice completion | Browser mic to SunSDR TX modulation | Open |
+| O6 | TX voice completion | Browser mic to SunSDR TX modulation | Implemented (on-air verified) |
 | O7 | ATR integration | Backend endpoint and device bridge | Open |
+| O8 | TX power control | Per-band drive (`0x0017`) configurable from UI | Implemented (on-air verified) |
 
 ## 2.5 Strategy
 

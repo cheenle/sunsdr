@@ -20,9 +20,10 @@
 | R2 | Fixed local UDP bind IP differs from deployment host | Medium | High | Parameterize or update `server.py` network constants |
 | R3 | TX release command lost or socket half-open | Low-Medium | Critical | ACK retry, backup `s:`, watchdog, forced backend RX handler |
 | R4 | WDSP library unavailable | Medium | Medium | Optional initialization; built-in DSP path still runs |
-| R5 | TX audio not transmitted despite UI expectations | High | High | Document boundary; implement TXModulator before claiming voice TX |
+| R5 | TX audio not transmitted despite UI expectations | Resolved | High | TXModulator consumes mic frames → Hilbert SSB → IQ; on-air verified |
 | R6 | ATR frontend connection errors confuse user | Medium | Medium | Implement `/WSATR1000` or hide UI until ready |
-| R7 | Memory channel manager expects missing API | Medium | Low-Medium | Implement `/api/mem_channels` or convert to local-only UI |
+| R7 | Memory channel manager expects missing API | Resolved | Low-Medium | `/api/mem_channels` implemented (GET/POST + JSON persistence) |
+| R10 | Over-driving the PA (no firmware ALC) | Low-Medium | High | Per-band drive caps at the factory-safe ceiling; verify with wattmeter/dummy load before sustained high power |
 | R8 | Stale frontend assets | Low | Medium | Service worker bypasses JS/HTML and scripts use version query strings |
 | R9 | Certificate expiry | Low | High | Use expiry check script/log and maintain backups |
 
@@ -35,20 +36,22 @@
 | A3 | Browser supports WebSocket and Web Audio | High | Modern iOS/desktop browsers |
 | A4 | TLS certificate/key pair is valid for `radio.vlsc.net` | High | HTTPS request and browser lock |
 | A5 | Shared `../web_control` modules remain available | High in current workspace | Import success on startup |
-| A6 | Operator understands current TX voice limitation | Medium | SDD/STATUS documentation |
+| A6 | Operator reads TX forward power from the ATR-1000 tuner or a wattmeter | High | Device stops `0x1F00` telemetry while keyed; on-air values confirmed |
 
 ## 13.4 Current Issues
 
 | ID | Issue | Priority | Status | Resolution Path |
 |----|-------|----------|--------|-----------------|
 | I1 | iPhone HTTP secure-context failure | Critical | Resolved in code | HTTPS/WSS auto-start and frontend WSS selection |
-| I2 | TX microphone modulation missing | High | Open | Design and implement server-side TX audio/IQ path |
+| I2 | TX microphone modulation missing | High | Resolved in code | Server-side mic→Hilbert SSB→IQ path implemented; on-air verified |
 | I3 | `/WSATR1000` missing | Medium | Open | Implement backend or disable frontend hooks |
-| I4 | `/api/mem_channels` missing | Medium | Open | Add FastAPI routes and persistence |
+| I4 | `/api/mem_channels` missing | Medium | Resolved in code | GET/POST routes with JSON persistence implemented |
 | I5 | Fixed SunSDR local IPs | Medium | Open | Move bind/device stream addresses to env/config |
 | I6 | Duplicate `/WSspectrum` route declaration in `server.py` | Low | Resolved in code | Removed the duplicate `ws_spectrum` handler; one declaration remains |
 | I7 | `start.sh` still prints HTTP URL even when TLS may be used | Low | Present | Align script message with server TLS behavior |
 | I8 | Control-plane latency stuck at `--ms` (PING dropped before reply) | Medium | Resolved in code | `/WSCTRX` answers `PING` with `PONG` before the colon-based command parse |
+| I9 | Low TX output power | High | Resolved in code | DRIVE byte (`0x0017`) was sent in the wrong packet field (payload, not trailing word) → device received drive=0; fixed and per-band power added |
+| I10 | TX forward power unreadable from device while keyed | Low | Open (by design) | Device stops `0x1F00` telemetry during TX; read power from ATR-1000 tuner or wattmeter |
 
 ## 13.5 Dependencies
 

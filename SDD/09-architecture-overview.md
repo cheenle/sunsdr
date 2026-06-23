@@ -13,7 +13,7 @@ FastAPI SunMRRC App (`server.py`)
   static file catch-all
   /WSCTRX control
   /WSaudioRX RX audio fan-out
-  /WSaudioTX TX audio transport placeholder
+  /WSaudioTX TX mic uplink -> SSB modulator -> TX IQ stream
   /WSspectrum waterfall fan-out
         |
         | in-process imports
@@ -47,7 +47,7 @@ SunSDR2 DX
 |----------|-------------|----------------|---------|
 | `/WSCTRX` | `controls.js`, `mobile.js`, modules | `ws_ctrl()` | Text commands and text responses |
 | `/WSaudioRX` | `controls.js` | `ws_audio_rx()` | Binary Int16 PCM server -> client |
-| `/WSaudioTX` | `controls.js`, `tx_button.js` | `ws_audio_tx()` | Binary/text accepted but not processed into TX modulation |
+| `/WSaudioTX` | `controls.js`, `tx_button.js`, `tx_capture_worklet.js` | `ws_audio_tx()` | Binary Int16 PCM mic frames → `TXModulator` → SunSDR TX IQ |
 | `/WSspectrum` | `controls.js` | `ws_spectrum()` | Binary uint8 spectrum rows |
 
 ## 9.4 Control Command Architecture
@@ -56,7 +56,7 @@ SunSDR2 DX
 |---------------|----------|--------|
 | Liveness | `PING` -> `PONG` | Control socket |
 | Query | `getFreq`, `getMode`, `getPTT`, `getWDSPStatus`, `getWDSPNotches` | Radio/DSP snapshot |
-| Radio | `setFreq`, `setPTT`, `tune`, `setAFGain`, `setRFGain`, `setPreamp`, `setAGC`, `setFilter` | `SunSDR2DXClient` and demodulator |
+| Radio | `setFreq`, `setPTT`, `tune`, `setAFGain`, `setRFGain`, `setPreamp`, `setAGC`, `setFilter`, `setDrive` | `SunSDR2DXClient` and demodulator |
 | DSP | `setMode`, `setWDSPEnabled`, `setWDSPNR2Level`, `setWDSPNR2`, `setWDSPNB`, `setWDSPANF`, `setWDSPNFEnabled`, `setWDSPAGC`, notch commands | `AudioDemodulator` |
 | Safety/Misc | `s`, `cq` | Force RX, unblock CQ state machine |
 
@@ -114,8 +114,7 @@ server.py
 
 | Gap | Impact |
 |-----|--------|
-| TX audio frames are not consumed by backend | PTT does not equal complete voice transmission |
 | Fixed local IQ bind/send IPs in `server.py` | Deployment tied to current LAN topology |
-| `/api/mem_channels` absent | Memory manager falls back to cache/offline behavior |
-| `/WSATR1000` absent | ATR UI status remains placeholder/failing connection |
-| CW/FT8/recording pages absent | Menu links are not complete product flows |
+| `/WSATR1000` absent | ATR UI status remains placeholder/failing connection; TX forward power must be read from the tuner directly |
+| CW/FT8/recording pages absent | Menu links removed from the navigation; pages not present in this snapshot |
+| TX forward-power telemetry unavailable while keyed | Device stops `0x1F00` during TX; no in-stream wattage readout |

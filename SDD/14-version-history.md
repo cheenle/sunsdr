@@ -8,6 +8,25 @@
 | SDD V2.2 | 2026-05-18 | MRRC Team | MRRC V5.2 playback and WDSP notes |
 | SDD V3.0 | 2026-06-21 | OpenCode | Re-baselined entire SDD to current `sunmrrc` codebase: FastAPI/Uvicorn, SunSDR2 DX direct UDP, mobile RX/control, HTTPS/WSS, explicit gaps |
 | SDD V3.1 | 2026-06-21 | OpenCode | Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate `/WSspectrum` route |
+| SDD V3.2 | 2026-06-23 | Claude | TX voice modulation and TX power control documented as implemented: device DRIVE (`0x0017`) per-band power, `/api/band_power` + Band Power UI, `/api/mem_channels` graduated to implemented, AD-010 added, CW/FT8 dead links removed |
+
+## Key Changes in SDD V3.2
+
+| Chapter | Change |
+|---------|--------|
+| 1 | Core features: TX voice modulation, TX power/drive control, per-band power UI, memory channel API moved to Implemented; capability boundaries trimmed to ATR + CW/FT8 only |
+| 2 | O6 (TX voice) marked implemented/on-air-verified; added O8 (per-band TX power); G5 narrowed to ATR/digital modes |
+| 3 | In-scope adds TX uplink, DRIVE power, `/api/band_power`, `/api/mem_channels`; out-of-scope drops TX modulation; SC8 + milestones updated |
+| 4 | `/WSaudioTX` interface re-described as active mic uplink; added TX modulation + DRIVE data flows |
+| 5 | NFR-063 (TX audio quality) defined with on-air-verified targets |
+| 6 | UC-007 (mic TX) and UC-008 (memory channels) marked implemented |
+| 7 | TXModulationFrame + MemoryChannel promoted to real entities; added BandPowerConfig; band_power.json/mem_channels.json persistence |
+| 8 | AD-009 reworded (TX + memory API no longer gated); added AD-010 (TX power via DRIVE 0x0017) |
+| 9 | WS table + command architecture add setDrive/`/api/band_power`; known gaps trimmed |
+| 10 | TXAudioIngressService + MemoryChannelService marked implemented; added BandPowerService; contract adds setDrive |
+| 11 | TXAudioWebSocket re-described; added TXModulator + TxCaptureWorklet; gaps trimmed |
+| 12 | Connection matrix TX path; band_power.json config; TX verification procedure + telemetry blind-spot note |
+| 13 | R5/R7 + I2/I4 resolved; added TX power root-cause issue (resolved) |
 
 ## Key Changes in SDD V3.1
 
@@ -40,8 +59,9 @@
 
 ## Design Baseline Notes
 
-- Current implemented baseline is mobile RX/control for SunSDR2 DX.
-- TX microphone audio, ATR backend, memory-channel backend, and CW/FT8/recording menu targets are explicitly not claimed as complete.
+- Current implemented baseline is mobile RX/control **plus TX voice** for SunSDR2 DX: mic uplink → Hilbert SSB → 24-bit IQ → `0xFFFD` TX stream, with device DRIVE (`0x0017`) per-band power control (on-air verified: Tune ~12 W, voice 30–40 W PEP).
+- Memory-channel backend (`/api/mem_channels`) and per-band power (`/api/band_power`) are implemented and persisted.
+- ATR-1000 backend (`/WSATR1000`) and CW/FT8/recording menu targets remain the only outstanding gated hooks. CW/FT8 dead menu links were removed; Recordings remains.
 - This SDD should be updated whenever a planned frontend hook gains a real backend implementation or is intentionally removed.
 
 *This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.*

@@ -77,9 +77,10 @@
 
 | ID | Use Case | Current State |
 |----|----------|---------------|
-| UC-007 | Browser microphone TX audio | Frontend capture/EQ/Opus code exists; server modulation path open |
-| UC-008 | Memory channel save/recall | Frontend manager exists; backend `/api/mem_channels` missing |
-| UC-009 | ATR-1000 power/SWR | UI placeholders/hooks exist; backend `/WSATR1000` missing |
-| UC-010 | CW decoder | Menu link exists; page absent in current repository snapshot |
-| UC-011 | FT8 automation | Menu link exists; page absent in current repository snapshot |
-| UC-012 | Recordings/logbook | Menu links exist; backend/pages absent in current repository snapshot |
+| UC-007 | Browser microphone TX audio | Implemented; mic frames modulated to SunSDR TX IQ and transmitted (on-air verified) |
+| UC-008 | Memory channel save/recall | Implemented; backend `/api/mem_channels` GET/POST with JSON persistence |
+| UC-013 | Per-band TX power | Implemented; Menu → Band Power panel + `/api/band_power`, applied via device DRIVE (`0x0017`) |
+| UC-009 | ATR-1000 power/SWR | UI placeholders/hooks exist; backend `/WSATR1000` is transport-only placeholder |
+| UC-010 | CW decoder | Menu link removed (page absent) |
+| UC-011 | FT8 automation | Menu link removed (page absent) |
+| UC-012 | Recordings | Implemented; `recordings.html` + server-side RX MP3 capture/download |

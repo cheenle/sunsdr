@@ -25,10 +25,13 @@ The current codebase is intentionally narrower than the older MRRC documentation
 | Static mobile PWA-style UI | Implemented | Mobile layout with safe-area support, manifest, service worker, bottom PTT area |
 | Control WebSocket | Implemented | `/WSCTRX` handles `PING`, frequency, mode, PTT, tune, gain, filter, WDSP commands |
 | RX audio WebSocket | Implemented | `/WSaudioRX` broadcasts 16 kHz Int16 PCM frames to browser clients |
-| TX audio WebSocket | Transport only | `/WSaudioTX` accepts connections; server currently discards received frames |
+| TX voice modulation | Implemented | `/WSaudioTX` mic frames → Hilbert SSB → 24-bit IQ → `0xFFFD` TX stream; on-air verified (Tune ~12 W, voice 30–40 W PEP) |
+| TX power / drive control | Implemented | Device DRIVE command (`0x0017`) with per-band power; confirmed on-air |
+| Per-band power UI | Implemented | Menu → Band Power panel + `/api/band_power` (persisted to `band_power.json`) |
 | Spectrum WebSocket | Implemented | `/WSspectrum` broadcasts compact uint8 FFT rows; browser accumulates frames (~38 Hz → ~3.8 Hz) and renders with adaptive noise-floor contrast |
 | SunSDR2 DX UDP control | Implemented | Boot/connect sequence and parameter commands through shared direct protocol module |
 | IQ stream processing | Implemented | UDP `50002` IQ decode, DSP feed, audio extraction, spectrum extraction |
+| Memory channel API | Implemented | `/api/mem_channels` GET/POST with JSON persistence (`mem_channels.json`) |
 | WDSP runtime control | Conditional | Active when `libwdsp` is available through `wdsp_wrapper` |
 | HTTPS auto-start | Implemented | Uvicorn starts with TLS when cert/key files exist |
 | Restart automation | Implemented | `restart.sh` cleans exact working-directory server process and listening port |
@@ -37,10 +40,9 @@ The current codebase is intentionally narrower than the older MRRC documentation
 
 | Capability | Boundary |
 |------------|----------|
-| TX voice | PTT and tune control exist, but microphone audio is not yet modulated into the SunSDR TX stream |
+| TX power telemetry | Device stops sending `0x1F00` while keyed; forward power/SWR read from the ATR-1000 tuner, not in-stream telemetry |
 | ATR-1000 | Frontend hooks and status placeholders exist, but no `/WSATR1000` server endpoint is implemented here |
-| Memory channels | Frontend service-oriented manager exists, but `/api/mem_channels` backend is absent |
-| CW/FT8/recordings | Navigation links exist, but target pages are not present in this repository snapshot |
+| Recordings | `recordings.html` page exists; CW/FT8 menu links were removed (target pages absent) |
 | Authentication | Cookie/callsign helpers exist; no server-side auth boundary is implemented in `server.py` |
 
 ## 1.5 Architecture Layers
@@ -61,4 +63,4 @@ Device Layer
 
 ## 1.6 Current Project Status
 
-As of 2026-06-21, the RX chain is healthy on local desktop and the mobile-side blocker was traced to iOS secure-context requirements. HTTPS/WSS startup is implemented and the expected mobile entry is `https://radio.vlsc.net:8080`. Control-network tuning and TX microphone modulation remain open engineering work.
+As of 2026-06-23, the RX chain is healthy and the iOS secure-context blocker is resolved via HTTPS/WSS startup (expected mobile entry `https://radio.vlsc.net:8080`). The TX voice path is implemented end-to-end and on-air verified: browser mic → Hilbert SSB → 24-bit IQ, with output power set by the device DRIVE command (`0x0017`) per band (Tune ~12 W, voice 30–40 W PEP read from the ATR-1000). Remaining open work is control-network configurability (fixed LAN IPs) and the ATR-1000 backend endpoint.
