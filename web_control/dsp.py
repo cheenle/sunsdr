@@ -45,18 +45,22 @@ TX_PACKET_INTERVAL_S = TX_PACKET_SAMPLES / TX_IQ_SAMPLE_RATE   # 5.12 ms
 # Audio samples consumed per TX packet to stay time-coherent:
 #   200 IQ @ 39063 Hz (5.12 ms) == 80 audio @ 15625 Hz
 TX_AUDIO_PER_PKT = round(TX_PACKET_SAMPLES * AUDIO_RATE / TX_IQ_SAMPLE_RATE)  # 80
-# Genuine ExpertSDR3 TX IQ peaks at ~0.092 (24-bit normalized); RMS 0.002–0.043.
-# The old 0.3 target was ~3.3× hotter and, with firmware ALC unsupported, clipped
-# in the PA (periodic popping). Drive scales 0..1 below this ceiling.
-# NOTE (2026-06-22 v3): RF power is now controlled at the DEVICE via the
-# 0x0017 drive command (see sunsdr_direct.set_drive / BAND_POWER), NOT by
-# inflating the digital IQ level. So this ceiling goes back to a moderate
-# digital-domain safety knee: the software stage only needs to produce a CLEAN
-# SSB envelope that the device's DAC + drive scaling then amplify. With the
-# moderate TX_DRIVE_GAIN below, normal speech peaks land well under this knee
-# so the tanh soft-limiter almost never engages (no compression distortion).
-# The device drive (0..100%) is the real power control.
-TX_IQ_PEAK = 0.5
+# TX IQ ceiling = FULL SCALE (1.0). VERIFIED against a fresh ExpertSDR3 capture
+# (device/captures/expert_40m_drive.pcap, 2026-06-24): genuine voice TX IQ runs
+# at RMS≈0.33 with peaks routinely hitting 1.0 (full 24-bit scale), and Tune is a
+# near-full-scale constant carrier (RMS≈0.98, peak 1.0). The IQ amplitude is
+# INDEPENDENT of drive — across drive bytes 114→255 (20%→100%) voice RMS held
+# steady at ~0.33. Drive (0x0017) scales RF power at the DEVICE; the digital IQ
+# is always sent hot.
+#
+# The earlier "~0.092 peak" figure was wrong: it was measured off a quiet/low
+# segment of an old capture, not a full-modulation burst. Capping at 0.5 was the
+# root cause of the low-power bug — it threw away half the amplitude (RMS 0.20 vs
+# ExpertSDR3's 0.33), so 100% drive made only ~20 W where ExpertSDR3 makes ~45 W
+# (the measured 2.25× power gap matches (0.33/0.20)² exactly). At 1.0 the existing
+# TX_DRIVE_GAIN drives peaks into the tanh knee near 1.0 and lifts RMS to ~0.33,
+# matching the genuine client. Device drive remains the RF power control.
+TX_IQ_PEAK = 1.0
 # Leading zero-IQ packets after PTT assert, covering PA/relay settling
 # (~17 zero packets observed before audio energy in the reference burst).
 TX_SETTLE_PACKETS = 17
@@ -101,13 +105,16 @@ TX_HILBERT_MARGIN = 256
 # ceiling is fixed at TX_IQ_PEAK and does NOT scale with drive, so drive moves
 # the level under a constant clip point instead of moving the clip point too
 # (the old bug that guaranteed ~7× overdrive at every drive setting).
-TX_DRIVE_GAIN = 2.5           # fixed make-up gain. RF power is set at the
-# DEVICE now (0x0017 drive), so this only needs to lift typical phone-mic
-# audio (~0.1–0.3 peak) into a healthy digital level (~0.3–0.5 peak) WITHOUT
-# slamming the tanh knee. Normal speech peaks land around 0.3–0.4 (under the
-# 0.5 ceiling), so the soft-limiter rarely engages and the far end hears clean
-# SSB. Turn the DEVICE drive up for more power, not this.
-# Average TX power ~15 W into a 100 W PA — well below saturation.
+TX_DRIVE_GAIN = 3.0           # fixed make-up gain. RF power is set at the
+# DEVICE (0x0017 drive); this only lifts the mic audio into a healthy digital
+# level. LOWERED 5.0→3.0 (2026-06-24): the browser now does the peak-average
+# reduction (tx_audio_eq.js compressor ratio 6:1 + makeup gain), so the IQ
+# arriving here is already low-crest-factor. At ×5 the post-drive peak hit ~2.3
+# (4.6× over the 0.5 ceiling) and the tanh knee did ALL the limiting — heavy
+# compression distortion on loud syllables. At ×3 the tanh is a safety net for
+# residual transients, not the primary limiter, so the far end hears cleaner
+# SSB while the higher RMS (from client compression) lifts average power.
+# Turn the DEVICE drive up for more peak power, not this.
 
 # ── IQ Decoder ─────────────────────────────────────────────────────
 
@@ -210,9 +217,9 @@ class AudioDemodulator:
         self._wdsp_accum = np.array([], dtype=np.float32)
         self._wdsp_bs = 256  # must match buffer_size (no zero-padding!)
         # ── WDSP state tracking ────────────────────────────────
-        self._wdsp_enabled = False
-        self._nr2_enabled = False
-        self._nr2_level = 50
+        self._wdsp_enabled = True   # enabled by default
+        self._nr2_enabled = True    # NR2 on by default
+        self._nr2_level = 30
         self._nr2_gain_method = 0
         self._nr2_npe_method = 0
         self._nr2_ae_run = True
@@ -237,7 +244,9 @@ class AudioDemodulator:
                 sample_rate=int(self.audio_rate), buffer_size=self._wdsp_bs,
                 mode=WDSPMode.USB, enable_nr2=True, enable_nb=False,
                 enable_anf=False, agc_mode=WDSPAGCMode.SLOW)
-            logger.info("WDSP ready (AGC SLOW + NR2)")
+            # Apply the default NR2 level (50) — was silently ignored before.
+            self._wdsp.set_nr2_level(self._nr2_level)
+            logger.info("WDSP ready (AGC SLOW + NR2 level=%d)", self._nr2_level)
         except Exception as e:
             logger.debug(f"WDSP unavailable: {e}")
 
@@ -426,15 +435,25 @@ class AudioDemodulator:
         # Decimate
         audio = audio[::self.decim]
 
-        # Built-in AGC
+        # Built-in AGC — only used when WDSP is unavailable or disabled.
+        # When WDSP is active its own AGC (SLOW/MED/FAST) does the work;
+        # we run a very slow low-gain pass just to keep the input healthy.
         if len(audio) > 0:
             rms = float(np.sqrt(np.mean(audio**2) + 1e-12))
             if self._agc_gain is None:
                 self._agc_gain = 0.25 / rms if rms > 1e-10 else 1.0
-            target = 0.25 * self._volume * 2.0
-            self._agc_gain = self._agc_gain * 0.95 + (target / (rms + 1e-10)) * 0.05
-            audio *= min(self._agc_gain, 50000.0)
-            np.clip(audio, -1.0, 1.0, out=audio)
+            if self._wdsp_enabled and self._wdsp is not None:
+                # WDSP active: its own AGC handles output level.
+                # Gentle pre-gain just to keep input healthy for NR2.
+                target = 0.2
+                self._agc_gain = self._agc_gain * 0.995 + (target / (rms + 1e-10)) * 0.005
+                audio *= min(self._agc_gain, 30.0)
+            else:
+                # Original AGC — unchanged from HEAD.
+                target = 0.25 * self._volume * 2.0
+                self._agc_gain = self._agc_gain * 0.95 + (target / (rms + 1e-10)) * 0.05
+                audio *= min(self._agc_gain, 50000.0)
+                np.clip(audio, -1.0, 1.0, out=audio)
 
         audio = audio.astype(np.float32)
 

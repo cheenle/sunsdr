@@ -6,6 +6,12 @@ audio processing: AGC (LONG/SLOW/MED/FAST), NR2 spectral noise
 reduction, NB noise blanker, ANF auto notch filter.
 
 Library: libwdsp.dylib (ARM64, built from https://github.com/g0orx/wdsp)
+
+Fixed 2026-06-24:
+  - process() now buffers input → chunked 256-sample blocks → concatenates
+    output, so variable-length input is fully processed (no truncation).
+  - set_nr2_level() now calls SetRXAEMNRgainLine to actually set NR2 strength.
+  - Warmup output (err=-2) is no longer discarded.
 """
 
 import ctypes, os, logging, numpy as np
@@ -61,9 +67,16 @@ class WDSPProcessor:
         self.buffer_size = buffer_size
         self.channel = 0
         self._nr2 = enable_nr2
+        self._nr2_level = 50
 
         self._in = np.zeros(buffer_size * 2, dtype=np.float64)
         self._out = np.zeros(buffer_size * 2, dtype=np.float64)
+        # Streaming buffers — process() accumulates variable-length input
+        # into _input_buffer, drains in buffer_size chunks through
+        # fexchange0, and queues output into _output_buffer.  Output is
+        # returned FIFO so the caller always gets time-aligned samples.
+        self._input_buffer = np.array([], dtype=np.float64)
+        self._output_buffer = np.array([], dtype=np.float64)
         self._init(mode, agc_mode, enable_nb, enable_anf)
 
     def _init(self, mode, agc, nb, anf):
@@ -77,7 +90,10 @@ class WDSPProcessor:
             ctypes.c_double(0), ctypes.c_double(0),
             ctypes.c_int(0))
         _wdsp.SetRXAMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
-        _wdsp.SetRXAPanelGain1(ctypes.c_int(self.channel), ctypes.c_double(0.06))
+        # Panel gain: 0.06 was too low, 0.5 over-drives the chain.
+        # 0.2 gives NR2 a workable input level without saturating WDSP.
+        # WDSP AGC (SLOW/MED/FAST) handles final output level.
+        _wdsp.SetRXAPanelGain1(ctypes.c_int(self.channel), ctypes.c_double(0.2))
         self.set_agc(agc)
         if self._nr2:
             _wdsp.SetRXAEMNRRun(ctypes.c_int(self.channel), ctypes.c_int(1))
@@ -86,6 +102,27 @@ class WDSPProcessor:
             _wdsp.SetRXAEMNRaeRun(ctypes.c_int(self.channel), ctypes.c_int(1))
             _wdsp.SetRXAEMNRPosition(ctypes.c_int(self.channel), ctypes.c_int(0))
             _wdsp.SetRXASNBARun(ctypes.c_int(self.channel), ctypes.c_int(1))
+            # Apply the default NR2 level via the gain-line API.
+            self._apply_nr2_gain_line(self._nr2_level)
+        if nb:
+            self.set_nb_enabled(True)
+        if anf:
+            self.set_anf_enabled(True)
+
+    # ── NR2 gain-line helper ────────────────────────────────────
+    def _apply_nr2_gain_line(self, level: int):
+        """Set NR2 gain-line from 0-100 level.
+
+        WDSP gain-line range is 0.0–1.0.  A value of 0.0 means maximum NR2
+        (aggressive noise suppression); 1.0 means minimum.  We invert the
+        frontend's 0–100 slider so 100 = most aggressive, 0 = off.
+        """
+        try:
+            gain = 1.0 - max(0.0, min(1.0, level / 100.0))
+            _wdsp.SetRXAEMNRgainLine(
+                ctypes.c_int(self.channel), ctypes.c_double(gain))
+        except AttributeError:
+            pass  # symbol not available in this libwdsp build
 
     def set_agc(self, mode: int):
         _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
@@ -94,34 +131,68 @@ class WDSPProcessor:
         _wdsp.SetRXAMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
 
     def process(self, audio_data: np.ndarray) -> np.ndarray:
-        """Process audio. Returns float32, same length as input."""
+        """Process audio through the WDSP chain.
+
+        Handles variable-length input by buffering and draining in
+        buffer_size blocks through fexchange0.  Returns float32 output
+        with exactly the same number of samples as the input, properly
+        time-aligned via a FIFO output buffer.
+        """
+        # Convert to float64
         if audio_data.dtype == np.int16:
             f32 = audio_data.astype(np.float64) / 32768.0
         else:
             f32 = audio_data.astype(np.float64)
 
-        if len(f32) < self.buffer_size:
-            padded = np.zeros(self.buffer_size, dtype=np.float64)
-            padded[:len(f32)] = f32
-            f32 = padded
-        else:
-            f32 = f32[:self.buffer_size]
+        n_in = len(f32)
+        if n_in == 0:
+            return audio_data
 
-        self._in[0::2] = f32
-        self._in[1::2] = 0.0
+        # Accumulate input and drain complete blocks
+        self._input_buffer = np.concatenate([self._input_buffer, f32])
+        bs = self.buffer_size
 
-        err = ctypes.c_int(0)
-        _wdsp.fexchange0(
-            ctypes.c_int(self.channel),
-            self._in.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-            self._out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-            ctypes.byref(err))
+        while len(self._input_buffer) >= bs:
+            chunk = self._input_buffer[:bs]
+            self._input_buffer = self._input_buffer[bs:]
 
-        if err.value != 0:  # -2 = warmup, others = error
-            return audio_data[:len(audio_data)]
+            self._in[0::2] = chunk
+            self._in[1::2] = 0.0
 
-        out = self._out[0::2].copy()
-        return out[:len(audio_data)].astype(np.float32)
+            err = ctypes.c_int(0)
+            _wdsp.fexchange0(
+                ctypes.c_int(self.channel),
+                self._in.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                self._out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                ctypes.byref(err))
+
+            # err == 0: normal
+            # err == -2: warmup (output is valid but not fully converged)
+            # err == other: real error → skip this block
+            if err.value not in (0, -2):
+                logger.debug("WDSP fexchange0 error=%d (skipping block)", err.value)
+                continue
+
+            out = self._out[0::2].copy()
+            self._output_buffer = np.concatenate([self._output_buffer, out])
+
+        # Return exactly n_in time-aligned samples
+        if len(self._output_buffer) >= n_in:
+            result = self._output_buffer[:n_in]
+            self._output_buffer = self._output_buffer[n_in:]
+            return result.astype(np.float32)
+
+        # Not enough output yet — drain what we have, pad with silence
+        if len(self._output_buffer) > 0:
+            result = np.concatenate([
+                self._output_buffer,
+                np.zeros(n_in - len(self._output_buffer), dtype=np.float64),
+            ])
+            self._output_buffer = np.array([], dtype=np.float64)
+            return result.astype(np.float32)
+
+        # No output at all — return silence
+        return np.zeros(n_in, dtype=np.float32)
 
     # ── NR2 (spectral noise reduction) ──────────────────────────
 
@@ -133,13 +204,10 @@ class WDSPProcessor:
         self._nr2 = on
 
     def set_nr2_level(self, level: int):
-        """Set NR2 level (0-100)."""
+        """Set NR2 strength (0-100). 100 = most aggressive."""
         if not WDSP_AVAILABLE: return
-        gain = max(0.0, min(1.0, level / 100.0))
-        _wdsp.SetRXAEMNRgainMethod(ctypes.c_int(self.channel), ctypes.c_int(0))
-        _wdsp.SetRXAEMNRnpeMethod(ctypes.c_int(self.channel), ctypes.c_int(0))
-        # Gain line = 1 for fixed gain, gain value controls strength
-        _wdsp.SetRXAEMNRaeRun(ctypes.c_int(self.channel), ctypes.c_int(1))
+        self._nr2_level = max(0, min(100, level))
+        self._apply_nr2_gain_line(self._nr2_level)
 
     def set_nr2_gain_method(self, method: int):
         """Set NR2 gain method (0=linear, 1=log)."""

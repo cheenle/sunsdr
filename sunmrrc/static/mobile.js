@@ -3141,7 +3141,9 @@ const ATR1000 = {
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
-            const url = `${protocol}//${host}/WSATR1000`;
+            const url = (typeof wsUrlWithAuth === 'function')
+                ? wsUrlWithAuth(`${protocol}//${host}/WSATR1000`)
+                : `${protocol}//${host}/WSATR1000`;
             this.ws = new WebSocket(url);
             
             this.ws.onopen = () => {

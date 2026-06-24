@@ -17,7 +17,7 @@ from opus_rx import (RxOpusEncoder, TxOpusDecoder,
 import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import Response, HTMLResponse, JSONResponse
+from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse
 import uvicorn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -27,6 +27,24 @@ logger = logging.getLogger("sunmrrc")
 DEVICE_HOST = os.environ.get("DEVICE_HOST", "192.168.16.200")
 WEB_PORT = int(os.environ.get("WEB_PORT", "8889"))
 STATIC_DIR = Path(__file__).parent / "static"
+WEB_PASSWORD = os.environ.get("WEB_PASSWORD", "sunmrrc")
+
+# ── Auth ───────────────────────────────────────────────────────────
+import hashlib, secrets as _secrets
+_auth_tokens: set[str] = set()        # valid session tokens (server-side)
+AUTH_COOKIE = "sunmrrc_auth"
+AUTH_TOKEN_BYTES = 32
+
+def _make_auth_token() -> str:
+    """Generate a new random session token."""
+    return _secrets.token_hex(AUTH_TOKEN_BYTES)
+
+def _verify_auth(request: Request) -> bool:
+    """Check whether the request carries a valid auth cookie or query-param token."""
+    token = request.cookies.get(AUTH_COOKIE)
+    if not token:
+        token = request.query_params.get("token")
+    return token is not None and token in _auth_tokens
 
 # ── App ───────────────────────────────────────────────────────────
 radio = SunSDR2DXClient(host=DEVICE_HOST)
@@ -50,13 +68,28 @@ def _next_tx_counter() -> int:
 _last_smeter_ts = 0.0  # throttle S-meter broadcasts
 _last_telem_ts = 0.0   # throttle TX power/SWR telemetry broadcasts
 
-# TX telemetry calibration (0x1F00 off14 u16 → watts). Verified idle baseline
-# ~9, ~49 into a dummy load (~5 W per TXPLAN). Linear approximation; calibrate
-# TELEM_PWR_SCALE against a known TX power for accuracy.
-TELEM_PWR_BASELINE = 9.0
-# Cubic fit: watts = (pwr_raw - baseline)^3 × scale
-# Verified 2025-06-24: (77-9)^3×1.91e-5=6.0W, (110-9)^3×1.91e-5=19.7W≈20W
-TELEM_PWR_SCALE = 0.0000191   # 1.91e-5
+# TX telemetry (0x1F00, 34 B). Field offsets reverse-engineered from a real
+# ExpertSDR3 40m drive sweep (device/captures/expert_40m_drive.pcap, analyzed
+# 2026-06-24 against external wattmeter + ExpertSDR3's own power readout):
+#   off30 f32 = forward power in WATTS (PEP envelope). Monotonic with drive:
+#               28%→3W, 71%→54W, 88%→83W, 100%→101W. Matches ExpertSDR3's own
+#               ~95W self-readout at 100%. This is the device's direct float
+#               watt reading — NO cubic/linear fit needed.
+#   off16 u16 = SUPPLY VOLTAGE × 10 (NOT SWR). Reverse-engineered 2026-06-25:
+#               reads ~136 (13.6 V) at idle and DROPS as power rises
+#               (0W→13.6, 30-50W→13.1, 80-110W→12.9 V), correlation with
+#               forward power = -0.79 — a textbook PSU sag curve, not SWR.
+#               The device sends NO reverse-power field (off22 is *average*
+#               forward power, ratio to off30 ≈ the 3:1 SSB crest factor), so
+#               it cannot compute SWR at all. A stable reading while NOT keyed
+#               also rules out SWR. Value is volts = off16 / 10.
+#   off18 f32 = PA temperature °C (~42, barely moves with drive).
+# The OLD off14 u16 + cubic fit was wrong: off14 is non-monotonic noise
+# (28%→72, 45%→51, 100%→81) and never tracked real power. The OLD off16/100
+# "SWR" was also wrong — it's the supply voltage (see above).
+TELEM_PWR_OFF = 30     # f32 forward power (W)
+TELEM_VOLT_OFF = 16    # u16 supply voltage ×10
+TELEM_TEMP_OFF = 18    # f32 PA temp °C
 _last_tlm_ts = 0.0     # throttle TX power/SWR telemetry broadcasts
 _last_pwr_log_ts = 0.0  # throttle TX power logger to 1 Hz
 _last_1f01_log_ts = 0.0  # throttle 0x1F01 TX-frame logger to 1 Hz
@@ -95,6 +128,71 @@ RECORDINGS_DIR = STATIC_DIR / "recordings"
 MIME = {".css":"text/css", ".js":"application/javascript", ".html":"text/html",
         ".json":"application/json", ".png":"image/png", ".wav":"audio/wav",
         ".mp3":"audio/mpeg", ".wasm":"application/wasm"}
+
+LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0f">
+<title>SunMRRC — Login</title>
+<link rel="stylesheet" href="/mobile.css">
+<style>
+  body {{ display:flex; align-items:center; justify-content:center; min-height:100vh;
+         background:var(--bg-primary); font-family:-apple-system,BlinkMacSystemFont,sans-serif; }}
+  .login-card {{ background:var(--bg-card); border:1px solid var(--border-color);
+                 border-radius:16px; padding:32px 24px; width:100%; max-width:360px;
+                 text-align:center; }}
+  .login-card h1 {{ color:var(--accent-primary); font-size:24px; margin:0 0 8px; }}
+  .login-card p {{ color:var(--text-secondary); font-size:14px; margin:0 0 24px; }}
+  .login-card input {{ width:100%; padding:12px; border-radius:10px;
+                       border:1px solid var(--border-color); background:var(--bg-secondary);
+                       color:var(--text-primary); font-size:16px; text-align:center;
+                       box-sizing:border-box; -webkit-appearance:none; }}
+  .login-card input:focus {{ outline:none; border-color:var(--accent-primary); }}
+  .login-card button {{ width:100%; margin-top:16px; padding:12px; border:none;
+                        border-radius:10px; background:var(--accent-primary);
+                        color:#000; font-size:16px; font-weight:600; cursor:pointer; }}
+  .login-card button:active {{ opacity:0.8; }}
+  .login-card .error {{ color:var(--accent-danger); font-size:13px; margin-top:12px; display:none; }}
+</style>
+</head>
+<body>
+<div class="login-card">
+  <h1>&#x269B; SunMRRC</h1>
+  <p>Enter password to access radio</p>
+  <input type="password" id="pwd" placeholder="Password" autofocus autocomplete="current-password">
+  <button id="btn">Sign In</button>
+  <div class="error" id="err">Wrong password</div>
+</div>
+<script>
+var next = "{next}";
+var btn = document.getElementById('btn');
+var inp = document.getElementById('pwd');
+var err = document.getElementById('err');
+async function tryLogin() {{
+  var pwd = inp.value;
+  if (!pwd) return;
+  btn.disabled = true; err.style.display = 'none';
+  try {{
+    var r = await fetch('/api/auth/login', {{
+      method:'POST', headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{password:pwd, next:next}})
+    }});
+    if (r.ok) {{
+      var data = await r.json();
+      window.location.href = data.next || '/';
+    }} else {{
+      err.style.display = 'block'; btn.disabled = false; inp.focus();
+    }}
+  }} catch(e) {{ err.style.display = 'block'; btn.disabled = false; }}
+}}
+btn.addEventListener('click', tryLogin);
+inp.addEventListener('keydown', function(e) {{ if (e.key==='Enter') tryLogin(); }});
+</script>
+</body>
+</html>"""
 
 
 # ── Lifespan ──────────────────────────────────────────────────────
@@ -205,6 +303,83 @@ async def lifespan(app: FastAPI):
             pass
 
 app = FastAPI(title="SunMRRC", lifespan=lifespan)
+
+# ── Auth middleware ─────────────────────────────────────────────────
+# Protects every HTTP route except /login and /api/auth/*.
+# WebSocket endpoints do their own token check in on-accept.
+_PUBLIC_PATHS = {"/login", "/api/auth/login", "/api/auth/logout"}
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    path = request.url.path.rstrip("/") or "/"
+    # Allow public paths without auth
+    if path in _PUBLIC_PATHS:
+        return await call_next(request)
+    # Allow static assets needed BY the login page (CSS)
+    if path.startswith("/mobile.css"):
+        return await call_next(request)
+    if not _verify_auth(request):
+        # API routes get a 401 JSON response
+        if path.startswith("/api/") or path.startswith("/WS"):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        # Page routes redirect to login, preserving the original URL
+        qs = request.url.query
+        redirect_url = f"/login?next={path}"
+        if qs:
+            redirect_url += f"&{qs}"
+        return RedirectResponse(url=redirect_url, status_code=302)
+    return await call_next(request)
+
+
+# ── Auth routes ─────────────────────────────────────────────────────
+@app.get("/login")
+async def _login_page(request: Request):
+    """Serve the login page."""
+    next_url = request.query_params.get("next", "/")
+    # Prevent open redirect: only allow same-origin paths
+    if next_url.startswith("//") or next_url.startswith("http:") or next_url.startswith("https:"):
+        next_url = "/"
+    return HTMLResponse(LOGIN_HTML.format(next=next_url))
+
+
+@app.post("/api/auth/login")
+async def _api_login(request: Request):
+    """Validate password and issue a session token."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid request"}, status_code=400)
+    pwd = body.get("password", "")
+    if pwd != WEB_PASSWORD:
+        logger.warning("Auth: failed login attempt from %s", request.client.host if request.client else "?")
+        return JSONResponse({"error": "wrong password"}, status_code=401)
+    token = _make_auth_token()
+    _auth_tokens.add(token)
+    logger.info("Auth: new session token issued (%d active)", len(_auth_tokens))
+    next_url = body.get("next", "/")
+    if next_url.startswith("//") or next_url.startswith("http:") or next_url.startswith("https:"):
+        next_url = "/"
+    resp = JSONResponse({"ok": True, "next": next_url})
+    resp.set_cookie(AUTH_COOKIE, token, httponly=False, samesite="strict", max_age=86400*30)
+    return resp
+
+
+@app.post("/api/auth/logout")
+async def _api_logout(request: Request):
+    """Invalidate the current session token."""
+    token = request.cookies.get(AUTH_COOKIE)
+    if token:
+        _auth_tokens.discard(token)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/auth/check")
+async def _api_auth_check(request: Request):
+    """Check whether the current request is authenticated (used by login page JS)."""
+    if _verify_auth(request):
+        return JSONResponse({"authenticated": True})
+    return JSONResponse({"authenticated": False})
+
 
 # ── Memory channels persistence ───────────────────────────────────
 MEM_CHANNELS_FILE = Path(__file__).parent / "mem_channels.json"
@@ -509,7 +684,11 @@ async def _process_iq_stream():
         _probe_cnt = 0
         _probe_last = time.monotonic()
         try:
-            _probe_file = open(_PROBE_PATH, "a", buffering=1)  # line-buffered
+            # "w" (truncate) NOT "a" (append): each TX pacer start gets a fresh
+            # file. The old append mode accumulated days of history across many
+            # parameter versions + a header row per session, so any whole-file
+            # analysis mixed stale data with current — a real debugging trap.
+            _probe_file = open(_PROBE_PATH, "w", buffering=1)  # line-buffered
         except Exception:
             _probe_file = None
         if _probe_file and _probe_cnt == 0:
@@ -594,9 +773,18 @@ async def _process_iq_stream():
             # 1 Hz: flush the TX IQ power accumulator to server.log.
             if _pwr_n > 0 and (now - _pwr_log_last) >= 1.0:
                 _rms = (_pwr_sum_sq / _pwr_n) ** 0.5
+                # Underflow count is a jitter-buffer health metric: each
+                # underrun inserts a silence packet (amplitude step to 0 →
+                # click/dropout the far end hears). Previously incremented
+                # but never logged — a blind spot. Surface it here at 1 Hz.
+                try:
+                    _ur = dsp_proc.modulator._mic_underruns if (
+                        dsp_proc and dsp_proc.modulator) else -1
+                except Exception:
+                    _ur = -1
                 logger.info(
                     f"TX IQ pwr: peak={_pwr_peak:.4f}  rms={_rms:.4f}  "
-                    f"n={_pwr_n}  pkts={_pwr_n_pkts}")
+                    f"n={_pwr_n}  pkts={_pwr_n_pkts}  underruns={_ur}")
                 _pwr_sum_sq = 0.0
                 _pwr_peak = 0.0
                 _pwr_n = 0
@@ -639,18 +827,16 @@ async def _process_iq_stream():
                     raw_rx = data[0]
                     if len(raw_rx) >= 10 and raw_rx[0] == 0x32 and raw_rx[1] == 0xff:
                         sub = struct.unpack('<H', raw_rx[2:4])[0]
-                        if sub == 0x1F00 and len(raw_rx) >= 30:
+                        if sub == 0x1F00 and len(raw_rx) >= 34:
                             if now - _last_telem_ts >= 0.1:
                                 _last_telem_ts = now
                                 try:
-                                    pwr_raw = struct.unpack_from('<H', raw_rx, 14)[0]
-                                    swr_raw = struct.unpack_from('<H', raw_rx, 16)[0]
-                                    swr = swr_raw / 100.0  # off16 u16 / 100 = SWR
-                                    temp_c = struct.unpack_from('<f', raw_rx, 18)[0]
-                                    over = max(0.0, pwr_raw - TELEM_PWR_BASELINE)
-                                    watts = over * over * over * TELEM_PWR_SCALE
+                                    watts = struct.unpack_from('<f', raw_rx, TELEM_PWR_OFF)[0]
+                                    volt_raw = struct.unpack_from('<H', raw_rx, TELEM_VOLT_OFF)[0]
+                                    volts = volt_raw / 10.0  # off16 u16 / 10 = supply V
+                                    temp_c = struct.unpack_from('<f', raw_rx, TELEM_TEMP_OFF)[0]
                                     asyncio.ensure_future(_send_ctrl(
-                                        f"getTXTelem:{watts:.1f},{swr:.2f},{temp_c:.0f},{pwr_raw}"))
+                                        f"getTXTelem:{watts:.1f},{volts:.1f},{temp_c:.0f},{int(watts)}"))
                                 except Exception:
                                     pass
                 except (asyncio.TimeoutError, asyncio.CancelledError):
@@ -737,40 +923,36 @@ async def _process_iq_stream():
                 audio_count += 1
                 asyncio.ensure_future(_broadcast_audio(audio))
 
-        elif sub == 0x1F00 and len(raw) >= 30:
-            # Device→PC TX telemetry (sub-ID verified by live probe 2026-06-22:
-            # 0x1F00 len=34, payload=24B).
-            # Fields (verified against 323+ packets across 6 captures 2026-06-24):
-            #   off14 u16 = pwr_raw (forward power envelope, idle ~9, TX 47-77)
-            #   off16 u16 = SWR × 100 (132=1.32 TUNE, 134-137=1.34-1.37 TX/RX)
-            #   off18 f32 = temp °C
-            #   off22 f32 = TUNE measurement (~2.0) — 0.0 during normal TX
-            #   off26 f32 = constant 1.0000 (device placeholder, never changes)
+        elif sub == 0x1F00 and len(raw) >= 34:
+            # Device→PC TX telemetry (0x1F00, 34 B). Power = off30 f32 (watts),
+            # supply voltage = off16 u16 / 10, temp = off18 f32. See TELEM_*_OFF
+            # comment above for the reverse-engineering provenance (real 40m
+            # drive sweep vs external wattmeter). off30 is the device's direct
+            # float watt reading — no fit. off16 is PSU voltage, NOT SWR (the
+            # device sends no reverse-power field). Needs len>=34 (off30 f32
+            # spans bytes 30-33).
             now_t = time.monotonic()
             if now_t - _last_telem_ts >= 0.1:  # throttle to ~10 Hz
                 _last_telem_ts = now_t
                 try:
-                    pwr_raw = struct.unpack_from('<H', raw, 14)[0]
-                    swr_raw = struct.unpack_from('<H', raw, 16)[0]
-                    swr = swr_raw / 100.0  # u16 / 100 = SWR (verified)
-                    temp_c = struct.unpack_from('<f', raw, 18)[0]
-                    over = max(0.0, pwr_raw - TELEM_PWR_BASELINE)
-                    watts = over * over * over * TELEM_PWR_SCALE
+                    watts = struct.unpack_from('<f', raw, TELEM_PWR_OFF)[0]
+                    volts = struct.unpack_from('<H', raw, TELEM_VOLT_OFF)[0] / 10.0
+                    temp_c = struct.unpack_from('<f', raw, TELEM_TEMP_OFF)[0]
                     asyncio.ensure_future(_send_ctrl(
-                        f"getTXTelem:{watts:.1f},{swr:.2f},{temp_c:.0f},{pwr_raw}"))
+                        f"getTXTelem:{watts:.1f},{volts:.1f},{temp_c:.0f},{watts:.0f}"))
                     global _last_pwr_log_ts
                     if (getattr(radio, '_ptt_active', False)
                             and now_t - _last_pwr_log_ts >= 1.0):
                         _last_pwr_log_ts = now_t
                         logger.info(
-                            f"[TX] 0x1F00 raw={pwr_raw} W={watts:.1f} "
-                            f"SWR={swr:.2f} T={temp_c:.0f}C")
+                            f"[TX] 0x1F00 W={watts:.1f} "
+                            f"V={volts:.1f} T={temp_c:.0f}C")
                 except Exception as e:
                     logger.warning(f"0x1F00 parse error: {e}")
 
         elif sub == 0x1F01 and len(raw) >= 22:
             # TX-only frame marker (trailing bit 16 toggles during TX).
-            # Forward power is in 0x1F00 pwr_raw (cubic fit); this is a flag only.
+            # Forward power is in 0x1F00 off30 f32 (watts); this is a flag only.
             pass
 
         # Periodic stats (doesn't send keep-alive — that's handled above)
@@ -856,6 +1038,9 @@ async def _broadcast_spectrum(spec):
 # ── WebSocket: Spectrum (/WSspectrum) ─────────────────────────────
 @app.websocket("/WSspectrum")
 async def ws_spectrum(ws: WebSocket):
+    token = ws.query_params.get("token", "")
+    if token not in _auth_tokens:
+        await ws.accept(); await ws.close(code=4001, reason="auth required"); return
     await ws.accept(); spectrum_clients.add(ws)
     try:
         while True: await ws.receive()
@@ -867,6 +1052,9 @@ async def ws_spectrum(ws: WebSocket):
 @app.websocket("/WSCTRX")
 async def ws_ctrl(ws: WebSocket):
     global recording_active, recording_buffer, recording_start_time
+    token = ws.query_params.get("token", "")
+    if token not in _auth_tokens:
+        await ws.accept(); await ws.close(code=4001, reason="auth required"); return
     await ws.accept(); ctrl_clients.add(ws)
     try:
         while True:
@@ -1082,6 +1270,9 @@ async def ws_ctrl(ws: WebSocket):
 @app.websocket("/WSATR1000")
 async def ws_atr1000(ws: WebSocket):
     """ATR-1000 antenna tuner proxy — bidirectional JSON relay."""
+    token = ws.query_params.get("token", "")
+    if token not in _auth_tokens:
+        await ws.accept(); await ws.close(code=4001, reason="auth required"); return
     await ws.accept()
     try:
         while True:
@@ -1105,6 +1296,9 @@ async def ws_atr1000(ws: WebSocket):
 # ── WebSocket: Audio RX/TX ────────────────────────────────────────
 @app.websocket("/WSaudioRX")
 async def ws_audio_rx(ws: WebSocket):
+    token = ws.query_params.get("token", "")
+    if token not in _auth_tokens:
+        await ws.accept(); await ws.close(code=4001, reason="auth required"); return
     await ws.accept(); audio_rx_clients.add(ws)
     try:
         while True: await ws.receive()
@@ -1118,6 +1312,9 @@ async def ws_audio_tx(ws: WebSocket):
     from controls.js); text frames are control: 'm:rate,encode,...' settings,
     's:' stop. PCM is fed to the TX modulator, which queues 0xFFFD IQ packets
     for the TX pacer thread to drain. See PROTOCOL.md §17 and CLAUDE.md AD-009."""
+    token = ws.query_params.get("token", "")
+    if token not in _auth_tokens:
+        await ws.accept(); await ws.close(code=4001, reason="auth required"); return
     await ws.accept(); audio_tx_clients.add(ws)
     tx_rate = 16000  # mic sample rate from controls.js (48k downsampled ×3)
     loop = asyncio.get_running_loop()
@@ -1237,7 +1434,8 @@ def _find_ssl():
 if __name__ == "__main__":
     ssl_cert, ssl_key = _find_ssl()
     scheme = "https" if ssl_cert else "http"
-    logger.info(f"sunmrrc {scheme}://[::]:{WEB_PORT}")
+    pwd_display = "***" if os.environ.get("WEB_PASSWORD") else "(default: sunmrrc)"
+    logger.info(f"sunmrrc {scheme}://[::]:{WEB_PORT}  password={pwd_display}")
     if ssl_cert:
         logger.info(f"TLS: {ssl_cert}")
         uvicorn.run(app, host="::", port=WEB_PORT, reload=False,

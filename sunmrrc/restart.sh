@@ -70,9 +70,11 @@ export NO_PROXY="127.0.0.1,localhost" no_proxy="127.0.0.1,localhost"
 
 if [ "$FOREGROUND" = "1" ]; then
     echo "→ 前台启动 sunmrrc → http://localhost:$WEB_PORT (Ctrl-C 退出)"
+    echo "   WEB_PASSWORD=${WEB_PASSWORD:-(default: sunmrrc)}"
     exec python3 server.py
 else
     echo "→ 后台启动 sunmrrc → http://localhost:$WEB_PORT"
+    echo "   WEB_PASSWORD=${WEB_PASSWORD:-(default: sunmrrc)}"
     nohup python3 server.py > "$LOG_FILE" 2>&1 &
     NEW_PID=$!
     sleep 2

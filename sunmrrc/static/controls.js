@@ -4,6 +4,20 @@
 var AUDIO_TAG_PCM = 0x00;
 var AUDIO_TAG_OPUS = 0x01;
 
+// ── Auth token helper ────────────────────────────────────────────────
+// Reads the sunmrrc_auth cookie set by the login page and appends it as a
+// query parameter to WebSocket URLs so the server can authenticate WS
+// connections (browser WebSocket API doesn't support custom headers).
+function getAuthToken() {
+    var m = document.cookie.match(/(?:^|;\s*)sunmrrc_auth=([^;]*)/);
+    return m ? m[1] : '';
+}
+function wsUrlWithAuth(path) {
+    var token = getAuthToken();
+    var sep = path.indexOf('?') >= 0 ? '&' : '?';
+    return path + (token ? sep + 'token=' + encodeURIComponent(token) : '');
+}
+
 //Mobile detection///////////////////////////////////////////////////////////////////////////
 /* eslint-disable */
 const IS_MOBILE = (function (a) {
@@ -243,7 +257,7 @@ function AudioRX_start(){
 
 	// RX 音频固定为 Int16 PCM（后端只发 16-bit PCM），不做 Opus 协商。
 
-	wsAudioRX = new WebSocket( (location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSaudioRX' );
+	wsAudioRX = new WebSocket( wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSaudioRX') );
 	wsAudioRX.binaryType = 'arraybuffer';
 	wsAudioRX.onopen = wsAudioRXopen;
 	wsAudioRX.onclose = wsAudioRXclose;
@@ -811,7 +825,7 @@ function ControlTRX_start(){
 	}
 	
 	setWSStatus('status-ctrl', 'connecting');
-	const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSCTRX';
+	const wsUrl = wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSCTRX');
 	console.log('🔌 尝试连接WebSocket:', wsUrl);
 	wsControlTRX = new WebSocket( wsUrl );
 	wsControlTRX.onopen = wsControlTRXopen;
@@ -1313,22 +1327,25 @@ function initRXSmeter(){
 var SP = {0:0,1:25,2:37,3:50,4:62,5:73,6:84,7:98,8:110,9:123,5:134,10:144,15:154,20:164,25:172,30:180,35:191,40:202,45:212,50:221,55:231,60:240};
 var RIG_LEVEL_STRENGTH = {0:-54,1:-48,2:-42,3:-36,4:-30,5:-24,6:-18,7:-12,8:-6,9:0,5:5,10:10,15:15,20:20,25:25,30:30,35:35,40:40,45:45,50:50,55:55,60:60};
 // TX 功率/SWR/温度 遥测显示 (数据来自设备 0x1F00 包, 见 PROTOCOL.md §17.6)
-// 消息格式: getTXTelem:<watts>,<swr>,<temp_c>,<raw>
-// 字段来源: off16 u16 / 100 = SWR, off14 u16 = pwr_raw, off18 f32 = temp °C
+// 消息格式: getTXTelem:<watts>,<volts>,<temp_c>,<raw>
+// 字段来源(抓包逆向 2026-06-25, device/captures/expert_40m_drive.pcap):
+//   off30 f32 = 正向功率瓦数(PEP), off16 u16 / 10 = 电源电压V(非SWR),
+//   off18 f32 = PA温度°C。设备不提供反向功率,无法算SWR;off16 原先被
+//   误当成 SWR×100,实为电源电压(空载13.6V,满功率压降到~12.9V)。
 function updateTXTelem(param) {
 	if (!param) return;
 	var p = param.split(",");
 	var watts = parseFloat(p[0]);
-	var swr   = parseFloat(p[1]);
+	var volts = parseFloat(p[1]);
 	var temp  = parseFloat(p[2]);
 	if (isNaN(watts)) return;
 
 	var powerEl = document.getElementById("atr-power");
-	var swrEl   = document.getElementById("atr-swr");
+	var voltEl  = document.getElementById("atr-swr");      // 复用原 SWR 显示位
 	var powerBar = document.getElementById("atr-power-bar");
-	var swrBar   = document.getElementById("atr-swr-bar");
+	var voltBar   = document.getElementById("atr-swr-bar");
 	var tempEl  = document.getElementById("txtelem-temp");
-	var MAX_W = 15;  // 显示满量程 (SunSDR2 DX 标称 ~10-15W)
+	var MAX_W = 100;  // 显示满量程 (off30 PEP 满功率 ~100W)
 
 	if (powerEl) {
 		powerEl.textContent = watts.toFixed(1);
@@ -1341,14 +1358,16 @@ function updateTXTelem(param) {
 		powerBar.style.background = watts > MAX_W * 0.8 ? '#f44336'
 			: watts > MAX_W * 0.5 ? '#ff9800' : '#3b82f6';
 	}
-	if (swrEl && !isNaN(swr)) {
-		swrEl.textContent = swr.toFixed(2);
-		swrEl.style.color = swr >= 3 ? '#f44336' : swr >= 2 ? '#ff9800' : '#3b82f6';
+	// 电压显示: 正常 13.x V; 低于 12V 告警(压降过大/供电不足)
+	if (voltEl && !isNaN(volts)) {
+		voltEl.textContent = volts.toFixed(1) + "V";
+		voltEl.style.color = volts < 12 ? '#f44336' : volts < 12.8 ? '#ff9800' : '#3b82f6';
 	}
-	if (swrBar && !isNaN(swr)) {
-		var spct = Math.max(0, Math.min(100, (swr - 1) / 2 * 100));
-		swrBar.style.width = spct + "%";
-		swrBar.style.background = swr >= 3 ? '#f44336' : swr >= 2 ? '#ff9800' : '#3b82f6';
+	if (voltBar && !isNaN(volts)) {
+		// 11-14V 映射到 0-100%
+		var vpct = Math.max(0, Math.min(100, (volts - 11) / 3 * 100));
+		voltBar.style.width = vpct + "%";
+		voltBar.style.background = volts < 12 ? '#f44336' : volts < 12.8 ? '#ff9800' : '#3b82f6';
 	}
 	if (tempEl) tempEl.textContent = (isNaN(temp) ? "--" : temp.toFixed(0) + "°C");
 
@@ -1935,8 +1954,9 @@ MediaHandler.prototype.callback = async function( stream )
         // 初始化 TX EQ
         initTX_EQ(this.context);
 
-        // 音频链: micSource → preamp → antiAlias → antiAlias2 → eqLow → eqMid → eqHigh → midCut → presence → compressor → noiseGate → gain_node → processor
+        // 音频链: micSource → preamp → antiAlias → antiAlias2 → eqLow → eqMid → eqHigh → midCut → presence → compressor → makeup → noiseGate → gain_node → processor
         // RagChew 专用节点在标准模式下设为直通（flat gain / bypass），不影响信号
+        // compressor 后的 makeup 增益把压缩衰减补回来，将"压缩"转化为平均功率提升
         this.micSource.connect(AudioTX_preamp);
         AudioTX_preamp.connect(AudioTX_antiAlias);
         AudioTX_antiAlias.connect(AudioTX_antiAlias2);
@@ -1946,7 +1966,8 @@ MediaHandler.prototype.callback = async function( stream )
         AudioTX_eqHigh.connect(AudioTX_midCut);
         AudioTX_midCut.connect(AudioTX_presence);
         AudioTX_presence.connect(AudioTX_compressor);
-        AudioTX_compressor.connect(AudioTX_noiseGate);
+        AudioTX_compressor.connect(AudioTX_makeup);
+        AudioTX_makeup.connect(AudioTX_noiseGate);
         AudioTX_noiseGate.connect(this.gain_node);
         this.gain_node.connect( this.processor );
 
@@ -2048,7 +2069,7 @@ function AudioTX_start()
 	isRecording = false;
 	encode = true;
 	setWSStatus('status-tx', 'connecting');
-	wsAudioTX = new WebSocket( (location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSaudioTX' );
+	wsAudioTX = new WebSocket( wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSaudioTX') );
 	wsAudioTX.onopen = appendwsAudioTXOpen;
 	wsAudioTX.onerror = appendwsAudioTXError;
 	wsAudioTX.onclose = appendwsAudioTXclose;
@@ -2073,7 +2094,7 @@ function appendwsAudioTXclose(){
 					var oldOnOpen = wsAudioTX ? wsAudioTX.onopen : null;
 					var oldOnError = wsAudioTX ? wsAudioTX.onerror : null;
 					var oldOnClose = wsAudioTX ? wsAudioTX.onclose : null;
-					wsAudioTX = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split('/')[2] + '/WSaudioTX');
+					wsAudioTX = new WebSocket( wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split('/')[2] + '/WSaudioTX') );
 					wsAudioTX.onopen = appendwsAudioTXOpen;
 					wsAudioTX.onerror = appendwsAudioTXError;
 					wsAudioTX.onclose = appendwsAudioTXclose;
@@ -2245,7 +2266,7 @@ function Waterfall_start(){
 	wfRow = wfCtx.createImageData(wfCanvas.width, 1);
 
 	if (wsSpectrum && wsSpectrum.readyState !== WebSocket.CLOSED) return;
-	var url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split('/')[2] + '/WSspectrum';
+	var url = wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split('/')[2] + '/WSspectrum');
 	wsSpectrum = new WebSocket(url);
 	wsSpectrum.binaryType = 'arraybuffer';
 	wsSpectrum.onmessage = function(ev){

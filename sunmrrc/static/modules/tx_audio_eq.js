@@ -28,6 +28,7 @@ var AudioTX_highCut = null;    // 高切低通 @ 3kHz
 var AudioTX_midCut = null;     // 中低频衰减 @ 500Hz
 var AudioTX_presence = null;   // 高频存在感 @ 2.4kHz
 var AudioTX_compressor = null; // 动态压缩器
+var AudioTX_makeup = null;     // 压缩后 makeup 增益（Web Audio 压缩器无自动 makeup）
 var AudioTX_noiseGate = null;  // 噪声门（gain 节点）
 var isRagchewMode = false;     // 当前是否为 RagChew 模式
 
@@ -140,12 +141,24 @@ function initTX_EQ(context) {
     AudioTX_presence.Q.setValueAtTime(1.4, context.currentTime);
     AudioTX_presence.gain.setValueAtTime(0, context.currentTime);
 
+    // ========== 动态压缩器：温和，保留语音自然动态 ==========
+    // 历史：曾收紧到 6:1 / thr -28 去"降峰均比"，那是基于错误诊断（以为低功率
+    // 是峰均比导致）。真正的根因是 TX_IQ_PEAK 把 IQ 削到半量程（已修为 1.0）。
+    // 强压缩在根因修复后变成冗余 + 有害：把语音动态压死，并把服务器 tanh 推成
+    // 2:1 主力限幅器（drv peak ~2.0 → 响亮音节失真、带外溅射）。
+    // 回退到温和档：让语音保留呼吸感，tanh 只做轻量兜底。
     AudioTX_compressor = context.createDynamicsCompressor();
     AudioTX_compressor.threshold.setValueAtTime(-24, context.currentTime);
-    AudioTX_compressor.knee.setValueAtTime(30, context.currentTime);
+    AudioTX_compressor.knee.setValueAtTime(12, context.currentTime);
     AudioTX_compressor.ratio.setValueAtTime(3, context.currentTime);
     AudioTX_compressor.attack.setValueAtTime(0.003, context.currentTime);
     AudioTX_compressor.release.setValueAtTime(0.25, context.currentTime);
+
+    // ========== Makeup 增益 ==========
+    // Web Audio 的 DynamicsCompressor 没有自动 makeup gain。温和压缩 (3:1) 下
+    // 衰减小，只需轻补 ~+4dB (×1.6)。配合 TX_IQ_PEAK=1.0，整链电平已充足。
+    AudioTX_makeup = context.createGain();
+    AudioTX_makeup.gain.setValueAtTime(1.6, context.currentTime);
 
     AudioTX_noiseGate = context.createGain();
     AudioTX_noiseGate.gain.setValueAtTime(1, context.currentTime);
@@ -225,6 +238,11 @@ function setTX_EQ_Preset(presetName) {
             AudioTX_compressor.release.setValueAtTime(0.250, ctx.currentTime);
         }
 
+        // Makeup: RagChew 压缩温和 (ratio 3:1)，只需轻补 ~+3dB，避免本地强信号过冲
+        if (AudioTX_makeup) {
+            AudioTX_makeup.gain.setValueAtTime(1.4, ctx.currentTime);
+        }
+
         // 噪声门
         if (AudioTX_noiseGate) {
             AudioTX_noiseGate.gain.setValueAtTime(1, ctx.currentTime);
@@ -252,6 +270,21 @@ function setTX_EQ_Preset(presetName) {
         }
         if (AudioTX_midCut) AudioTX_midCut.gain.setValueAtTime(0, ctx.currentTime);
         if (AudioTX_presence) AudioTX_presence.gain.setValueAtTime(0, ctx.currentTime);
+
+        // 标准模式压缩器：温和自然 (init 默认值，预设切换时重申)
+        // 真正修复发射功率的是服务器端 TX_IQ_PEAK 0.5→1.0 (用满量程，对齐
+        // ExpertSDR3)。早期为"降峰均比"加的强压缩 (6:1 + makeup ×2.5) 基于误诊，
+        // 会压死语音动态并让服务器 tanh 当主力限幅器 (drv peak ~2.0 → 失真/溅射)。
+        // 回退到 3:1 / thr -24 / knee 12：保留语音呼吸感，tanh 只兜底。
+        if (AudioTX_compressor) {
+            AudioTX_compressor.threshold.setValueAtTime(-24, ctx.currentTime);
+            AudioTX_compressor.knee.setValueAtTime(12, ctx.currentTime);
+            AudioTX_compressor.ratio.setValueAtTime(3, ctx.currentTime);
+            AudioTX_compressor.attack.setValueAtTime(0.003, ctx.currentTime);
+            AudioTX_compressor.release.setValueAtTime(0.25, ctx.currentTime);
+        }
+        // Makeup: 温和压缩只需轻补 (+4dB)
+        if (AudioTX_makeup) AudioTX_makeup.gain.setValueAtTime(1.6, ctx.currentTime);
 
         // 应用标准3段EQ
         AudioTX_eqLow.gain.setValueAtTime(preset.low, ctx.currentTime);

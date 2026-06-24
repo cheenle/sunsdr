@@ -81,7 +81,11 @@ def build_hw_init(rate_key: str = "78k") -> bytes:
     word[11] = rate index: 0=39k, 1=78k, 2=156k, 3=312k
     word[10] = word[11] * 65536 + 1  (redundant encoding)
     Payload is exactly 50 bytes (12 words + 2B zero pad) to match ExpertSDR3.
-    Trailing is fixed 0x509E9C00 (verified from ExpertSDR3 capture).
+    Trailing is fixed 0x37E00000 — verified byte-for-byte against the real
+    ExpertSDR3 init in device/captures/sunsdr_sdr_tx.pcap (0x0001 trailing =
+    937426944 = 0x37E00000, same rate index word[11]=1/78k). The prior value
+    0x509E9C00 did NOT match any capture and is a likely cause of the PA being
+    held at reduced power (clock/PLL/calibration register in the HW-init word).
     """
     rate_index = HW_INIT_RATE_INDEX.get(rate_key, 1)  # default 78k
     words = [
@@ -90,7 +94,7 @@ def build_hw_init(rate_key: str = "78k") -> bytes:
         rate_index,                                       # word[11]: ★ rate index ★
     ]
     payload = struct.pack("<%dI" % len(words), *words) + b'\x00\x00'
-    return build_packet(CmdID.HW_INIT, payload, trailing=0x509E9C00)
+    return build_packet(CmdID.HW_INIT, payload, trailing=0x37E00000)
 
 # ── Per-band TX power (drive %) ─────────────────────────────────────
 # EDIT THESE to set max output power per band. drive % maps to the 0x0017

@@ -27,6 +27,16 @@ tail -f sunmrrc/server.log
 
 Default: `https://localhost:8889` (or `WEB_PORT` env).
 
+## Authentication
+
+All routes (HTTP and WebSocket) require a session token. Unauthenticated visitors are redirected to `/login`.
+
+- **Default password**: `sunmrrc`
+- **Custom password**: `WEB_PASSWORD=MySecret123 ./restart.sh`
+- **Mechanism**: login page → POST `/api/auth/login` → sets `sunmrrc_auth` cookie → JS reads cookie → passes token as `?token=` query param on all WebSocket connections
+- **Token lifetime**: 30 days (cookie max-age); all tokens invalidated on server restart
+- **WebSocket auth**: each WS endpoint checks `?token=` query param against `_auth_tokens` server-side set. Browser WebSocket API doesn't support custom headers, hence query-param auth.
+
 ## Architecture
 
 See `SDD/09-architecture-overview.md` and `SDD/11-component-model.md` for detailed diagrams.
@@ -82,17 +92,20 @@ TX output power is set by the **DRIVE command (0x0017)**, NOT by software IQ gai
 - **Packet layout is the gotcha**: the drive byte goes in the **trailing word**, not the payload. `build_packet(CmdID.DRIVE, data=b"\0\0\0\0", trailing=byte)`. Putting it in the payload sends drive=0 (device transmits at near-zero power — this was the original "low power" bug).
 - **Re-sent on every QSY**: ExpertSDR3 (and now `set_frequency()`) re-sends 0x0017 on each frequency change, because the device resets drive to a per-band calibration value otherwise. `set_ptt(tx=True)` also re-sends it just before keying as a guard.
 - **Per-band power is user-configurable**, persisted to `band_power.json`, edited via `/api/band_power` and the **Band Power** menu panel. `band_power_for(freq_hz)` looks up the % for the current band; `BAND_POWER_DEFAULT` (100) covers out-of-band frequencies.
-- **Software IQ gain stays gentle** (`dsp.py` `TX_DRIVE_GAIN=2.5`, `TX_IQ_PEAK=0.5`): the software layer only produces clean SSB that barely engages the tanh soft-limiter; the device drive does the power scaling.
+- **IQ amplitude must use the FULL scale** (`dsp.py` `TX_IQ_PEAK=1.0`, `TX_DRIVE_GAIN=3.0`): verified 2026-06-25 against a real ExpertSDR3 40m drive sweep (`device/captures/expert_40m_drive.pcap`) — ExpertSDR3's TX IQ peaks reach **1.0 full-scale** (voice RMS ~0.33), and IQ amplitude is **constant with drive** (drive only scales power at the device). The earlier `TX_IQ_PEAK=0.5` clipped half the amplitude through the tanh limiter and was THE root cause of low power (~20W vs ExpertSDR3's 45W at 100% drive on the same audio). The "~0.092 peak" figure in older notes was measured from a quiet/low-level capture segment and is **wrong** — ignore it.
+- **The DRIVE byte is correct as-is** (verified against `tci_drive_scan.pcap`: 100%→trailing 255, byte in trailing word). Don't re-investigate it for power problems — the lever is `TX_IQ_PEAK` + drive %, not the byte format.
 
-### TX power telemetry (0x1F00)
+### TX power / voltage telemetry (0x1F00)
 
-The device **does** send 0x1F00 while keyed (verified: 273 TX-state packets in `sunsdr_sdr_tx.pcap` with pwr_raw 47-48). Fields:
-- `off14` u16 = pwr_raw (idle ~9, TX 47-77)
-- `off16` u16 = SWR × 100 (132-137 range across captures → 1.32-1.37 SWR)
-- `off18` f32 = temp °C (reliable)
-- `off26` f32 = always 1.0000 (device placeholder, never changes)
+The device sends 0x1F00 (34 B) continuously, in RX and TX. **Field offsets reverse-engineered 2026-06-25** from `device/captures/expert_40m_drive.pcap` (a full 40m drive sweep) cross-checked against an external wattmeter and ExpertSDR3's own readout:
 
-Power is cubic fit: `watts = (pwr_raw - 9)^3 × 1.91e-5`. Confirmed: Tune ~12W, SSB voice 30–40W PEP via ATR-1000.
+- `off30` **f32 = forward power in WATTS** (PEP envelope). Monotonic with drive: 28%→3W, 71%→54W, 88%→83W, 100%→101W. Matches ExpertSDR3's ~95W self-readout at 100%. **Direct float watts — NO fit needed.**
+- `off16` **u16 = supply voltage × 10** (NOT SWR). Reads ~136 (13.6V) at idle, sags as power rises (0W→13.6, 30-50W→13.1, 80-110W→12.9V); correlation with forward power = **-0.79**, a textbook PSU-sag curve. Volts = `off16 / 10`.
+- `off18` f32 = PA temperature °C (~42, barely moves).
+- `off22` f32 = **average** forward power (ratio to off30 ≈ the 3:1 SSB crest factor) — not reverse power.
+- `off26` f32 = always 1.0000 (device placeholder).
+
+**The device exposes NO reverse-power field, so it cannot compute SWR.** The old code's "SWR = off16/100" was wrong — that's the 13.6V supply voltage. The old "off14 u16 + cubic fit" power was also wrong (off14 is non-monotonic noise). Frontend `getTXTelem` now carries `watts,volts,temp`; the UI **VOLT** field replaces the former **SWR** field.
 
 ## Dependencies
 
@@ -130,6 +143,9 @@ The IQ processing loop sends both heartbeat (0x0018 to port 50001 every 0.5s) an
 - **Restart script kills by cwd**, not by process name — won't accidentally kill `web_control/server.py` if it's running
 - **TLS by default** for iOS secure context — `DISABLE_SSL=1` to force HTTP for local dev
 - **WDSP is optional** (AD-008) — demods work without it; `get_wdsp_status()` reports `available: true/false`
+- **WDSP enabled by default** — NR2 (level 50), AGC SLOW active on startup. The frontend DSP toggle switches WDSP on/off.
+- **NR2 level is now functional** (fixed 2026-06-24) — `SetRXAEMNRgainLine` applies the actual gain value (0.0=max NR2, 1.0=min). Previously `set_nr2_level()` computed the gain but never called the WDSP API.
+- **process() chunked** (fixed 2026-06-24) — `WDSPProcessor.process()` now buffers variable-length input and drains in 256-sample blocks, returning full-length output. Previously it truncated input >256 samples.
 - **Spectrum quantization is server-side** (AD-005) — waterfall canvas gets 512 uint8 values, not raw float dB
 - **PTT release is safety-critical** (AD-007) — frontend has ACK retry + watchdog; backend has forced-RX handler on `s:` command
 - **RX audio is tagged dual-codec** (AD-004) — each `/WSaudioRX` frame carries a 1-byte codec tag (`0x00`=Int16 PCM, `0x01`=Opus 16 kHz mono); default Opus (~18-24 kbps vs ~256 kbps PCM), switchable via `setOpus:` (Audio Codec menu). Server encodes via a direct `ctypes` libopus binding in `web_control/opus_rx.py` (NOT `opuslib` — arm64 macOS can't call the variadic `opus_encoder_ctl` through ctypes, so bitrate is set via the `max_data_bytes` cap on `opus_encode`). Falls back to PCM if libopus is missing. 16 kHz resampled server-side from 15625 Hz native rate

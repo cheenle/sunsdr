@@ -1194,25 +1194,41 @@ therefore **half** the RX rate.
 > hardware TX buffer and is a likely source of the periodic popping noted in `TXPLAN.md`.
 > ExpertSDR3 sends in tight bursts (sub-ms gaps) but the *average* rate holds at 195.8 pkt/s.
 
-### 17.4 TX IQ level — peak ≈ 0.09, NOT 0.3
+### 17.4 TX IQ level — full-scale (peak ≈ 1.0), NOT 0.09 and NOT 0.3
 
-The genuine ExpertSDR3 TX IQ never exceeds **|IQ| ≈ 0.092** (24-bit normalized), with
-per-packet RMS in the **0.002–0.043** range:
+**Verified 2026-06-24 against a fresh full-output ExpertSDR3 40m capture
+(`device/captures/expert_40m_drive.pcap`):** the genuine client drives TX IQ to
+**|IQ| peak ≈ 1.0 (full 24-bit scale)** during voice. Per-drive analysis of the
+non-silent IQ packets:
 
 ```
-global peak |IQ| = 0.09189
-per-packet RMS   = 0.002 … 0.043 (mean 0.024 in the voice burst)
+drive  20%   voice IQ: peak max 0.81  rms mean 0.25
+drive  50%   voice IQ: peak max 1.00  rms mean 0.33
+drive 100%   voice IQ: peak max 1.00  rms mean 0.33
+Tune (cw carrier): rms mean ≈ 0.98 (near full-scale constant envelope)
 ```
 
-> **Superseded by on-air testing (2026-06-23):** the `~0.09` reference peak was the
-> *modulation depth ExpertSDR3 happened to use at its drive setting* — it is NOT an absolute
-> ceiling. Output power is controlled by the **DRIVE command (0x0017)**, not by IQ peak (see
-> §18). With drive doing the power scaling, the software IQ peak only needs to be a clean
-> level that doesn't engage the tanh soft-limiter. Current code runs `TX_IQ_PEAK = 0.5`,
-> `TX_DRIVE_GAIN = 2.5`; on-air this produces clean SSB with Tune ~12 W and voice 30–40 W PEP
-> (ATR-1000 reading) at 100 % drive. The earlier "lower to 0.09 or it clips the PA" guidance
-> was wrong — the real low-power cause was the DRIVE byte being placed in the payload instead
-> of the trailing word (§18), so the device received drive=0.
+Key finding: **IQ amplitude is INDEPENDENT of drive** — voice RMS holds at ~0.33
+and peaks reach 1.0 across the whole 20–100 % drive range. Drive (0x0017) scales
+power *at the device PA*, NOT the digital IQ level. The client modulates at full
+digital scale and lets the device drive byte do the power scaling.
+
+> **History of wrong values:**
+> - The original `0.3` guess (no basis).
+> - The `~0.09` "verified peak" — measured from a LOW-LEVEL / nearly-silent burst
+>   in an old capture (`tx_analysis.json` bursts had peak 0.0018–0.092). It was a
+>   quiet passage, not a ceiling. Believing it caused `TX_IQ_PEAK` to be set to 0.5,
+>   which a tanh soft-limiter then clamped — so HALF the available amplitude was
+>   thrown away. Measured symptom: 100 % drive produced only ~20 W (external
+>   wattmeter) vs ExpertSDR3's ~45 W under identical conditions.
+> - **Fix (2026-06-24):** `TX_IQ_PEAK = 1.0` (was 0.5) to match the real client's
+>   full-scale modulation. Power immediately rose to parity with ExpertSDR3
+>   (whistle/Tune ~80 W PEP, normal voice 30–50 W). `TX_DRIVE_GAIN` stays 3.0; the
+>   browser compressor was relaxed (ratio 6:1 → 3:1, makeup ×2.5 → ×1.6) once the
+>   ceiling fix made the earlier crest-factor crunching unnecessary.
+> - **Root cause was NOT IQ level being too low in an absolute sense** — it was the
+>   0.5 ceiling halving a signal the client sends at 1.0. Power control is the
+>   device DRIVE byte (§18); IQ just needs to reach full scale cleanly.
 
 ### 17.5 Leading silence before audio (PA settling)
 
@@ -1223,43 +1239,53 @@ run of zero-IQ packets immediately after asserting PTT, before feeding real modu
 
 ### 17.6 Device → PC TX telemetry (decoded + on-air findings)
 
-During TX the device sends two small telemetry sub-types back on 50002 (836 + 7 frames in
-the reference):
+During TX the device sends two small telemetry sub-types back on 50002:
 
 | Sub-type | Size | Content |
 |----------|------|---------|
-| `0x1F00` | 34 B | `off14` u16 raw level, `off16` u16 SWR×100, `off18` f32 temp °C |
+| `0x1F00` | 34 B | `off30` f32 forward power (W), `off16` u16 supply voltage ×10, `off18` f32 temp °C |
 | `0x1F01` | 22 B | Mostly zeros — TX status flags |
 
-`server.py` decodes `0x1F00` into `getTXTelem:watts,swr,temp,raw` for the UI:
-- **off14 u16** = pwr_raw (forward power envelope, idle baseline ~9, TX range 47-77)
-- **off16 u16** = SWR × 100 (132=1.32 in TUNE, 134-137=1.34-1.37 TX/RX). Device reports SWR in all modes.
-- **off18 f32** = temperature °C (reliable, ≈45-49°C)
-- **off22 f32** = TUNE measurement, 0.0 during normal TX
-- **off26 f32** = constant 1.0000 (device placeholder, never changes)
-- **off30 f32** = mirrors off22 during TUNE
+**Field map verified 2026-06-25** by reverse-engineering a real ExpertSDR3 40m drive
+sweep (`device/captures/expert_40m_drive.pcap`, ~17 k 0x1F00 packets) against an
+external wattmeter AND ExpertSDR3's own power/voltage readouts. `server.py` decodes
+`0x1F00` into `getTXTelem:watts,volts,temp,raw` for the UI:
 
-The device **does** send `0x1F00` while keyed (verified 2026-06-24: 273 TX packets in
-`sunsdr_sdr_tx.pcap` with pwr_raw 47-48). SWR field at off16 varies across captures
-(1.32-1.37), confirming it reflects real antenna match conditions.
-> verified across multiple PTT windows, zero `0x1F00` frames arrive between PTT-ON and PTT-OFF.
-> The `0x1F00` values the server logs are therefore the **idle/RX baseline only**, NOT forward
-> power. A `W=0.0` line during TX is a *measurement blind spot*, not zero output. Real forward
-> power must be read from the **ATR-1000 tuner** (or an external wattmeter). `0x1F01` is logged
-> TX-only at 1 Hz as a candidate location for an in-stream forward-power field, but it has not
-> yet been seen carrying one.
+- **off30 f32** = **forward power in WATTS (PEP envelope)** — the device's direct
+  float watt reading, NO fit needed. Monotonic with drive: 28 %→3 W, 71 %→54 W,
+  88 %→83 W, 100 %→101 W. Matches ExpertSDR3's own ~95 W self-readout at 100 %.
+- **off16 u16** = **supply voltage × 10 (NOT SWR)** — reads ~136 (13.6 V) at idle and
+  DROPS as power rises (0 W→13.6, 30–50 W→13.1, 80–110 W→12.9 V). Correlation with
+  forward power = **−0.79**, a textbook PSU-sag curve. Value is `volts = off16 / 10`.
+- **off18 f32** = PA temperature °C (~42, barely moves with drive).
+- **off22 f32** = *average* forward power (W); ratio to off30 ≈ the 3:1 SSB crest
+  factor (100 %: off22 peak ~33 W vs off30 peak 101 W).
+- **off26 f32** = constant 1.0000 (device placeholder, never changes).
+
+> **The device sends NO reverse-power field**, so it **cannot compute SWR** — and the
+> old `off16/100 = SWR` reading was wrong (it's supply voltage). The "SWR ≈ 1.36 even
+> when not transmitting" that this produced was actually the 13.6 V idle supply
+> voltage. SWR must be read from the **ATR-1000 tuner** or an external SWR meter, not
+> from `0x1F00`.
+>
+> **Earlier wrong claims (now corrected):** off14 u16 was thought to be `pwr_raw` with
+> a cubic fit `watts=(pwr_raw−9)³×1.91e-5`. off14 is actually non-monotonic noise
+> (28 %→72, 45 %→51, 100 %→81) that never tracked real power. The real watt field is
+> off30 f32. Also: `0x1F00` IS sent during TX (verified, thousands of TX-state packets
+> carrying live power) — an earlier note claiming it only carries an idle baseline was
+> based on an incomplete capture.
 
 ### 17.7 Corrected summary vs. current code
 
 | Item | Original code | Verified / fixed | Status |
 |------|---------------|------------------|--------|
 | TX power control | software IQ gain only | **device DRIVE 0x0017** (trailing word) | ✅ fixed — see §18 |
-| TX IQ peak level | `0.3` | `TX_IQ_PEAK=0.5` clean SSB; power via drive | ✅ gentle, tanh barely engages |
+| TX IQ peak level | `0.3` | `TX_IQ_PEAK=1.0` (full scale, matches real client); power via drive | ✅ fixed 2026-06-24 — 0.5 halved power (§17.4) |
 | TX packet interval | `2.56 ms` (200/78125) | `5.12 ms` (200/39063) | ✅ fixed — adaptive pacer |
 | TX sample rate | implied 78,125 Hz | **39,063 Hz** | ✅ modulate at 39 kHz |
 | Pre-TX silence | none | ~17 zero packets | ✅ settling pad after PTT |
 | Stream byte 4-7 | n/a | packet counter (resets per PTT) | ✅ documented |
-| TX power telemetry | 0x1F00 verified | device sends 0x1F00 in all modes (273 TX packets) | ✅ off16 u16/100 = SWR, off14 pwr_raw |
+| TX power telemetry | 0x1F00 verified | device sends 0x1F00 in all modes (~17k TX packets) | ✅ off30 f32 = watts, off16 u16/10 = supply V (§17.6) |
 
 ### 17.8 TX chain — as implemented
 
@@ -1383,37 +1409,49 @@ Captured per-band calibration reference values (TCI, from ExpertSDR3): 3.5 MHz�
 
 ### 18.5 TX power telemetry (0x1F00)
 
-The device **does** send `0x1F00` while keyed (verified 2026-06-24: 273 TX-state packets
-in `sunsdr_sdr_tx.pcap` with pwr_raw 47-48). The earlier finding of zero TX frames was
-incorrect — likely due to the old capture only containing RX-idle data.
+The device **does** send `0x1F00` while keyed, carrying live power. **Field map verified
+2026-06-25** against a real ExpertSDR3 40m drive sweep (`device/captures/expert_40m_drive.pcap`,
+~17 k 0x1F00 packets) vs an external wattmeter and ExpertSDR3's own readouts:
 
-- **off14 u16** = pwr_raw (forward power envelope, idle baseline ~9). Power formula:
-  `watts = (pwr_raw - 9)³ × 1.91e-5` (cubic fit; approximate, calibrate against wattmeter).
-- **off16 u16** = SWR × 100 (132-137 range → 1.32-1.37 SWR). Verified across 323+ packets.
-- **off18 f32** = temperature °C (~45-49°C, reliable).
-- **off26 f32** = constant 1.0000 (device placeholder, never changes — NOT real SWR).
+- **off30 f32** = **forward power in WATTS (PEP)** — direct float reading, NO fit. Monotonic
+  with drive: 28%→3 W, 71%→54 W, 88%→83 W, 100%→101 W. Matches ExpertSDR3's ~95 W at 100%.
+- **off16 u16** = **supply voltage × 10 (NOT SWR)** — ~136 (13.6 V) idle, sags to ~129 (12.9 V)
+  at full power. Correlation with forward power = −0.79 (PSU sag). `volts = off16 / 10`.
+- **off18 f32** = PA temperature °C (~42, barely moves with drive).
+- **off22 f32** = *average* forward power (W); ratio to off30 ≈ the 3:1 SSB crest factor.
+- **off26 f32** = constant 1.0000 (device placeholder).
 - `0x1F01` (22 B) is a TX-status flag (trailing bit 16 toggles during TX).
+
+> **Superseded:** off14 u16 + cubic fit `(pwr_raw−9)³×1.91e-5` was wrong (off14 is
+> non-monotonic noise). off16/100 "SWR" was wrong (it's supply voltage). The device sends
+> **no reverse-power field → it cannot compute SWR**; use the ATR-1000 / external SWR meter.
 
 ### 18.6 Software IQ level (decoupled from power)
 
-With power on the device side, `dsp.py` software gain stays **gentle** so the SSB envelope
-is clean and the `tanh` soft-limiter barely engages:
+Power is set by the device DRIVE byte, but the IQ **must reach full digital scale** to
+match what the real ExpertSDR3 client sends (peak ≈ 1.0, voice RMS ~0.33 — see §17.4):
 
 ```
-TX_IQ_PEAK    = 0.5     # IQ normalization ceiling (envelope shaping, not power)
-TX_DRIVE_GAIN = 2.5     # mic→IQ make-up gain
+TX_IQ_PEAK    = 1.0     # IQ normalization ceiling — FULL scale (matches ExpertSDR3)
+TX_DRIVE_GAIN = 3.0     # mic→IQ make-up gain (lifts phone-mic level into IQ scale)
 ```
 
-These are envelope/quality knobs only. **Raising them does not raise output power** —
-it just drives the signal into the soft-limiter and degrades the SSB. Use the per-band
-**drive %** to set power.
+**History (2026-06-25 fix):** `TX_IQ_PEAK` was `0.5`, which the `tanh` soft-limiter
+clamped — throwing away half the amplitude the client normally sends and capping output
+at ~20 W (vs ExpertSDR3's 45 W at the same drive). Raising it to `1.0` restored power
+parity. Note this is NOT a power knob in the analog sense — power is the device drive
+byte (§18) — but the digital level must reach full scale *cleanly* or the device PA has
+less to amplify. Above 1.0 the tanh limiter would distort; 1.0 is the correct ceiling.
+The browser-side compressor was also relaxed (ratio 6:1 → 3:1, makeup ×2.5 → ×1.6) once
+the ceiling fix removed the need for aggressive crest-factor reduction.
 
 ### 18.7 Safety
 
 The PA is rated **~100 W PEP**. 100% drive on a band equals that band's factory-safe
-ceiling (the same value ExpertSDR3 writes), so it will not overdrive the PA on its own —
-but before sustained high-power TX, verify forward power and SWR on a wattmeter / dummy
-load, since the in-stream telemetry is unavailable while keyed (§18.5).
+ceiling (the same value ExpertSDR3 writes), so it will not overdrive the PA on its own.
+Live forward power (off30 f32) and supply voltage (off16) ARE available in `0x1F00`
+while keyed (§18.5); SWR is NOT (the device sends no reverse-power field) — read it from
+an external SWR meter or the ATR-1000 tuner.
 
 ---
 
