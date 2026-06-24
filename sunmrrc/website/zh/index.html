@@ -36,7 +36,7 @@
         </ul>
         <div class="nav-actions">
             <a href="../index.html" class="lang-btn">English</a>
-            <button class="mobile-menu-toggle"><i class="fas fa-bars"></i></button>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -315,6 +315,9 @@ WEB_PORT=8080 ./restart.sh  <span class="dim"># 自定义端口</span>
 </footer>
 
 <script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
 document.querySelectorAll('a[href^="#"]').forEach(a => {
     a.addEventListener('click', function(e) {
         e.preventDefault();

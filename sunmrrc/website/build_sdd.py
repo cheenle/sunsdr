@@ -145,6 +145,7 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -170,6 +171,9 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
 </footer>
 
 <script>
+function toggleMobileMenu() {{
+    document.querySelector('.nav-links').classList.toggle('active');
+}}
 document.querySelectorAll('a[href^="#"]').forEach(a => {{
     a.addEventListener('click', function(e) {{
         e.preventDefault();
