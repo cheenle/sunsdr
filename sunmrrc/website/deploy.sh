@@ -9,7 +9,7 @@ set -e
 LOCAL_WEBSITE_DIR="/Users/cheenle/HAM/sunsdr/sunmrrc/website"
 REMOTE_HOST="www.vlsc.net"
 REMOTE_USER="cheenle"
-REMOTE_WEBROOT="/var/www/html/sunmrrc"
+REMOTE_WEBROOT="/var/www/vlsc.net/sunmrrc"
 BACKUP_DIR="/var/www/backups/sunmrrc_$(date +%Y%m%d_%H%M%S)"
 
 echo "=========================================="
