@@ -33,9 +33,9 @@ Runtime facts are derived from the current repository, primarily `server.py`, `s
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-SUNMRRC-2026-001 |
-| SDD Version | V3.3 |
+| SDD Version | V3.3 (SunMRRC V1.0) |
 | Baseline Date | 2026-06-24 |
-| Status | Living design baseline |
+| Status | Production release |
 | Project | SunMRRC |
 | Primary Radio | SunSDR2 DX |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy |

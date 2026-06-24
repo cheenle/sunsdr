@@ -10,8 +10,9 @@
 | SDD V3.1 | 2026-06-21 | OpenCode | Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate `/WSspectrum` route |
 | SDD V3.2 | 2026-06-23 | Claude | TX voice modulation and TX power control documented as implemented: device DRIVE (`0x0017`) per-band power, `/api/band_power` + Band Power UI, `/api/mem_channels` graduated to implemented, AD-010 added, CW/FT8 dead links removed |
 | SDD V3.3 | 2026-06-24 | Claude | Tagged dual-codec audio transport (RX Opus/PCM + TX Opus uplink); corrected `0x1F00` telemetry field offsets (SWR = off16 u16/100, not off26 f32); AD-004 expanded to cover TX path; AD-011 added for SWR field correction; ATT/sample-rate controls documented; TXPLAN phased roadmap marked complete |
+| **SunMRRC V1.0** | **2026-06-24** | **Claude** | **🎉 Initial production release.** RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, SWR/power/temp telemetry from 0x1F00, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.3 baseline. |
 
-## Key Changes in SDD V3.3
+## Key Changes in SunMRRC V1.0 (SDD V3.3)
 
 | Chapter | Change |
 |---------|--------|

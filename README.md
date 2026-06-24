@@ -1,4 +1,4 @@
-# SunMRRC — SunSDR2 DX Mobile Radio Control
+# SunMRRC — SunSDR2 DX Mobile Radio Control  ![V1.0](https://img.shields.io/badge/version-1.0-blue)
 
 Web-based mobile control server for the [SunSDR2 DX](https://eesdr.com/) SDR transceiver. Provides HTTPS/WSS access from any modern browser — full waterfall spectrum display, real-time RX audio, frequency/mode/filter control, WDSP noise reduction, and PTT management. Optimized for iPhone/iOS Safari.
 
