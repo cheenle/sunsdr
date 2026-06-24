@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Use Case Model — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html" class="active">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="use-case-model-art-0508">6. Use Case Model (ART 0508)</h1>
+<h2 id="actors">6.1 Actors</h2>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HAM Operator</td>
+<td>Primary user controlling SunSDR2 DX from browser</td>
+</tr>
+<tr>
+<td>System Maintainer</td>
+<td>Starts service, manages certificates, observes logs, validates network</td>
+</tr>
+<tr>
+<td>Browser Runtime</td>
+<td>Supplies WebSocket, Web Audio, touch, microphone, and secure-context behavior</td>
+</tr>
+<tr>
+<td>SunSDR2 DX</td>
+<td>Radio device controlled and streamed by UDP</td>
+</tr>
+</tbody>
+</table>
+<h2 id="core-use-cases">6.2 Core Use Cases</h2>
+<h3 id="uc-001-start-mobile-session">UC-001: Start Mobile Session</h3>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Open the mobile UI and establish control/RX/spectrum channels</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Server running, TLS configured for mobile production, browser can reach host</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>User opens <code>https://radio.vlsc.net:8080</code>; server returns <code>index.html</code>; scripts load; user powers on; frontend opens <code>/WSCTRX</code>, <code>/WSaudioRX</code>, <code>/WSaudioTX</code>; <code>Waterfall_start()</code> opens <code>/WSspectrum</code> (and <code>Waterfall_stop()</code> closes it on power off)</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>UI displays connection state, frequency/mode, network bitrate/latency when available</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>HTTP on iOS prevents reliable mic/audio permissions; stale service-worker cache must not serve old JS/HTML</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-002-remote-receive-audio">UC-002: Remote Receive Audio</h3>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Hear demodulated SunSDR RX audio in the browser</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Radio connected; IQ stream available on UDP <code>50002</code>; <code>/WSaudioRX</code> connected</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Server receives IQ packet; decodes 24-bit I/Q; feeds <code>StreamProcessor</code>; obtains PCM; resamples to 16 kHz; broadcasts Int16 bytes; browser decodes to Float32; Web Audio plays output</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>Operator hears RX audio and bitrate monitor reflects traffic</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>If AudioContext is suspended, frontend resume/unlock handling is required; if HTTP on iOS, playback/mic behavior may fail</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-003-tune-frequency-and-mode">UC-003: Tune Frequency and Mode</h3>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Change radio frequency and DSP demodulation mode</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td><code>/WSCTRX</code> connected and radio control initialized</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>User taps band/step/frequency/mode controls; frontend sends <code>setFreq:*</code> or <code>setMode:*</code>; server calls <code>radio.set_frequency()</code> or demodulator <code>set_mode()</code>; server returns <code>getFreq:*</code> or <code>getMode:*</code></td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>UI reflects new state; radio receives new frequency command</td>
+</tr>
+<tr>
+<td>Notes</td>
+<td>Mode is software DSP-side in this codebase; hardware remains IQ/mode-agnostic for <code>setMode</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-004-monitor-spectrum-and-s-meter">UC-004: Monitor Spectrum and S-Meter</h3>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>See signal context while listening</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>IQ processing loop is active</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Spectrum processor emits FFT (~38 Hz); server derives S estimate and sends <code>getSignalLevel:*</code>; server quantizes the 512-bin spectrum to uint8 and broadcasts <code>/WSspectrum</code>; browser smooths the S-meter and renders the waterfall</td>
+</tr>
+<tr>
+<td>Waterfall Rendering</td>
+<td>Browser accumulates <code>WF_DECIMATE=10</code> frames and averages them into one row (≈38 Hz → ≈3.8 Hz, slower and smoother); per row it derives an adaptive noise floor (the <code>WF_PCTL=0.30</code> percentile of that row plus <code>WF_HEADROOM=2</code>), subtracts it, adds a blue sea-floor bias (<code>WF_BIAS=52</code>) and applies contrast gain (<code>WF_GAIN=8.0</code>); the resulting byte indexes a black→blue→cyan→yellow→red colour ramp so noise stays an even blue field and signals rise to yellow/red regardless of absolute noise level</td>
+</tr>
+<tr>
+<td>S-Meter Smoothing</td>
+<td>Browser applies an asymmetric exponential filter in <code>updateSMeter</code> — attack α=0.5, release α=0.15 — so the needle jumps up quickly on a new signal and decays slowly, giving a stable, readable reading instead of per-frame jitter</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>Operator sees a stable S-level and a slow, high-contrast waterfall</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-005-ptt-and-tune-control">UC-005: PTT and Tune Control</h3>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Key/de-key transmitter safely and support tune command</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Control WebSocket connected; radio control initialized</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>User presses PTT or TUNE; frontend sends <code>setPTT:true</code> or <code>tune:true</code>; server calls radio setter and updates demodulator PTT state; user releases; frontend sends false command and expects ack</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>Radio returns to RX after release</td>
+</tr>
+<tr>
+<td>Safety Flows</td>
+<td>Frontend release ACK retry, backup <code>s:</code> command over TX socket, lock-leak detection, PTT watchdog, backend <code>s</code> handler forces <code>set_ptt(False)</code></td>
+</tr>
+<tr>
+<td>Boundary</td>
+<td>Voice TX audio modulation is not complete; this is currently keying/control, not full microphone transmission</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-006-adjust-dsp-and-audio-settings">UC-006: Adjust DSP and Audio Settings</h3>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 65%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Improve RX intelligibility and adjust gain/filter settings</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Control WebSocket connected; DSP processor initialized</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>User toggles WDSP, NR2, NB, ANF, NF, AGC or changes filter/gain; frontend sends <code>setWDSP*</code>, <code>setFilter</code>, <code>setAFGain</code>, <code>setRFGain</code>, <code>setPreamp</code>, <code>setAGC</code>; server updates demodulator/radio and broadcasts state</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>Audio chain and UI state are updated</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>WDSP setters are safe no-ops or report unavailable when <code>libwdsp</code> is absent</td>
+</tr>
+</tbody>
+</table>
+<h2 id="extended-and-planned-use-cases">6.3 Extended and Planned Use Cases</h2>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 34%" />
+<col style="width: 51%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Use Case</th>
+<th>Current State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UC-007</td>
+<td>Browser microphone TX audio</td>
+<td>Implemented; mic frames modulated to SunSDR TX IQ and transmitted (on-air verified)</td>
+</tr>
+<tr>
+<td>UC-008</td>
+<td>Memory channel save/recall</td>
+<td>Implemented; backend <code>/api/mem_channels</code> GET/POST with JSON persistence</td>
+</tr>
+<tr>
+<td>UC-013</td>
+<td>Per-band TX power</td>
+<td>Implemented; Menu → Band Power panel + <code>/api/band_power</code>, applied via device DRIVE (<code>0x0017</code>)</td>
+</tr>
+<tr>
+<td>UC-009</td>
+<td>ATR-1000 power/SWR</td>
+<td>UI placeholders/hooks exist; backend <code>/WSATR1000</code> is transport-only placeholder</td>
+</tr>
+<tr>
+<td>UC-010</td>
+<td>CW decoder</td>
+<td>Menu link removed (page absent)</td>
+</tr>
+<tr>
+<td>UC-011</td>
+<td>FT8 automation</td>
+<td>Menu link removed (page absent)</td>
+</tr>
+<tr>
+<td>UC-012</td>
+<td>Recordings</td>
+<td>Implemented; <code>recordings.html</code> + server-side RX MP3 capture/download</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

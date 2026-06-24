@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Summary — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html" class="active">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="executive-summary">1. Executive Summary</h1>
+<h2 id="project-overview">1.1 Project Overview</h2>
+<p>SunMRRC is a mobile-first browser remote-control system for SunSDR2 DX. It provides a web UI, WebSocket control/audio channels, direct UDP communication with the radio, IQ stream demodulation, browser audio playback, S-meter estimation, and a compact waterfall display.</p>
+<p>The current codebase is intentionally narrower than the older MRRC documentation it replaced. It is no longer a Tornado/Hamlib/PyAudio-centric design; it is a FastAPI/Uvicorn service that imports shared SunSDR2 DX protocol and DSP modules from <code>../web_control</code> and serves a dedicated mobile UI from <code>static/</code>.</p>
+<h2 id="current-design-goals">1.2 Current Design Goals</h2>
+<table>
+<colgroup>
+<col style="width: 18%" />
+<col style="width: 25%" />
+<col style="width: 56%" />
+</colgroup>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Target</th>
+<th>Current Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mobile-first operation</td>
+<td>iPhone/mobile browser as primary UI</td>
+<td><code>static/index.html</code>, <code>static/mobile.css</code>, <code>static/mobile.js</code></td>
+</tr>
+<tr>
+<td>Secure iOS runtime</td>
+<td>HTTPS/WSS secure context</td>
+<td><code>_find_ssl()</code> in <code>server.py</code>, <code>STATUS.md</code> HTTPS notes</td>
+</tr>
+<tr>
+<td>Direct SunSDR control</td>
+<td>No rigctld dependency for this app</td>
+<td><code>SunSDR2DXClient</code> imported from <code>../web_control/sunsdr_direct.py</code></td>
+</tr>
+<tr>
+<td>Real-time RX</td>
+<td>IQ UDP to browser speaker</td>
+<td><code>_process_iq_stream()</code>, <code>StreamProcessor</code>, <code>/WSaudioRX</code></td>
+</tr>
+<tr>
+<td>Visual signal awareness</td>
+<td>S-meter (exponentially smoothed) plus accumulated/contrast-stretched waterfall</td>
+<td><code>getSignalLevel:*</code>, <code>/WSspectrum</code>, <code>waterfall-canvas</code></td>
+</tr>
+<tr>
+<td>Safe PTT handling</td>
+<td>Avoid stuck TX states</td>
+<td><code>ptt_manager.js</code>, <code>tx_button.js</code>, <code>setPTT</code> handling</td>
+</tr>
+<tr>
+<td>DSP configurability</td>
+<td>Runtime WDSP controls</td>
+<td><code>setWDSP*</code> commands and <code>AudioDemodulator</code> WDSP setters</td>
+</tr>
+</tbody>
+</table>
+<h2 id="implemented-core-features">1.3 Implemented Core Features</h2>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 26%" />
+<col style="width: 43%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Static mobile PWA-style UI</td>
+<td>Implemented</td>
+<td>Mobile layout with safe-area support, manifest, service worker, bottom PTT area</td>
+</tr>
+<tr>
+<td>Control WebSocket</td>
+<td>Implemented</td>
+<td><code>/WSCTRX</code> handles <code>PING</code>, frequency, mode, PTT, tune, gain, filter, WDSP commands</td>
+</tr>
+<tr>
+<td>RX audio WebSocket</td>
+<td>Implemented</td>
+<td><code>/WSaudioRX</code> broadcasts tagged dual-codec frames (0x00=PCM, 0x01=Opus 16 kHz mono); default Opus</td>
+</tr>
+<tr>
+<td>TX voice modulation</td>
+<td>Implemented</td>
+<td><code>/WSaudioTX</code> mic frames → Hilbert SSB → 24-bit IQ → <code>0xFFFD</code> TX stream; on-air verified (Tune ~12 W, voice 30–40 W PEP)</td>
+</tr>
+<tr>
+<td>TX power / drive control</td>
+<td>Implemented</td>
+<td>Device DRIVE command (<code>0x0017</code>) with per-band power; confirmed on-air</td>
+</tr>
+<tr>
+<td>Per-band power UI</td>
+<td>Implemented</td>
+<td>Menu → Band Power panel + <code>/api/band_power</code> (persisted to <code>band_power.json</code>)</td>
+</tr>
+<tr>
+<td>Spectrum WebSocket</td>
+<td>Implemented</td>
+<td><code>/WSspectrum</code> broadcasts compact uint8 FFT rows; browser accumulates frames (~38 Hz → ~3.8 Hz) and renders with adaptive noise-floor contrast</td>
+</tr>
+<tr>
+<td>SunSDR2 DX UDP control</td>
+<td>Implemented</td>
+<td>Boot/connect sequence and parameter commands through shared direct protocol module</td>
+</tr>
+<tr>
+<td>IQ stream processing</td>
+<td>Implemented</td>
+<td>UDP <code>50002</code> IQ decode, DSP feed, audio extraction, spectrum extraction</td>
+</tr>
+<tr>
+<td>Memory channel API</td>
+<td>Implemented</td>
+<td><code>/api/mem_channels</code> GET/POST with JSON persistence (<code>mem_channels.json</code>)</td>
+</tr>
+<tr>
+<td>WDSP runtime control</td>
+<td>Conditional</td>
+<td>Active when <code>libwdsp</code> is available through <code>wdsp_wrapper</code></td>
+</tr>
+<tr>
+<td>HTTPS auto-start</td>
+<td>Implemented</td>
+<td>Uvicorn starts with TLS when cert/key files exist</td>
+</tr>
+<tr>
+<td>Restart automation</td>
+<td>Implemented</td>
+<td><code>restart.sh</code> cleans exact working-directory server process and listening port</td>
+</tr>
+</tbody>
+</table>
+<h2 id="explicit-capability-boundaries">1.4 Explicit Capability Boundaries</h2>
+<table>
+<colgroup>
+<col style="width: 54%" />
+<col style="width: 45%" />
+</colgroup>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TX power telemetry</td>
+<td>Device sends <code>0x1F00</code> in all modes (verified: 273 TX-state packets in captures). off16 u16/100 = SWR, off14 u16 = pwr_raw (cubic fit → watts), off18 f32 = temp °C</td>
+</tr>
+<tr>
+<td>ATR-1000</td>
+<td>Frontend hooks and status placeholders exist; <code>/WSATR1000</code> endpoint accepts connections but does not interface with real tuner hardware</td>
+</tr>
+<tr>
+<td>Recordings</td>
+<td><code>recordings.html</code> page exists; CW/FT8 menu links were removed (target pages absent)</td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>Cookie/callsign helpers exist; no server-side auth boundary is implemented in <code>server.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="architecture-layers">1.5 Architecture Layers</h2>
+<pre class="text"><code>Client Layer
+  Mobile browser UI, Web Audio API, WebSocket clients, service worker
+
+Application Layer
+  FastAPI app, static file serving, WebSocket endpoints, client fan-out
+
+Signal Layer
+  IQ packet intake, spectrum processor, audio demodulator, optional WDSP chain
+
+Device Layer
+  SunSDR2 DX UDP control and stream protocol</code></pre>
+<h2 id="current-project-status">1.6 Current Project Status</h2>
+<p>As of 2026-06-23, the RX chain is healthy and the iOS secure-context blocker is resolved via HTTPS/WSS startup (expected mobile entry <code>https://radio.vlsc.net:8080</code>). The TX voice path is implemented end-to-end and on-air verified: browser mic → Hilbert SSB → 24-bit IQ, with output power set by the device DRIVE command (<code>0x0017</code>) per band (Tune ~12 W, voice 30–40 W PEP read from the ATR-1000). Remaining open work is control-network configurability (fixed LAN IPs) and the ATR-1000 backend endpoint.</p>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Version History — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html" class="active">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="version-history">14. Version History</h1>
+<table>
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 18%" />
+<col style="width: 25%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SDD V1.0</td>
+<td>2026-03-15</td>
+<td>MRRC Team</td>
+<td>Original MRRC TeamSD document set</td>
+</tr>
+<tr>
+<td>SDD V2.0</td>
+<td>2026-05-02</td>
+<td>MRRC Team</td>
+<td>MRRC V5.0 mobile UI and broader MRRC capability update</td>
+</tr>
+<tr>
+<td>SDD V2.1</td>
+<td>2026-05-10</td>
+<td>MRRC Team</td>
+<td>MRRC V5.1 audio preset and Web Audio notes</td>
+</tr>
+<tr>
+<td>SDD V2.2</td>
+<td>2026-05-18</td>
+<td>MRRC Team</td>
+<td>MRRC V5.2 playback and WDSP notes</td>
+</tr>
+<tr>
+<td>SDD V3.0</td>
+<td>2026-06-21</td>
+<td>OpenCode</td>
+<td>Re-baselined entire SDD to current <code>sunmrrc</code> codebase: FastAPI/Uvicorn, SunSDR2 DX direct UDP, mobile RX/control, HTTPS/WSS, explicit gaps</td>
+</tr>
+<tr>
+<td>SDD V3.1</td>
+<td>2026-06-21</td>
+<td>OpenCode</td>
+<td>Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate <code>/WSspectrum</code> route</td>
+</tr>
+<tr>
+<td>SDD V3.2</td>
+<td>2026-06-23</td>
+<td>Claude</td>
+<td>TX voice modulation and TX power control documented as implemented: device DRIVE (<code>0x0017</code>) per-band power, <code>/api/band_power</code> + Band Power UI, <code>/api/mem_channels</code> graduated to implemented, AD-010 added, CW/FT8 dead links removed</td>
+</tr>
+<tr>
+<td>SDD V3.3</td>
+<td>2026-06-24</td>
+<td>Claude</td>
+<td>Tagged dual-codec audio transport (RX Opus/PCM + TX Opus uplink); corrected <code>0x1F00</code> telemetry field offsets (SWR = off16 u16/100, not off26 f32); AD-004 expanded to cover TX path; AD-011 added for SWR field correction; ATT/sample-rate controls documented; TXPLAN phased roadmap marked complete</td>
+</tr>
+<tr>
+<td><strong>SunMRRC V1.0</strong></td>
+<td><strong>2026-06-24</strong></td>
+<td><strong>Claude</strong></td>
+<td><strong>🎉 Initial production release.</strong> RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, SWR/power/temp telemetry from 0x1F00, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.3 baseline.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sunmrrc-v1.0-sdd-v3.3">Key Changes in SunMRRC V1.0 (SDD V3.3)</h2>
+<table>
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Updated capability boundaries: device DOES send 0x1F00 during TX; SWR from off16 u16/100</td>
+</tr>
+<tr>
+<td>8</td>
+<td>AD-004 expanded to dual-codec RX+TX; AD-010 telemetry note corrected; AD-011 added (SWR field)</td>
+</tr>
+<tr>
+<td>9</td>
+<td>WS table updated for tagged codec; signal processing adds Opus encode step; known gaps updated</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Added RxOpusEncoder/TxOpusDecoder components; updated ControlsJS and audio WS descriptions</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Added this V3.3 changelog</td>
+</tr>
+<tr>
+<td>STATUS.md</td>
+<td>Complete rewrite — TX implemented, telemetry corrected, codec documented</td>
+</tr>
+<tr>
+<td>README.md</td>
+<td>Features table updated; AD-004 description corrected; WS endpoints updated</td>
+</tr>
+<tr>
+<td>CLAUDE.md</td>
+<td>TX telemetry section rewritten with verified 0x1F00 offsets</td>
+</tr>
+<tr>
+<td>PROTOCOL.md</td>
+<td>0x1F00 field docs corrected: off16 u16/100 = SWR</td>
+</tr>
+<tr>
+<td>TXPLAN.md</td>
+<td>Marked as completed — all phases implemented</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sdd-v3.2">Key Changes in SDD V3.2</h2>
+<table>
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Core features: TX voice modulation, TX power/drive control, per-band power UI, memory channel API moved to Implemented; capability boundaries trimmed to ATR + CW/FT8 only</td>
+</tr>
+<tr>
+<td>2</td>
+<td>O6 (TX voice) marked implemented/on-air-verified; added O8 (per-band TX power); G5 narrowed to ATR/digital modes</td>
+</tr>
+<tr>
+<td>3</td>
+<td>In-scope adds TX uplink, DRIVE power, <code>/api/band_power</code>, <code>/api/mem_channels</code>; out-of-scope drops TX modulation; SC8 + milestones updated</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>/WSaudioTX</code> interface re-described as active mic uplink; added TX modulation + DRIVE data flows</td>
+</tr>
+<tr>
+<td>5</td>
+<td>NFR-063 (TX audio quality) defined with on-air-verified targets</td>
+</tr>
+<tr>
+<td>6</td>
+<td>UC-007 (mic TX) and UC-008 (memory channels) marked implemented</td>
+</tr>
+<tr>
+<td>7</td>
+<td>TXModulationFrame + MemoryChannel promoted to real entities; added BandPowerConfig; band_power.json/mem_channels.json persistence</td>
+</tr>
+<tr>
+<td>8</td>
+<td>AD-009 reworded (TX + memory API no longer gated); added AD-010 (TX power via DRIVE 0x0017)</td>
+</tr>
+<tr>
+<td>9</td>
+<td>WS table + command architecture add setDrive/<code>/api/band_power</code>; known gaps trimmed</td>
+</tr>
+<tr>
+<td>10</td>
+<td>TXAudioIngressService + MemoryChannelService marked implemented; added BandPowerService; contract adds setDrive</td>
+</tr>
+<tr>
+<td>11</td>
+<td>TXAudioWebSocket re-described; added TXModulator + TxCaptureWorklet; gaps trimmed</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Connection matrix TX path; band_power.json config; TX verification procedure + telemetry blind-spot note</td>
+</tr>
+<tr>
+<td>13</td>
+<td>R5/R7 + I2/I4 resolved; added TX power root-cause issue (resolved)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sdd-v3.1">Key Changes in SDD V3.1</h2>
+<table>
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>6</td>
+<td>UC-004 expanded: waterfall frame accumulation (10 frames → ~3.8 Hz), adaptive per-row noise floor (30th percentile), blue-sea bias + contrast gain, asymmetric S-meter smoothing; UC-001 notes <code>Waterfall_start/stop</code> on power on/off</td>
+</tr>
+<tr>
+<td>5</td>
+<td>New NFRs for waterfall render smoothness and S-meter needle stability</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Frontend architecture notes the <code>controls.js</code> waterfall render module and <code>updateSMeter</code> smoothing</td>
+</tr>
+<tr>
+<td>13</td>
+<td>I6 (duplicate <code>/WSspectrum</code> route) marked resolved; PING→PONG latency <code>--ms</code> bug noted resolved</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sdd-v3.0">Key Changes in SDD V3.0</h2>
+<table>
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>README</td>
+<td>Replaced MRRC/Tornado/Hamlib quick facts with SunMRRC/FastAPI/SunSDR2 DX facts</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Reframed executive summary around current RX/control baseline and open TX/ATR gaps</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Updated business direction to mobile SunSDR operation and design continuity</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Rebuilt project definition with current scope, out-of-scope items, and success criteria</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Rebuilt system context around browser, FastAPI server, shared DSP imports, SunSDR UDP interfaces</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Updated NFRs for HTTPS, RX audio, PTT safety, operability, and maintainability</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Rebuilt use cases for session startup, RX, tune/mode, spectrum, PTT/tune, DSP controls</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Rebuilt subject model around sessions, radio state, IQ, RX audio, spectrum, DSP, TLS</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Replaced outdated architecture decisions with current FastAPI/direct-UDP/Int16/HTTPS/PTT decisions</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Rebuilt architecture overview with current backend, frontend, WebSocket, signal, and deployment views</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Rebuilt service model and service contracts for current endpoints</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Rebuilt component model with actual local files and shared imported modules</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Rebuilt operational model around <code>restart.sh</code>, TLS, fixed LAN addresses, logs, and procedures</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Rebuilt feasibility assessment with current risks and open issues</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Added this V3.0 re-baseline history</td>
+</tr>
+</tbody>
+</table>
+<h2 id="design-baseline-notes">Design Baseline Notes</h2>
+<ul>
+<li>Current implemented baseline is mobile RX/control <strong>plus TX voice</strong> for SunSDR2 DX: mic uplink → Hilbert SSB → 24-bit IQ → <code>0xFFFD</code> TX stream, with device DRIVE (<code>0x0017</code>) per-band power control (on-air verified: Tune ~12 W, voice 30–40 W PEP).</li>
+<li>Memory-channel backend (<code>/api/mem_channels</code>) and per-band power (<code>/api/band_power</code>) are implemented and persisted.</li>
+<li>ATR-1000 backend (<code>/WSATR1000</code>) and CW/FT8/recording menu targets remain the only outstanding gated hooks. CW/FT8 dead menu links were removed; Recordings remains.</li>
+<li>This SDD should be updated whenever a planned frontend hook gains a real backend implementation or is intentionally removed.</li>
+</ul>
+<p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-SUNMRRC-2026-001</em></p>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

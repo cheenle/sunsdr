@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Model — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html" class="active">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="service-model-art-0582">10. Service Model (ART 0582)</h1>
+<h2 id="service-portfolio">10.1 Service Portfolio</h2>
+<table>
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 15%" />
+<col style="width: 20%" />
+<col style="width: 41%" />
+</colgroup>
+<thead>
+<tr>
+<th>Service</th>
+<th>Type</th>
+<th>Status</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>StaticUIService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>Serve mobile UI assets from <code>static/</code></td>
+</tr>
+<tr>
+<td>ControlService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>WebSocket command parsing, radio/DSP dispatch, state responses</td>
+</tr>
+<tr>
+<td>RXAudioService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>Broadcast demodulated audio to browser clients via tagged dual-codec (Opus/PCM)</td>
+</tr>
+<tr>
+<td>TXAudioIngressService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>Accept browser mic PCM, modulate to SunSDR TX IQ (<code>TXModulator</code>), queue <code>0xFFFD</code> packets</td>
+</tr>
+<tr>
+<td>TXPowerService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>Set device DRIVE (<code>0x0017</code>) with per-band power; re-send on QSY/PTT</td>
+</tr>
+<tr>
+<td>BandPowerService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td><code>/api/band_power</code> GET/POST; persist per-band drive % to <code>band_power.json</code></td>
+</tr>
+<tr>
+<td>SpectrumService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>Broadcast quantized FFT rows for waterfall</td>
+</tr>
+<tr>
+<td>SunSDRDeviceService</td>
+<td>Core</td>
+<td>Implemented via shared import</td>
+<td>Connect and command SunSDR2 DX over UDP</td>
+</tr>
+<tr>
+<td>IQProcessingService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>Receive IQ, decode samples, feed DSP, derive audio/spectrum</td>
+</tr>
+<tr>
+<td>DSPService</td>
+<td>Core</td>
+<td>Implemented/conditional</td>
+<td>Software demodulation and optional WDSP controls</td>
+</tr>
+<tr>
+<td>MemoryChannelService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td><code>/api/mem_channels</code> GET/POST with JSON persistence (<code>mem_channels.json</code>)</td>
+</tr>
+<tr>
+<td>TLSStartupService</td>
+<td>Support</td>
+<td>Implemented</td>
+<td>Choose HTTPS or HTTP runtime</td>
+</tr>
+<tr>
+<td>ProcessRestartService</td>
+<td>Support</td>
+<td>Implemented</td>
+<td>Controlled restart and log capture through <code>restart.sh</code></td>
+</tr>
+<tr>
+<td>ATRService</td>
+<td>Planned</td>
+<td>Missing backend</td>
+<td>Frontend references ATR status/control</td>
+</tr>
+<tr>
+<td>CW/FT8/RecordingServices</td>
+<td>Planned/legacy links</td>
+<td>Missing pages/backend in this snapshot</td>
+<td>Menu targets only</td>
+</tr>
+</tbody>
+</table>
+<h2 id="service-dependencies">10.2 Service Dependencies</h2>
+<pre class="text"><code>StaticUIService
+  -&gt; browser runtime
+
+ControlService
+  -&gt; SunSDRDeviceService
+  -&gt; DSPService
+
+RXAudioService
+  -&gt; IQProcessingService
+  -&gt; DSPService
+
+SpectrumService
+  -&gt; IQProcessingService
+
+IQProcessingService
+  -&gt; UDP socket bind/send
+  -&gt; StreamProcessor / SpectrumProcessor / AudioDemodulator
+
+TLSStartupService
+  -&gt; certs/fullchain.pem
+  -&gt; certs/radio.vlsc.net.key</code></pre>
+<h2 id="service-interfaces">10.3 Service Interfaces</h2>
+<table>
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 20%" />
+<col style="width: 23%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Service</th>
+<th>Input</th>
+<th>Output</th>
+<th>Protocol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>StaticUIService</td>
+<td>GET path</td>
+<td>Static bytes or fallback <code>index.html</code></td>
+<td>HTTP/HTTPS</td>
+</tr>
+<tr>
+<td>ControlService</td>
+<td>Command strings</td>
+<td>Response/broadcast strings</td>
+<td>WS/WSS <code>/WSCTRX</code></td>
+</tr>
+<tr>
+<td>RXAudioService</td>
+<td>PCM from DSP</td>
+<td>Int16 binary frames</td>
+<td>WS/WSS <code>/WSaudioRX</code></td>
+</tr>
+<tr>
+<td>TXAudioIngressService</td>
+<td>Binary PCM / text control from browser</td>
+<td>Modulated 24-bit IQ queued to device TX stream</td>
+<td>WS/WSS <code>/WSaudioTX</code></td>
+</tr>
+<tr>
+<td>BandPowerService</td>
+<td>GET / POST JSON</td>
+<td>Per-band drive table, persisted to <code>band_power.json</code></td>
+<td>HTTP/HTTPS <code>/api/band_power</code></td>
+</tr>
+<tr>
+<td>MemoryChannelService</td>
+<td>GET / POST JSON</td>
+<td>Memory channel list, persisted to <code>mem_channels.json</code></td>
+<td>HTTP/HTTPS <code>/api/mem_channels</code></td>
+</tr>
+<tr>
+<td>SpectrumService</td>
+<td>Float spectrum array</td>
+<td>uint8 binary frames</td>
+<td>WS/WSS <code>/WSspectrum</code></td>
+</tr>
+<tr>
+<td>SunSDRDeviceService</td>
+<td>Method calls</td>
+<td>UDP packets and mirrored state</td>
+<td>In-process + UDP</td>
+</tr>
+<tr>
+<td>DSPService</td>
+<td>IQ/audio samples and config setters</td>
+<td>PCM, status dict</td>
+<td>In-process</td>
+</tr>
+</tbody>
+</table>
+<h2 id="control-service-contract">10.4 Control Service Contract</h2>
+<table>
+<colgroup>
+<col style="width: 34%" />
+<col style="width: 38%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Response</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PING</code></td>
+<td><code>PONG</code></td>
+<td>No colon; handled before command parsing; drives the round-trip latency readout</td>
+</tr>
+<tr>
+<td><code>getSignalLevel:&lt;0-60&gt;</code></td>
+<td>(server push)</td>
+<td>Server-emitted per spectrum frame (~38 Hz); client applies asymmetric exponential smoothing before display</td>
+</tr>
+<tr>
+<td><code>getFreq:</code></td>
+<td><code>getFreq:&lt;hz&gt;</code></td>
+<td>Defaults to 14074000 if unknown</td>
+</tr>
+<tr>
+<td><code>getMode:</code></td>
+<td><code>getMode:&lt;mode&gt;</code></td>
+<td>DSP demodulator mode</td>
+</tr>
+<tr>
+<td><code>getPTT:</code></td>
+<td><code>getPTT:true/false</code></td>
+<td>Radio mirrored PTT state</td>
+</tr>
+<tr>
+<td><code>setFreq:&lt;hz&gt;</code></td>
+<td><code>getFreq:&lt;hz&gt;</code></td>
+<td>Calls <code>radio.set_frequency()</code></td>
+</tr>
+<tr>
+<td><code>setMode:&lt;mode&gt;</code></td>
+<td><code>getMode:&lt;mode&gt;</code></td>
+<td>Calls demodulator <code>set_mode()</code></td>
+</tr>
+<tr>
+<td><code>setPTT:true/false</code></td>
+<td><code>getPTT:true/false</code></td>
+<td>Calls radio and demodulator PTT setters</td>
+</tr>
+<tr>
+<td><code>tune:true/false</code></td>
+<td>none</td>
+<td>Calls <code>radio.set_tune()</code></td>
+</tr>
+<tr>
+<td><code>setAFGain:&lt;0-100&gt;</code></td>
+<td>none</td>
+<td>Sets demodulator volume and radio volume</td>
+</tr>
+<tr>
+<td><code>setRFGain:&lt;0-100&gt;</code></td>
+<td>none</td>
+<td>Calls radio RF gain</td>
+</tr>
+<tr>
+<td><code>setDrive:&lt;0-100&gt;</code></td>
+<td>none</td>
+<td>Calls <code>radio.set_drive()</code> → device DRIVE command (<code>0x0017</code>) sets TX power</td>
+</tr>
+<tr>
+<td><code>setFilter:&lt;lo&gt;,&lt;hi&gt;</code></td>
+<td>none</td>
+<td>Reconfigures demodulator filter and radio filter</td>
+</tr>
+<tr>
+<td><code>setWDSP*</code></td>
+<td>broadcast/state</td>
+<td>Updates DSP settings and broadcasts where applicable</td>
+</tr>
+<tr>
+<td><code>s:</code></td>
+<td><code>getPTT:false</code></td>
+<td>Safety backup to force RX</td>
+</tr>
+<tr>
+<td><code>cq:*</code></td>
+<td><code>cq:complete</code></td>
+<td>Acknowledges frontend state; no server CQ playback</td>
+</tr>
+</tbody>
+</table>
+<h2 id="service-quality-targets">10.5 Service Quality Targets</h2>
+<table>
+<colgroup>
+<col style="width: 36%" />
+<col style="width: 64%" />
+</colgroup>
+<thead>
+<tr>
+<th>Service</th>
+<th>Quality Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>StaticUIService</td>
+<td>Serve current JS/HTML without stale service-worker interference</td>
+</tr>
+<tr>
+<td>ControlService</td>
+<td>Never silently ignore safety-critical PTT release when connection is alive</td>
+</tr>
+<tr>
+<td>RXAudioService</td>
+<td>Preserve continuous playback under normal LAN jitter</td>
+</tr>
+<tr>
+<td>SpectrumService</td>
+<td>Stay compact enough for mobile rendering (~512 bytes/frame, ~38 Hz); client accumulates ~10 frames per row and applies adaptive noise-floor contrast</td>
+</tr>
+<tr>
+<td>TLSStartupService</td>
+<td>Make production mobile path secure by default</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

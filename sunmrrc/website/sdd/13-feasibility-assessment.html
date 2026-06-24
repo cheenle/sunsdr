@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feasibility Assessment — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html" class="active">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="feasibility-assessment-art-0530">13. Feasibility Assessment (ART 0530)</h1>
+<h2 id="feasibility-summary">13.1 Feasibility Summary</h2>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 33%" />
+<col style="width: 36%" />
+</colgroup>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Assessment</th>
+<th>Explanation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RX technical feasibility</td>
+<td>High</td>
+<td>IQ receive, demodulation, Int16 broadcast, and browser playback are implemented</td>
+</tr>
+<tr>
+<td>Control feasibility</td>
+<td>High</td>
+<td>Frequency, PTT, tune, gains, filters, and DSP commands are implemented</td>
+</tr>
+<tr>
+<td>Mobile feasibility</td>
+<td>Medium-High</td>
+<td>HTTPS/WSS solves the key iOS secure-context blocker; device validation remains required</td>
+</tr>
+<tr>
+<td>TX voice feasibility</td>
+<td>Medium</td>
+<td>Frontend pipeline exists, but server modulation path remains unresolved</td>
+</tr>
+<tr>
+<td>ATR feasibility</td>
+<td>Medium</td>
+<td>Frontend hooks exist; backend endpoint/proxy work remains</td>
+</tr>
+<tr>
+<td>Operational feasibility</td>
+<td>High</td>
+<td>Single-process server and restart script are simple to operate</td>
+</tr>
+<tr>
+<td>Product completeness</td>
+<td>Medium</td>
+<td>RX/control baseline is strong; inherited planned menu items need implementation or pruning</td>
+</tr>
+</tbody>
+</table>
+<h2 id="risks">13.2 Risks</h2>
+<table>
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 13%" />
+<col style="width: 30%" />
+<col style="width: 18%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Risk</th>
+<th>Probability</th>
+<th>Impact</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>iOS opens HTTP URL instead of HTTPS</td>
+<td>Medium</td>
+<td>High</td>
+<td>Use <code>https://radio.vlsc.net:8080</code>; server logs warn on HTTP fallback</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>Fixed local UDP bind IP differs from deployment host</td>
+<td>Medium</td>
+<td>High</td>
+<td>Parameterize or update <code>server.py</code> network constants</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>TX release command lost or socket half-open</td>
+<td>Low-Medium</td>
+<td>Critical</td>
+<td>ACK retry, backup <code>s:</code>, watchdog, forced backend RX handler</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>WDSP library unavailable</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>Optional initialization; built-in DSP path still runs</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>TX audio not transmitted despite UI expectations</td>
+<td>Resolved</td>
+<td>High</td>
+<td>TXModulator consumes mic frames → Hilbert SSB → IQ; on-air verified</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>ATR frontend connection errors confuse user</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>Implement <code>/WSATR1000</code> or hide UI until ready</td>
+</tr>
+<tr>
+<td>R7</td>
+<td>Memory channel manager expects missing API</td>
+<td>Resolved</td>
+<td>Low-Medium</td>
+<td><code>/api/mem_channels</code> implemented (GET/POST + JSON persistence)</td>
+</tr>
+<tr>
+<td>R10</td>
+<td>Over-driving the PA (no firmware ALC)</td>
+<td>Low-Medium</td>
+<td>High</td>
+<td>Per-band drive caps at the factory-safe ceiling; verify with wattmeter/dummy load before sustained high power</td>
+</tr>
+<tr>
+<td>R8</td>
+<td>Stale frontend assets</td>
+<td>Low</td>
+<td>Medium</td>
+<td>Service worker bypasses JS/HTML and scripts use version query strings</td>
+</tr>
+<tr>
+<td>R9</td>
+<td>Certificate expiry</td>
+<td>Low</td>
+<td>High</td>
+<td>Use expiry check script/log and maintain backups</td>
+</tr>
+</tbody>
+</table>
+<h2 id="assumptions">13.3 Assumptions</h2>
+<table>
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 30%" />
+<col style="width: 30%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Assumption</th>
+<th>Confidence</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A1</td>
+<td>SunSDR2 DX is reachable at <code>192.168.16.200</code></td>
+<td>Medium</td>
+<td>Radio connect log</td>
+</tr>
+<tr>
+<td>A2</td>
+<td>Host owns local IP <code>192.168.16.100</code></td>
+<td>Medium</td>
+<td>UDP bind success</td>
+</tr>
+<tr>
+<td>A3</td>
+<td>Browser supports WebSocket and Web Audio</td>
+<td>High</td>
+<td>Modern iOS/desktop browsers</td>
+</tr>
+<tr>
+<td>A4</td>
+<td>TLS certificate/key pair is valid for <code>radio.vlsc.net</code></td>
+<td>High</td>
+<td>HTTPS request and browser lock</td>
+</tr>
+<tr>
+<td>A5</td>
+<td>Shared <code>../web_control</code> modules remain available</td>
+<td>High in current workspace</td>
+<td>Import success on startup</td>
+</tr>
+<tr>
+<td>A6</td>
+<td>Operator reads TX forward power from the ATR-1000 tuner or a wattmeter</td>
+<td>High</td>
+<td>Device sends <code>0x1F00</code> in all modes (273 TX packets verified); on-air values confirmed</td>
+</tr>
+</tbody>
+</table>
+<h2 id="current-issues">13.4 Current Issues</h2>
+<table>
+<colgroup>
+<col style="width: 8%" />
+<col style="width: 15%" />
+<col style="width: 21%" />
+<col style="width: 17%" />
+<col style="width: 36%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Issue</th>
+<th>Priority</th>
+<th>Status</th>
+<th>Resolution Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I1</td>
+<td>iPhone HTTP secure-context failure</td>
+<td>Critical</td>
+<td>Resolved in code</td>
+<td>HTTPS/WSS auto-start and frontend WSS selection</td>
+</tr>
+<tr>
+<td>I2</td>
+<td>TX microphone modulation missing</td>
+<td>High</td>
+<td>Resolved in code</td>
+<td>Server-side mic→Hilbert SSB→IQ path implemented; on-air verified</td>
+</tr>
+<tr>
+<td>I3</td>
+<td><code>/WSATR1000</code> missing</td>
+<td>Medium</td>
+<td>Open</td>
+<td>Implement backend or disable frontend hooks</td>
+</tr>
+<tr>
+<td>I4</td>
+<td><code>/api/mem_channels</code> missing</td>
+<td>Medium</td>
+<td>Resolved in code</td>
+<td>GET/POST routes with JSON persistence implemented</td>
+</tr>
+<tr>
+<td>I5</td>
+<td>Fixed SunSDR local IPs</td>
+<td>Medium</td>
+<td>Open</td>
+<td>Move bind/device stream addresses to env/config</td>
+</tr>
+<tr>
+<td>I6</td>
+<td>Duplicate <code>/WSspectrum</code> route declaration in <code>server.py</code></td>
+<td>Low</td>
+<td>Resolved in code</td>
+<td>Removed the duplicate <code>ws_spectrum</code> handler; one declaration remains</td>
+</tr>
+<tr>
+<td>I7</td>
+<td><code>start.sh</code> still prints HTTP URL even when TLS may be used</td>
+<td>Low</td>
+<td>Present</td>
+<td>Align script message with server TLS behavior</td>
+</tr>
+<tr>
+<td>I8</td>
+<td>Control-plane latency stuck at <code>--ms</code> (PING dropped before reply)</td>
+<td>Medium</td>
+<td>Resolved in code</td>
+<td><code>/WSCTRX</code> answers <code>PING</code> with <code>PONG</code> before the colon-based command parse</td>
+</tr>
+<tr>
+<td>I9</td>
+<td>Low TX output power</td>
+<td>High</td>
+<td>Resolved in code</td>
+<td>DRIVE byte (<code>0x0017</code>) was sent in the wrong packet field (payload, not trailing word) → device received drive=0; fixed and per-band power added</td>
+</tr>
+<tr>
+<td>I10</td>
+<td>TX power formula approximate (cubic fit)</td>
+<td>Low</td>
+<td>Mitigated</td>
+<td>Power via <code>(pwr_raw-9)³ × 1.91e-5</code>; device sends <code>0x1F00</code> in all modes; calibrate against wattmeter</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dependencies">13.5 Dependencies</h2>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 40%" />
+<col style="width: 20%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Dependency</th>
+<th>Type</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>Python 3.12+</td>
+<td>Runtime</td>
+<td>Required</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>FastAPI/Uvicorn</td>
+<td>Runtime</td>
+<td>Required</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>NumPy</td>
+<td>Runtime/DSP</td>
+<td>Required</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Shared <code>../web_control</code> modules</td>
+<td>Code dependency</td>
+<td>Required</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>SunSDR2 DX network reachability</td>
+<td>Hardware/network</td>
+<td>Required</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>TLS cert/key files</td>
+<td>Mobile production</td>
+<td>Required for iOS secure context</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>libwdsp</td>
+<td>Optional DSP</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>Browser Web Audio/WebSocket support</td>
+<td>Client</td>
+<td>Required</td>
+</tr>
+</tbody>
+</table>
+<h2 id="feasibility-conclusion">13.6 Feasibility Conclusion</h2>
+<p>SunMRRC is feasible and already useful as a mobile RX/control baseline for SunSDR2 DX. The primary production-grade path is HTTPS/WSS mobile RX plus direct radio control. Full voice TX, ATR, memory-channel backend, and legacy menu targets should be treated as planned work until implemented and verified.</p>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

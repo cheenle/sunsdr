@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subject Area Model — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html" class="active">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="subject-area-model-app-408">7. Subject Area Model (APP 408)</h1>
+<h2 id="subject-areas">7.1 Subject Areas</h2>
+<pre class="text"><code>ClientSession
+  owns WebSocket memberships and UI state
+
+RadioControl
+  owns SunSDR2 DX command state: frequency, PTT, gain, filter, tune
+
+IQStream
+  owns UDP packet intake and conversion to complex samples
+
+RXAudioFlow
+  owns demodulated PCM and browser playback delivery
+
+SpectrumFlow
+  owns FFT, S-meter estimation, server-side quantized waterfall frames,
+  and browser-side waterfall rendering state (frame accumulation, adaptive
+  noise floor) plus S-meter exponential smoothing
+
+DSPConfiguration
+  owns mode, WDSP switches, AGC, notches, filter settings
+
+OperationalConfig
+  owns host/port/TLS/runtime script behavior</code></pre>
+<h2 id="entity-definitions">7.2 Entity Definitions</h2>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 36%" />
+<col style="width: 39%" />
+</colgroup>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Attributes</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ClientSession</td>
+<td>websocket, channel_type, connected_at</td>
+<td>Runtime connection in one of <code>ctrl_clients</code>, <code>audio_rx_clients</code>, <code>audio_tx_clients</code>, <code>spectrum_clients</code></td>
+</tr>
+<tr>
+<td>RadioDevice</td>
+<td>host, control_port, stream_port, connected</td>
+<td>SunSDR2 DX hardware endpoint and connection state</td>
+</tr>
+<tr>
+<td>RadioState</td>
+<td>rx_freq, tx_freq, ptt, preamp, rf_gain, agc, filter_low, filter_high</td>
+<td>State mirrored by <code>SunSDR2DXClient</code> and UI responses</td>
+</tr>
+<tr>
+<td>IQPacket</td>
+<td>sub_type, counter, payload, sample_count</td>
+<td>UDP stream packet parsed by <code>_process_iq_stream()</code></td>
+</tr>
+<tr>
+<td>IQSample</td>
+<td>i, q, normalized_value</td>
+<td>24-bit signed I/Q sample converted to complex64</td>
+</tr>
+<tr>
+<td>DemodulatorState</td>
+<td>mode, ptt, volume, filter, agc_gain</td>
+<td>Software demodulation state inside <code>AudioDemodulator</code></td>
+</tr>
+<tr>
+<td>RXAudioFrame</td>
+<td>pcm_bytes, sample_rate, frame_length</td>
+<td>tagged dual-codec frame (Opus/PCM) broadcast to <code>/WSaudioRX</code> clients</td>
+</tr>
+<tr>
+<td>SpectrumFrame</td>
+<td>bins, quantized_bytes, percentile</td>
+<td>FFT-derived waterfall and S-meter source; server quantizes 512 dB bins to uint8 (0 = -120 dB, 255 = 0 dB)</td>
+</tr>
+<tr>
+<td>WaterfallRenderState</td>
+<td>accum_buffer, accum_count, decimate, noise_pctl, headroom, gain, bias</td>
+<td>Browser-side waterfall rendering state in <code>controls.js</code>: accumulates ~10 frames (38 Hz -&gt; ~3.8 Hz), computes a per-row adaptive noise floor (30th percentile), then stretches contrast with bias/gain over a blue-&gt;cyan-&gt;yellow-&gt;red colour ramp</td>
+</tr>
+<tr>
+<td>SMeterState</td>
+<td>smoothed_value, attack_alpha, release_alpha</td>
+<td>Browser-side S-meter smoothing in <code>updateSMeter</code>: asymmetric exponential filter (attack alpha 0.5, release alpha 0.15) for a stable needle</td>
+</tr>
+<tr>
+<td>WDSPConfig</td>
+<td>available, enabled, nr2Level, nr2_enabled, nbEnabled, anfEnabled, nfEnabled, agcMode, notches</td>
+<td>Runtime DSP feature configuration</td>
+</tr>
+<tr>
+<td>TLSConfig</td>
+<td>certfile, keyfile, disabled</td>
+<td>HTTPS startup decision</td>
+</tr>
+<tr>
+<td>FrontendPreference</td>
+<td>callsign, AF gain, squelch, saved frequency cookies, WDSP cookie state</td>
+<td>Browser-persisted settings</td>
+</tr>
+<tr>
+<td>MemoryChannel</td>
+<td>index, frequency, mode, label</td>
+<td>Memory record persisted server-side via <code>/api/mem_channels</code> (<code>mem_channels.json</code>)</td>
+</tr>
+<tr>
+<td>TXModulationFrame</td>
+<td>pcm_bytes, sample_rate, hilbert_iq</td>
+<td>Browser mic PCM (<code>/WSaudioTX</code>) modulated to 24-bit IQ via Hilbert SSB and queued as <code>0xFFFD</code> TX packets</td>
+</tr>
+<tr>
+<td>TXDriveConfig</td>
+<td>drive_pct, taper_byte</td>
+<td>TX power level sent as the DRIVE command (<code>0x0017</code>); <code>byte = round(255·√(drive%/100))</code> in the trailing word</td>
+</tr>
+<tr>
+<td>BandPowerConfig</td>
+<td>bands[low,high,power], default</td>
+<td>Runtime per-band drive %, persisted to <code>band_power.json</code>, served by <code>/api/band_power</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="relationships">7.3 Relationships</h2>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 32%" />
+<col style="width: 32%" />
+</colgroup>
+<thead>
+<tr>
+<th>Relationship</th>
+<th>Cardinality</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ClientSession -&gt; RXAudioFrame</td>
+<td>N:M</td>
+<td>Multiple connected browsers may receive each broadcast audio frame</td>
+</tr>
+<tr>
+<td>ClientSession -&gt; SpectrumFrame</td>
+<td>N:M</td>
+<td>Spectrum clients receive the same quantized frame</td>
+</tr>
+<tr>
+<td>RadioDevice -&gt; RadioState</td>
+<td>1:1</td>
+<td>Client object mirrors latest known radio state</td>
+</tr>
+<tr>
+<td>IQPacket -&gt; IQSample</td>
+<td>1:N</td>
+<td>Each valid stream packet contains many decoded samples</td>
+</tr>
+<tr>
+<td>IQSample -&gt; RXAudioFrame</td>
+<td>N:1</td>
+<td>DSP accumulates many IQ samples into demodulated audio output</td>
+</tr>
+<tr>
+<td>IQSample -&gt; SpectrumFrame</td>
+<td>N:1</td>
+<td>Spectrum processor accumulates IQ samples for FFT</td>
+</tr>
+<tr>
+<td>DSPConfiguration -&gt; RXAudioFrame</td>
+<td>1:N</td>
+<td>Mode, filters, and WDSP settings affect subsequent audio frames</td>
+</tr>
+<tr>
+<td>TLSConfig -&gt; ClientSession</td>
+<td>1:N</td>
+<td>HTTPS selection determines browser WSS and secure API availability</td>
+</tr>
+</tbody>
+</table>
+<h2 id="state-ownership">7.4 State Ownership</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 48%" />
+</colgroup>
+<thead>
+<tr>
+<th>State</th>
+<th>Owner</th>
+<th>Persistence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Connected WebSockets</td>
+<td><code>server.py</code> global sets</td>
+<td>Runtime only</td>
+</tr>
+<tr>
+<td>Radio state</td>
+<td><code>SunSDR2DXClient</code> instance</td>
+<td>Runtime only</td>
+</tr>
+<tr>
+<td>DSP state</td>
+<td><code>AudioDemodulator</code> instance</td>
+<td>Runtime only; frontend cookies may replay settings</td>
+</tr>
+<tr>
+<td>Per-band TX power</td>
+<td><code>sunsdr_direct</code> runtime table + <code>band_power.json</code></td>
+<td>Filesystem (JSON)</td>
+</tr>
+<tr>
+<td>Memory channels</td>
+<td><code>/api/mem_channels</code> + <code>mem_channels.json</code></td>
+<td>Filesystem (JSON)</td>
+</tr>
+<tr>
+<td>UI state</td>
+<td><code>mobileState</code>, DOM, cookies</td>
+<td>Browser session/cookies</td>
+</tr>
+<tr>
+<td>Waterfall render state</td>
+<td><code>controls.js</code> waterfall module (<code>wfAccum</code>, <code>wfAccumCount</code>, <code>WF_*</code>)</td>
+<td>Browser runtime only</td>
+</tr>
+<tr>
+<td>Smoothed S-meter value</td>
+<td><code>mobileState.currentSMeter</code> via <code>updateSMeter</code></td>
+<td>Browser runtime only</td>
+</tr>
+<tr>
+<td>TLS files</td>
+<td><code>certs/</code></td>
+<td>Filesystem</td>
+</tr>
+<tr>
+<td>Server logs</td>
+<td><code>server.log</code> via <code>restart.sh</code></td>
+<td>Filesystem</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deferred-domain-entities">7.5 Deferred Domain Entities</h2>
+<table>
+<colgroup>
+<col style="width: 32%" />
+<col style="width: 68%" />
+</colgroup>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Reason Deferred</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ATRMeterData</td>
+<td>Frontend exists, backend endpoint absent</td>
+</tr>
+<tr>
+<td>AuthUser</td>
+<td>No server-side user database or auth routes in current backend</td>
+</tr>
+<tr>
+<td>LogbookEntry</td>
+<td>Menu item only; no model in current backend</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

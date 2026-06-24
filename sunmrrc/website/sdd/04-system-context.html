@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Context — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html" class="active">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="system-context-app-011">4. System Context (APP 011)</h1>
+<h2 id="context-diagram">4.1 Context Diagram</h2>
+<pre class="text"><code>HAM Operator
+  |
+  | HTTPS/WSS from mobile or desktop browser
+  v
+SunMRRC FastAPI Server
+  | serves static UI
+  | manages WebSocket clients
+  | imports SunSDR protocol and DSP helpers
+  |
+  | UDP control 192.168.16.100:50001 -&gt; 192.168.16.200:50001
+  | UDP IQ bind 192.168.16.100:50002 &lt;- SunSDR2 DX stream
+  v
+SunSDR2 DX</code></pre>
+<h2 id="actors">4.2 Actors</h2>
+<table>
+<colgroup>
+<col style="width: 53%" />
+<col style="width: 46%" />
+</colgroup>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HAM Operator</td>
+<td>Uses browser UI to listen, tune, adjust DSP/gain/filter, key PTT, and monitor status</td>
+</tr>
+<tr>
+<td>System Maintainer</td>
+<td>Starts/restarts service, manages TLS certificates, checks logs, validates network routing</td>
+</tr>
+<tr>
+<td>SunSDR2 DX</td>
+<td>External radio device controlled through verified UDP binary protocol</td>
+</tr>
+<tr>
+<td>Browser Runtime</td>
+<td>Provides WebSocket, Web Audio, microphone APIs, touch input, service worker cache</td>
+</tr>
+</tbody>
+</table>
+<h2 id="external-interfaces">4.3 External Interfaces</h2>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 18%" />
+<col style="width: 18%" />
+<col style="width: 20%" />
+<col style="width: 23%" />
+</colgroup>
+<thead>
+<tr>
+<th>Interface</th>
+<th>Protocol</th>
+<th>Endpoint</th>
+<th>Direction</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Static UI</td>
+<td>HTTPS/HTTP</td>
+<td><code>/{p:path}</code></td>
+<td>Browser -&gt; Server</td>
+<td>Serves <code>index.html</code>, CSS, JS, manifest, images, wasm</td>
+</tr>
+<tr>
+<td>Control WebSocket</td>
+<td>WSS/WS</td>
+<td><code>/WSCTRX</code></td>
+<td>Browser &lt;-&gt; Server</td>
+<td>Commands and state updates</td>
+</tr>
+<tr>
+<td>RX Audio WebSocket</td>
+<td>WSS/WS</td>
+<td><code>/WSaudioRX</code></td>
+<td>Server -&gt; Browser</td>
+<td>Int16 PCM audio frames</td>
+</tr>
+<tr>
+<td>TX Audio WebSocket</td>
+<td>WSS/WS</td>
+<td><code>/WSaudioTX</code></td>
+<td>Browser -&gt; Server</td>
+<td>Int16 PCM mic frames modulated to SunSDR TX IQ (<code>0xFFFD</code>)</td>
+</tr>
+<tr>
+<td>Spectrum WebSocket</td>
+<td>WSS/WS</td>
+<td><code>/WSspectrum</code></td>
+<td>Server -&gt; Browser</td>
+<td>Quantized spectrum rows</td>
+</tr>
+<tr>
+<td>Band Power API</td>
+<td>HTTPS/HTTP</td>
+<td><code>/api/band_power</code></td>
+<td>Browser &lt;-&gt; Server</td>
+<td>Get/set per-band TX drive %, persisted to <code>band_power.json</code></td>
+</tr>
+<tr>
+<td>Memory Channel API</td>
+<td>HTTPS/HTTP</td>
+<td><code>/api/mem_channels</code></td>
+<td>Browser &lt;-&gt; Server</td>
+<td>Get/set memory channels, persisted to <code>mem_channels.json</code></td>
+</tr>
+<tr>
+<td>SunSDR Control</td>
+<td>UDP</td>
+<td>device <code>:50001</code></td>
+<td>Server &lt;-&gt; Radio</td>
+<td>Boot, frequency, PTT, drive/power, gain, filter, tune commands</td>
+</tr>
+<tr>
+<td>SunSDR IQ Stream</td>
+<td>UDP</td>
+<td>local bind <code>:50002</code></td>
+<td>Radio -&gt; Server</td>
+<td>24-bit IQ packet stream, plus keepalive/control packets</td>
+</tr>
+<tr>
+<td>TLS Certificate</td>
+<td>File</td>
+<td><code>certs/fullchain.pem</code>, <code>certs/radio.vlsc.net.key</code></td>
+<td>Server local</td>
+<td>HTTPS enablement</td>
+</tr>
+</tbody>
+</table>
+<h2 id="data-flows">4.4 Data Flows</h2>
+<table>
+<colgroup>
+<col style="width: 31%" />
+<col style="width: 68%" />
+</colgroup>
+<thead>
+<tr>
+<th>Flow</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RX signal flow</td>
+<td>SunSDR IQ UDP -&gt; decode 24-bit IQ -&gt; DSP feed -&gt; demodulated PCM -&gt; resample to 16 kHz -&gt; <code>/WSaudioRX</code> -&gt; Web Audio playback</td>
+</tr>
+<tr>
+<td>Spectrum flow</td>
+<td>IQ -&gt; FFT -&gt; dB clip -&gt; uint8 quantize (512 bytes, ~38 Hz) -&gt; <code>/WSspectrum</code> -&gt; client accumulates <code>WF_DECIMATE</code> frames (~3.8 Hz) -&gt; per-row adaptive noise floor (<code>WF_PCTL</code>) + blue-sea bias (<code>WF_BIAS</code>) + gain (<code>WF_GAIN</code>) -&gt; waterfall canvas</td>
+</tr>
+<tr>
+<td>Control flow</td>
+<td>UI action -&gt; <code>/WSCTRX</code> command string -&gt; <code>SunSDR2DXClient</code> or demodulator setter -&gt; response/broadcast</td>
+</tr>
+<tr>
+<td>TX voice flow</td>
+<td>Browser mic -&gt; <code>/WSaudioTX</code> Int16 PCM -&gt; <code>TXModulator</code> resample to 15625 Hz -&gt; Hilbert SSB -&gt; 24-bit IQ -&gt; <code>0xFFFD</code> packets paced to device <code>:50002</code></td>
+</tr>
+<tr>
+<td>TX power flow</td>
+<td><code>setDrive:*</code> or QSY -&gt; <code>band_power_for(freq)</code> -&gt; DRIVE command (<code>0x0017</code>, byte in trailing word) -&gt; device per-band power; re-sent before each PTT assert</td>
+</tr>
+<tr>
+<td>Liveness/latency flow</td>
+<td>Frontend sends no-colon <code>PING</code> -&gt; <code>ws_ctrl()</code> answers <code>PONG</code> before command parsing -&gt; frontend round-trip timer updates the status-bar latency (ms)</td>
+</tr>
+<tr>
+<td>S-meter flow</td>
+<td>FFT percentile -&gt; <code>getSignalLevel:*</code> over <code>/WSCTRX</code> -&gt; client asymmetric exponential smoothing (attack 0.5 / release 0.15) -&gt; S-meter needle</td>
+</tr>
+<tr>
+<td>PTT safety flow</td>
+<td>UI PTT press/release -&gt; <code>setPTT:*</code> -&gt; radio PTT -&gt; <code>getPTT:*</code> ack -&gt; frontend retry/watchdog when release ack is missing</td>
+</tr>
+<tr>
+<td>HTTPS flow</td>
+<td>Uvicorn selects TLS cert/key at startup; frontend selects WSS when page protocol is HTTPS</td>
+</tr>
+</tbody>
+</table>
+<h2 id="system-boundaries">4.5 System Boundaries</h2>
+<table>
+<colgroup>
+<col style="width: 37%" />
+<col style="width: 29%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>Inside</th>
+<th>Outside</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Browser boundary</td>
+<td>UI state, audio playback, mic capture, PTT safety UX</td>
+<td>Browser permission model and autoplay policy</td>
+</tr>
+<tr>
+<td>Server boundary</td>
+<td>WebSockets, static serving, IQ processing orchestration, TLS startup</td>
+<td>Radio firmware, network routing, certificate issuance</td>
+</tr>
+<tr>
+<td>Shared-code boundary</td>
+<td><code>../web_control/sunsdr_direct.py</code>, <code>dsp.py</code>, <code>wdsp_wrapper.py</code></td>
+<td>These are imported dependencies rather than local <code>sunmrrc</code> files</td>
+</tr>
+<tr>
+<td>Device boundary</td>
+<td>UDP packets sent/received by server</td>
+<td>SunSDR2 DX hardware behavior and RF environment</td>
+</tr>
+</tbody>
+</table>
+<h2 id="contextual-constraints">4.6 Contextual Constraints</h2>
+<ul>
+<li>iOS Safari requires HTTPS for reliable <code>getUserMedia</code> and AudioContext behavior outside localhost.</li>
+<li>The current server binds SunSDR local UDP addresses directly as <code>192.168.16.100</code>, so deployment network topology is part of the design.</li>
+<li>The default radio host is <code>192.168.16.200</code>, configurable by <code>DEVICE_HOST</code> only for the control client; IQ bind/send paths still contain fixed addresses in <code>server.py</code>.</li>
+<li><code>/WSATR1000</code> is not part of the current backend despite frontend references.</li>
+</ul>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>

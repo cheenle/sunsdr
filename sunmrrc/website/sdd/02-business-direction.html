@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Direction — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html" class="active">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="business-direction-bus-411">2. Business Direction (BUS 411)</h1>
+<h2 id="vision">2.1 Vision</h2>
+<p>Make SunSDR2 DX usable from a phone browser with the least operational friction: open a secure URL, hear RX audio, see signal context, control essential radio parameters, and safely key/de-key the transmitter.</p>
+<h2 id="mission">2.2 Mission</h2>
+<p>Deliver a pragmatic, browser-native remote radio control surface for HAM operation that favors direct SunSDR integration, mobile ergonomics, low latency, and field maintainability over heavyweight framework or native-app complexity.</p>
+<h2 id="business-goals">2.3 Business Goals</h2>
+<table>
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 26%" />
+<col style="width: 56%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Goal</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G1</td>
+<td>Mobile RX confidence</td>
+<td>Operator can reliably listen to SunSDR2 DX from iPhone/mobile browser</td>
+</tr>
+<tr>
+<td>G2</td>
+<td>Safe remote control</td>
+<td>Frequency, mode, PTT, tune, gain, and DSP controls behave predictably</td>
+</tr>
+<tr>
+<td>G3</td>
+<td>Minimal deployment</td>
+<td>Single Python process serves UI, WebSockets, TLS, and radio bridge</td>
+</tr>
+<tr>
+<td>G4</td>
+<td>Design continuity</td>
+<td>SDD records implementation facts, decisions, risks, and future work</td>
+</tr>
+<tr>
+<td>G5</td>
+<td>Incremental extensibility</td>
+<td>Preserve hooks for ATR and digital modes without overstating completion</td>
+</tr>
+</tbody>
+</table>
+<h2 id="objectives">2.4 Objectives</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 28%" />
+<col style="width: 20%" />
+<col style="width: 41%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Objective</th>
+<th>Target</th>
+<th>Current Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>O1</td>
+<td>iOS secure-context operation</td>
+<td>HTTPS/WSS entry works</td>
+<td>Implemented by TLS auto-detect</td>
+</tr>
+<tr>
+<td>O2</td>
+<td>RX audio availability</td>
+<td>Browser receives continuous Int16 PCM</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>O3</td>
+<td>Control-plane liveness</td>
+<td><code>PING</code>/<code>PONG</code>, state query and command response</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>O4</td>
+<td>PTT release safety</td>
+<td>Multiple release safeguards</td>
+<td>Implemented in frontend and backend backup command</td>
+</tr>
+<tr>
+<td>O5</td>
+<td>Spectrum visibility</td>
+<td>Compact waterfall stream</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>O6</td>
+<td>TX voice completion</td>
+<td>Browser mic to SunSDR TX modulation</td>
+<td>Implemented (on-air verified)</td>
+</tr>
+<tr>
+<td>O7</td>
+<td>ATR integration</td>
+<td>Backend endpoint and device bridge</td>
+<td>Open</td>
+</tr>
+<tr>
+<td>O8</td>
+<td>TX power control</td>
+<td>Per-band drive (<code>0x0017</code>) configurable from UI</td>
+<td>Implemented (on-air verified)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="strategy">2.5 Strategy</h2>
+<table>
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 37%" />
+<col style="width: 48%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Strategy</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S1</td>
+<td>Mobile-first UI</td>
+<td>Optimize controls for touch, safe areas, one-screen radio operation</td>
+</tr>
+<tr>
+<td>S2</td>
+<td>Direct radio protocol</td>
+<td>Use verified SunSDR2 DX UDP protocol instead of generic CAT where possible</td>
+</tr>
+<tr>
+<td>S3</td>
+<td>Browser-native audio</td>
+<td>Keep RX playback in Web Audio; avoid native app dependency</td>
+</tr>
+<tr>
+<td>S4</td>
+<td>Small service surface</td>
+<td>FastAPI app owns static files and WebSockets in one process</td>
+</tr>
+<tr>
+<td>S5</td>
+<td>Document actual state</td>
+<td>SDD distinguishes implemented features from inherited/planned UI hooks</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tactics">2.6 Tactics</h2>
+<table>
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 57%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Tactic</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T1</td>
+<td>HTTPS by default</td>
+<td><code>_find_ssl()</code> selects cert/key, <code>DISABLE_SSL=1</code> only for local HTTP</td>
+</tr>
+<tr>
+<td>T2</td>
+<td>WSS auto-selection</td>
+<td>Frontend uses <code>location.protocol</code> to choose <code>wss://</code> or <code>ws://</code></td>
+</tr>
+<tr>
+<td>T3</td>
+<td>Direct IQ demodulation</td>
+<td>UDP <code>50002</code> IQ packets feed <code>StreamProcessor</code></td>
+</tr>
+<tr>
+<td>T4</td>
+<td>Compact waterfall</td>
+<td>Server quantizes spectrum to uint8 frames before broadcast</td>
+</tr>
+<tr>
+<td>T5</td>
+<td>PTT release ACK loop</td>
+<td>Frontend retries <code>setPTT:false</code> and uses backup <code>s:</code> command</td>
+</tr>
+<tr>
+<td>T6</td>
+<td>Optional WDSP</td>
+<td>Runtime setters are no-op safe when <code>libwdsp</code> is unavailable</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>
