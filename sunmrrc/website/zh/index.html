@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SunMRRC — SunSDR2 DX 手机远程电台控制。基于 Web 的 SDR 控制，支持实时频谱瀑布、双编解码音频和 TX 语音发射。V1.0 正式版。">
+    <meta name="keywords" content="SunSDR2 DX, SDR, 远程控制, 业余无线电, HAM Radio, WebSDR, 短波">
+    <meta name="author" content="BG1SB">
+    <meta name="theme-color" content="#000000">
+
+    <title>SunMRRC — SunSDR2 DX 手机远程电台控制</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2322d3ee' width='100' height='100' rx='20'/><text y='.9em' x='50%' text-anchor='middle' font-size='60'>📡</text></svg>">
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="#features">功能</a></li>
+            <li><a href="#architecture">架构</a></li>
+            <li><a href="#quickstart">快速部署</a></li>
+            <li><a href="#telemetry">遥测</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener">
+                <i class="fab fa-github"></i> GitHub
+            </a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../index.html" class="lang-btn">English</a>
+            <button class="mobile-menu-toggle"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="hero-content">
+        <div class="hero-badge">
+            <i class="fas fa-satellite-dish"></i>
+            <span>V1.0 · 正式发布</span>
+        </div>
+        <h1 class="hero-title">
+            你的 SunSDR2 DX<br>
+            <span class="gradient">随时随地</span>
+        </h1>
+        <p class="hero-subtitle">
+            SunMRRC 是 SunSDR2 DX 收发信机的移动端 Web 控制服务。基于 HTTPS/WSS 安全连接，
+            任意浏览器即可访问 —— 实时频谱瀑布图、双编解码 Opus/PCM 音频、TX SSB 语音发射、
+            设备 DRIVE 功率控制、完整遥测。专为 iPhone/iOS Safari 优化。
+        </p>
+        <div class="hero-actions">
+            <a href="https://radio.vlsc.net:8889" class="btn btn-primary btn-large" target="_blank">
+                <i class="fas fa-play"></i> 立即体验
+            </a>
+            <a href="https://github.com/cheenle/sunsdr" class="btn btn-secondary btn-large" target="_blank" rel="noopener">
+                <i class="fab fa-github"></i> 源代码
+            </a>
+        </div>
+        <div class="hero-stats">
+            <div class="stat-item">
+                <span class="stat-value">~18 kbps</span>
+                <span class="stat-label">Opus 音频</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">512 点</span>
+                <span class="stat-label">瀑布图 FFT</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">12 W</span>
+                <span class="stat-label">Tune 输出</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">10+ ADs</span>
+                <span class="stat-label">设计决策</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="features">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">核心功能</span>
+            <h2 class="section-title">为 SunSDR2 DX 打造</h2>
+        </div>
+
+        <div class="features-grid">
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-mobile-alt"></i></div>
+                <h3 class="card-title">移动优先</h3>
+                <p class="card-text">
+                    触控优化界面，支持安全区适配、PWA 安装到桌面。HTTPS/WSS 确保 iOS Safari
+                    麦克风和 AudioContext 正常工作。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-water"></i></div>
+                <h3 class="card-title">实时频谱瀑布</h3>
+                <p class="card-text">
+                    512 点 FFT 频谱 ~38 Hz 刷新。自适应底噪（30% 百分位）、蓝色基底偏移、
+                    对比度拉伸、黑→蓝→青→黄→红色带渲染。S 表指数平滑。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-headphones"></i></div>
+                <h3 class="card-title">双编解码 RX 音频</h3>
+                <p class="card-text">
+                    标签式双编解码传输：<code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">0x00</code> = Int16 PCM (~256 kbps)、
+                    <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">0x01</code> = Opus 16kHz 单声道 (~18-24 kbps，>10× 省流)。
+                    Audio Codec 菜单实时切换，libopus 不可用时自动回退 PCM。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-microphone-alt"></i></div>
+                <h3 class="card-title">TX 语音发射</h3>
+                <p class="card-text">
+                    浏览器麦克风 → AudioWorklet 48k→16k 降采样 → Opus/PCM 标签上行 →
+                    连续分数重采样 → 重叠保留 Hilbert SSB (USB/LSB) → 24-bit IQ → 0xFFFD TX 流。
+                    实测：Tune ~12W，SSB 语音 30–40W PEP。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-bolt"></i></div>
+                <h3 class="card-title">分波段功率控制</h3>
+                <p class="card-text">
+                    设备 DRIVE 命令 (<code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">0x0017</code>)，平方根锥度。
+                    Drive 字节放 trailing word。波段功率面板 → <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">/api/band_power</code> →
+                    <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">band_power.json</code>。每次 QSY / PTT 重发。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+                <h3 class="card-title">TX 遥测 (0x1F00)</h3>
+                <p class="card-text">
+                    设备在所有模式（RX/TX/TUNE）下发送遥测。off14 u16 = 功率原始值、
+                    off16 u16/100 = 驻波比（已验证 1.32–1.37）、off18 f32 = 温度 °C。
+                    功率三次方拟合：<code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">(pwr_raw-9)³ × 1.91e-5</code> W。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-shield-alt"></i></div>
+                <h3 class="card-title">PTT 安全保护</h3>
+                <p class="card-text">
+                    ACK 确认 + 3 次重试，备用 <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">s:</code> 强制 RX 命令，
+                    前端 watchdog 定时器，后端强制 RX 处理。手机端触控滑动自动释放。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-sliders-h"></i></div>
+                <h3 class="card-title">WDSP 专业降噪</h3>
+                <p class="card-text">
+                    可选 libwdsp.dylib 集成：NR2 频谱降噪、AGC（4 种模式）、ANF 自动陷波、
+                    NB 噪声消除。运行时切换 — 无 WDSP 也能正常收听。UI 通过
+                    <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">getWDSPStatus:</code> 查询可用性。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现（可选）</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-wave-square"></i></div>
+                <h3 class="card-title">采样率选择器</h3>
+                <p class="card-text">
+                    IQ 带宽：39 / 78 / 156 / 312 kHz。通过 0x0001 HW_INIT word[11] = 速率索引设置。
+                    切换采样率会触发完整重启动。前端菜单 + 后端 <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">setSampleRate:</code>。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+
+            <article class="card">
+                <div class="card-icon"><i class="fas fa-microchip"></i></div>
+                <h3 class="card-title">ATT / 前置放大</h3>
+                <p class="card-text">
+                    硬件衰减器：0=-20dB, 1=-10dB, 2=0dB, 3=+10dB。
+                    频率记忆频道 JSON 持久化。AGC、滤波器、模式通过
+                    <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">/WSCTRX</code> 命令协议控制。
+                </p>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="architecture" style="background: var(--bg-secondary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">系统架构</span>
+            <h2 class="section-title">工作原理</h2>
+        </div>
+
+        <div class="arch-diagram">
+<span class="dim">┌─────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="hl">iPhone / 桌面浏览器</span>                                    <span class="dim">│</span>
+<span class="dim">│</span>  index.html · controls.js · mobile.js · tx_button.js    <span class="dim">│</span>
+<span class="dim">│</span>  Web Audio API · Opus WASM · AudioWorklet · Canvas       <span class="dim">│</span>
+<span class="dim">└────────────┬────────────────────┬───────────────────────┘</span>
+<span class="dim">             │</span>  HTTPS/WSS       <span class="dim">│</span>
+<span class="dim">     ┌───────┴────────────────────┴───────┐</span>
+<span class="dim">     │</span>  <span class="hl">FastAPI / Uvicorn</span> (sunmrrc/server.py)  <span class="dim">│</span>
+<span class="dim">     │</span>  /WSCTRX  ·  /WSaudioRX  ·  /WSaudioTX       <span class="dim">│</span>
+<span class="dim">     │</span>  /WSspectrum  ·  /WSATR1000  ·  /api/*        <span class="dim">│</span>
+<span class="dim">     └───────┬────────────────────┬───────┘</span>
+<span class="dim">             │</span>  imports          <span class="dim">│</span>  UDP
+<span class="dim">     ┌───────┴────────┐    ┌──────┴──────────┐</span>
+<span class="dim">     │</span>  web_control/    <span class="dim">│    │</span>  <span class="hl">SunSDR2 DX</span>       <span class="dim">│</span>
+<span class="dim">     │</span>  sunsdr_direct   <span class="dim">│    │</span>  控制 :50001      <span class="dim">│</span>
+<span class="dim">     │</span>  dsp.py          <span class="dim">│    │</span>  IQ   :50002      <span class="dim">│</span>
+<span class="dim">     │</span>  opus_rx.py      <span class="dim">│    │</span>  192.168.16.200   <span class="dim">│</span>
+<span class="dim">     │</span>  wdsp_wrapper    <span class="dim">│    └─────────────────┘</span>
+<span class="dim">     └────────────────┘</span>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="quickstart">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">快速部署</span>
+            <h2 class="section-title">5 分钟上线</h2>
+        </div>
+        <div style="max-width: 640px; margin: 0 auto;">
+            <div class="arch-diagram" style="white-space: normal; line-height: 1.8;">
+<span class="dim"># 1. 克隆仓库并安装依赖</span>
+git clone https://github.com/cheenle/sunsdr.git
+<span class="hl">cd</span> sunmrrc
+../venv/bin/pip install fastapi uvicorn numpy scipy
+
+<span class="dim"># 2. 放置 TLS 证书（或设置 DISABLE_SSL=1 用 HTTP 调试）</span>
+<span class="dim">#    certs/fullchain.pem + certs/radio.vlsc.net.key</span>
+
+<span class="dim"># 3. 启动</span>
+./restart.sh               <span class="dim"># 后台运行, https://localhost:8889</span>
+WEB_PORT=8080 ./restart.sh  <span class="dim"># 自定义端口</span>
+./restart.sh -f              <span class="dim"># 前台运行（实时日志）</span>
+
+<span class="dim"># 4. 浏览器打开</span>
+<span class="hl">https://radio.vlsc.net:8889</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-cta">
+    <div class="container" style="text-align: center;">
+        <h2 class="section-title" style="margin-bottom: 1rem;">准备好开始了吗？</h2>
+        <p class="section-subtitle" style="margin-bottom: 3rem;">
+            V1.0 正式版。SDD V3.3 设计基线，11 项架构决策，完整协议文档。
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <a href="https://radio.vlsc.net:8889" class="btn btn-primary btn-large" target="_blank">
+                <i class="fas fa-play"></i> 立即体验
+            </a>
+            <a href="https://github.com/cheenle/sunsdr" class="btn btn-secondary btn-large" target="_blank">
+                <i class="fab fa-github"></i> GitHub
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-section">
+                <h4>SunMRRC</h4>
+                <p>
+                    SunSDR2 DX 移动远程电台控制<br>
+                    你的 SunSDR2 DX，随时随地<br>
+                    V1.0 · SDD V3.3 · GPL-3.0
+                </p>
+            </div>
+            <div class="footer-section">
+                <h4>链接</h4>
+                <ul>
+                    <li><a href="#">首页</a></li>
+                    <li><a href="#features">功能</a></li>
+                    <li><a href="#architecture">架构</a></li>
+                    <li><a href="#quickstart">快速部署</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>资源</h4>
+                <ul>
+                    <li><a href="https://github.com/cheenle/sunsdr" target="_blank">GitHub</a></li>
+                    <li><a href="https://github.com/cheenle/sunsdr/blob/main/PROTOCOL.md" target="_blank">协议文档</a></li>
+                    <li><a href="https://github.com/cheenle/sunsdr/tree/main/SDD" target="_blank">SDD 设计文档</a></li>
+                    <li><a href="https://radio.vlsc.net:8889" target="_blank">在线系统</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC 项目。基于 GPL-3.0 开源协议。· SunSDR2 DX 是 <a href="https://eesdr.com/" style="color:var(--accent);">Expert Electronics</a> 的产品。</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>
