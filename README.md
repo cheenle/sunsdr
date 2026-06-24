@@ -40,7 +40,10 @@ The server boots the SunSDR2 DX over UDP (port 50001), starts the IQ stream (por
 | HTTPS/WSS with TLS (required for iOS audio) | ✅ |
 | PTT with safety release (ACK retry, watchdog, forced-RX) | ✅ |
 | Memory channels (6 slots, cookie backup) | ✅ |
-| TX audio modulation | ❌ (planned) |
+| TX audio modulation | ✅ | Browser mic → Opus/PCM → Hilbert SSB → 24-bit IQ; on-air verified (Tune ~12W, voice 30–40W PEP) |
+| TX power / per-band drive | ✅ | Device DRIVE (0x0017), `/api/band_power` + Band Power UI |
+| TX telemetry (power/SWR/temp) | ✅ | 0x1F00: off14 pwr_raw, off16 SWR×100, off18 temp °C |
+| Sample rate selector | ✅ | 39/78/156/312 kHz via 0x0001 HW_INIT |
 | ATR-1000 antenna tuner integration | ❌ (placeholder) |
 | CW / FT8 / Recordings pages | ❌ (menu stubs) |
 
@@ -53,12 +56,12 @@ FastAPI app with 5 WebSocket endpoints:
 | Endpoint | Type | Purpose |
 |----------|------|---------|
 | `/WSCTRX` | Text | Control commands (frequency, mode, PTT, WDSP, filters) |
-| `/WSaudioRX` | Binary | RX audio — 16 kHz Int16 PCM frames to browser |
-| `/WSaudioTX` | Binary | TX microphone — placeholder (not yet consumed by hardware) |
+| `/WSaudioRX` | Binary | RX audio — tagged dual-codec: 0x00=Int16 PCM, 0x01=Opus (16 kHz mono) |
+| `/WSaudioTX` | Binary | TX microphone — tagged Opus/PCM uplink → Hilbert SSB modulator |
 | `/WSspectrum` | Binary | 512-byte uint8 spectrum rows for waterfall canvas |
 | `/WSATR1000` | JSON | ATR-1000 tuner proxy (accepts connections, HW integration TBD) |
 
-The IQ processing loop receives ~390 packets/sec of 24-bit I/Q samples from the device, feeds them through `StreamProcessor` → `SpectrumProcessor` (FFT) + `AudioDemodulator` (SSB/AM/FM/WDSP), then broadcasts spectrum and audio to connected clients.
+The IQ processing loop receives ~390 packets/sec of 24-bit I/Q samples from the device, feeds them through `StreamProcessor` → `SpectrumProcessor` (FFT) + `AudioDemodulator` (SSB/AM/FM/WDSP), then broadcasts spectrum and tagged audio (Opus/PCM) to connected clients.
 
 ### Shared libraries (`web_control/`)
 
@@ -118,7 +121,7 @@ Documented in `SDD/08-architecture-decisions.md`:
 - **AD-001**: FastAPI/Uvicorn over Tornado — small surface, async-native
 - **AD-002**: Direct SunSDR2 DX UDP protocol — no generic Hamlib abstraction
 - **AD-003**: Mode is DSP-owned — hardware stays IQ/mode-agnostic
-- **AD-004**: Int16 PCM RX transport — reliable, transparent, no Opus ambiguity
+- **AD-004**: Tagged dual-codec audio transport (Opus + Int16 PCM) — 1-byte codec tag per frame, 0x00=PCM, 0x01=Opus. Default Opus (~18-24 kbps); switchable via Audio Codec menu.
 - **AD-005**: Server-side spectrum quantization — 512 uint8 bins for efficient transfer
 - **AD-006**: HTTPS/WSS by default — required for iOS Safari secure context
 - **AD-007**: PTT release as safety-critical flow — ACK retry, watchdog, backup forced-RX

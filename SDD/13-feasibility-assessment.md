@@ -36,7 +36,7 @@
 | A3 | Browser supports WebSocket and Web Audio | High | Modern iOS/desktop browsers |
 | A4 | TLS certificate/key pair is valid for `radio.vlsc.net` | High | HTTPS request and browser lock |
 | A5 | Shared `../web_control` modules remain available | High in current workspace | Import success on startup |
-| A6 | Operator reads TX forward power from the ATR-1000 tuner or a wattmeter | High | Device stops `0x1F00` telemetry while keyed; on-air values confirmed |
+| A6 | Operator reads TX forward power from the ATR-1000 tuner or a wattmeter | High | Device sends `0x1F00` in all modes (273 TX packets verified); on-air values confirmed |
 
 ## 13.4 Current Issues
 
@@ -51,7 +51,7 @@
 | I7 | `start.sh` still prints HTTP URL even when TLS may be used | Low | Present | Align script message with server TLS behavior |
 | I8 | Control-plane latency stuck at `--ms` (PING dropped before reply) | Medium | Resolved in code | `/WSCTRX` answers `PING` with `PONG` before the colon-based command parse |
 | I9 | Low TX output power | High | Resolved in code | DRIVE byte (`0x0017`) was sent in the wrong packet field (payload, not trailing word) → device received drive=0; fixed and per-band power added |
-| I10 | TX forward power unreadable from device while keyed | Low | Open (by design) | Device stops `0x1F00` telemetry during TX; read power from ATR-1000 tuner or wattmeter |
+| I10 | TX power formula approximate (cubic fit) | Low | Mitigated | Power via `(pwr_raw-9)³ × 1.91e-5`; device sends `0x1F00` in all modes; calibrate against wattmeter |
 
 ## 13.5 Dependencies
 

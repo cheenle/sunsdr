@@ -13,8 +13,10 @@
 | WDSPWrapper | Shared DSP | `../web_control/wdsp_wrapper.py` | Optional libwdsp integration |
 | StaticServer | Backend support | `server.py` | Serves files from `static/` with MIME map |
 | ControlWebSocket | Backend core | `server.py` | `/WSCTRX` command loop |
-| RXAudioWebSocket | Backend core | `server.py` | `/WSaudioRX` client set and binary fan-out |
-| TXAudioWebSocket | Backend core | `server.py` | `/WSaudioTX` mic-frame ingress → `TXModulator.feed_audio()` |
+| RXAudioWebSocket | Backend core | `server.py` | `/WSaudioRX` tagged dual-codec fan-out (Opus/PCM) |
+| TXAudioWebSocket | Backend core | `server.py` | `/WSaudioTX` tagged mic-frame ingress → codec decode → `TXModulator.feed_audio()` |
+| RxOpusEncoder | Shared DSP | `../web_control/opus_rx.py` | Server-side Opus encode for RX broadcast; direct ctypes libopus |
+| TxOpusDecoder | Shared DSP | `../web_control/opus_rx.py` | Server-side Opus decode for TX mic uplink |
 | TXModulator | Shared DSP | `../web_control/dsp.py` | Mic PCM → fractional resample → Hilbert SSB → 24-bit IQ → `0xFFFD` TX packets |
 | TXPacer | Backend core | `server.py` | Drains queued TX IQ at 5.12 ms/pkt; sends `0xFFFD` to device:50002 |
 | BandPowerAPI | Backend core | `server.py` | `/api/band_power` GET/POST; persists to `band_power.json`; applies per-band DRIVE |
@@ -22,7 +24,7 @@
 | TLSLocator | Backend support | `server.py` | Cert/key discovery and HTTP fallback |
 | MobileHTML | Frontend core | `static/index.html` | UI structure and script composition |
 | MobileStyles | Frontend core | `static/mobile.css` | Mobile layout and visual controls |
-| ControlsJS | Frontend core | `static/controls.js` | WebSocket setup, RX audio decode/playback, control handlers |
+| ControlsJS | Frontend core | `static/controls.js` | WebSocket setup, tagged RX audio decode (Opus/PCM), TX audio encode + tag, control handlers, waterfall rendering |
 | MobileJS | Frontend core | `static/mobile.js` | Mobile UX, state, menus, DSP panel, frontend service hooks |
 | PTTManager | Frontend safety | `static/modules/ptt_manager.js` | PTT state, release ack retry, status sync |
 | TXButton | Frontend safety | `static/tx_button.js` | Touch PTT flow, lock handling, watchdog, warm-up frames |

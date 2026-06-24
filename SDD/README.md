@@ -33,8 +33,8 @@ Runtime facts are derived from the current repository, primarily `server.py`, `s
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-SUNMRRC-2026-001 |
-| SDD Version | V3.2 |
-| Baseline Date | 2026-06-23 |
+| SDD Version | V3.3 |
+| Baseline Date | 2026-06-24 |
 | Status | Living design baseline |
 | Project | SunMRRC |
 | Primary Radio | SunSDR2 DX |
@@ -62,7 +62,7 @@ SunSDR2 DX hardware
 | Area | Status | Notes |
 |------|--------|-------|
 | Mobile UI | Implemented | `static/index.html`, `mobile.css`, `mobile.js` |
-| RX audio | Implemented | IQ demodulation to Int16 PCM over `/WSaudioRX` |
+| RX audio | Implemented | IQ demodulation to tagged dual-codec (Opus/PCM) over `/WSaudioRX` |
 | Spectrum waterfall | Implemented | Quantized 512-bin frames over `/WSspectrum` |
 | Radio control | Implemented | Frequency, DSP mode, PTT, tune, gain, filter, AGC/preamp controls |
 | WDSP controls | Implemented when libwdsp is available | NR2, NB, ANF, NF, AGC, notches |

@@ -15,7 +15,7 @@
 | 模式切换 | ✅ | USB/LSB/CW/AM/FM |
 | PTT 发射 | ✅ | TX 灯亮，RF 输出 |
 | S 表 | ✅ | FFT 频谱 90 分位 |
-| 音频播放 | ✅ | Int16 PCM @16000Hz via WSaudioRX |
+| 音频播放 | ✅ | Opus/PCM tagged @16000Hz via WSaudioRX |
 | 音频采集 | 🔶 | WSaudioTX 已就绪，待接入 TX IQ 调制 |
 | 瀑布图 | ❌ | MRRC UI 无瀑布组件 |
 | DSP NR2/ANF | 🔶 | WDSP 库就绪，待稳定集成 |

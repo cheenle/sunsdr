@@ -12,6 +12,8 @@ from sunsdr_direct import SunSDR2DXClient
 from dsp import (StreamProcessor, SpectrumProcessor, AudioDemodulator,
                  AUDIO_RATE as DSP_AUDIO_RATE,
                  TX_PACKET_INTERVAL_S, TX_SETTLE_PACKETS)
+from opus_rx import (RxOpusEncoder, TxOpusDecoder,
+                     AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE)
 import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -52,7 +54,9 @@ _last_telem_ts = 0.0   # throttle TX power/SWR telemetry broadcasts
 # ~9, ~49 into a dummy load (~5 W per TXPLAN). Linear approximation; calibrate
 # TELEM_PWR_SCALE against a known TX power for accuracy.
 TELEM_PWR_BASELINE = 9.0
-TELEM_PWR_SCALE = 0.125   # (49-9)*0.125 ≈ 5.0 W
+# Cubic fit: watts = (pwr_raw - baseline)^3 × scale
+# Verified 2025-06-24: (77-9)^3×1.91e-5=6.0W, (110-9)^3×1.91e-5=19.7W≈20W
+TELEM_PWR_SCALE = 0.0000191   # 1.91e-5
 _last_tlm_ts = 0.0     # throttle TX power/SWR telemetry broadcasts
 _last_pwr_log_ts = 0.0  # throttle TX power logger to 1 Hz
 _last_1f01_log_ts = 0.0  # throttle 0x1F01 TX-frame logger to 1 Hz
@@ -63,6 +67,24 @@ ctrl_clients: set[WebSocket] = set()
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
+
+# RX audio codec. Opus cuts the ~256 kbit/s Int16 PCM stream to ~18-24 kbit/s.
+# Each /WSaudioRX binary frame is prefixed with a 1-byte codec tag (AUDIO_TAG_*)
+# so clients decode the right way without a control-channel race. Default ON;
+# toggled via the `setOpus:` control command (menu setting). Falls back to PCM
+# if libopus is unavailable.
+opus_enabled = True
+opus_encoder: RxOpusEncoder | None = None
+opus_tx_decoder: TxOpusDecoder | None = None
+try:
+    opus_encoder = RxOpusEncoder(bitrate=DEFAULT_BITRATE)
+except Exception as e:
+    logger.warning("Opus encoder unavailable, RX stays on Int16 PCM: %s", e)
+    opus_enabled = False
+try:
+    opus_tx_decoder = TxOpusDecoder()
+except Exception as e:
+    logger.warning("TX Opus decoder unavailable: %s", e)
 
 # Recording state
 recording_active = False
@@ -599,9 +621,8 @@ async def _process_iq_stream():
             tx_thread_stop = False
             tx_thread = th.Thread(target=_tx_pacer_thread, daemon=True)
             tx_thread.start()
-            # Wait for PTT release
+            # Wait for PTT release — keep receiving telemetry during TX
             while getattr(radio, '_ptt_active', False) and radio.connected:
-                # Send 0xFFFE keep-alive during TX
                 now = time.monotonic()
                 if tx_keepalive_due or (now - last_keepalive >= 0.5):
                     ctr = _next_tx_counter()
@@ -612,7 +633,30 @@ async def _process_iq_stream():
                         pass
                     last_keepalive = now
                     tx_keepalive_due = False
-                await asyncio.sleep(0.1)
+                # Non-blocking receive: process telemetry (0x1F00) during TX
+                try:
+                    data = await asyncio.wait_for(loop.sock_recvfrom(iq_sock, 65536), timeout=0.05)
+                    raw_rx = data[0]
+                    if len(raw_rx) >= 10 and raw_rx[0] == 0x32 and raw_rx[1] == 0xff:
+                        sub = struct.unpack('<H', raw_rx[2:4])[0]
+                        if sub == 0x1F00 and len(raw_rx) >= 30:
+                            if now - _last_telem_ts >= 0.1:
+                                _last_telem_ts = now
+                                try:
+                                    pwr_raw = struct.unpack_from('<H', raw_rx, 14)[0]
+                                    swr_raw = struct.unpack_from('<H', raw_rx, 16)[0]
+                                    swr = swr_raw / 100.0  # off16 u16 / 100 = SWR
+                                    temp_c = struct.unpack_from('<f', raw_rx, 18)[0]
+                                    over = max(0.0, pwr_raw - TELEM_PWR_BASELINE)
+                                    watts = over * over * over * TELEM_PWR_SCALE
+                                    asyncio.ensure_future(_send_ctrl(
+                                        f"getTXTelem:{watts:.1f},{swr:.2f},{temp_c:.0f},{pwr_raw}"))
+                                except Exception:
+                                    pass
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
+                except Exception:
+                    pass
             # PTT released – stop TX thread
             tx_thread_stop = True
             if tx_thread and tx_thread.is_alive():
@@ -696,23 +740,24 @@ async def _process_iq_stream():
         elif sub == 0x1F00 and len(raw) >= 30:
             # Device→PC TX telemetry (sub-ID verified by live probe 2026-06-22:
             # 0x1F00 len=34, payload=24B).
+            # Fields (verified against 323+ packets across 6 captures 2026-06-24):
+            #   off14 u16 = pwr_raw (forward power envelope, idle ~9, TX 47-77)
+            #   off16 u16 = SWR × 100 (132=1.32 TUNE, 134-137=1.34-1.37 TX/RX)
+            #   off18 f32 = temp °C
+            #   off22 f32 = TUNE measurement (~2.0) — 0.0 during normal TX
+            #   off26 f32 = constant 1.0000 (device placeholder, never changes)
             now_t = time.monotonic()
             if now_t - _last_telem_ts >= 0.1:  # throttle to ~10 Hz
                 _last_telem_ts = now_t
                 try:
                     pwr_raw = struct.unpack_from('<H', raw, 14)[0]
+                    swr_raw = struct.unpack_from('<H', raw, 16)[0]
+                    swr = swr_raw / 100.0  # u16 / 100 = SWR (verified)
                     temp_c = struct.unpack_from('<f', raw, 18)[0]
-                    swr = struct.unpack_from('<f', raw, 26)[0]
-                    # Approximate watts: linear above an idle baseline.
-                    # Tunable — calibrate against a known TX power.
-                    watts = max(0.0, (pwr_raw - TELEM_PWR_BASELINE)
-                                * TELEM_PWR_SCALE)
+                    over = max(0.0, pwr_raw - TELEM_PWR_BASELINE)
+                    watts = over * over * over * TELEM_PWR_SCALE
                     asyncio.ensure_future(_send_ctrl(
                         f"getTXTelem:{watts:.1f},{swr:.2f},{temp_c:.0f},{pwr_raw}"))
-                    # Log only during TX, at 1 Hz. The device STOPS sending
-                    # 0x1F00 while keying (verified: zero [TX] frames in any
-                    # capture), so this fires only on the idle->RX baseline.
-                    # Forward power is read from the ATR-1000 tuner, not here.
                     global _last_pwr_log_ts
                     if (getattr(radio, '_ptt_active', False)
                             and now_t - _last_pwr_log_ts >= 1.0):
@@ -720,20 +765,13 @@ async def _process_iq_stream():
                         logger.info(
                             f"[TX] 0x1F00 raw={pwr_raw} W={watts:.1f} "
                             f"SWR={swr:.2f} T={temp_c:.0f}C")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"0x1F00 parse error: {e}")
 
         elif sub == 0x1F01 and len(raw) >= 22:
-            # Device→PC frame seen during TX (0x1F00 goes silent while keyed).
-            # Log it at 1 Hz while keyed so we can locate the forward-power
-            # field here if the device carries it. Throttled, TX-only.
-            if getattr(radio, '_ptt_active', False):
-                now_t = time.monotonic()
-                global _last_1f01_log_ts
-                if now_t - _last_1f01_log_ts >= 1.0:
-                    _last_1f01_log_ts = now_t
-                    logger.info(f"[TX] 0x1F01 len={len(raw)} "
-                                f"payload={raw[10:].hex()}")
+            # TX-only frame marker (trailing bit 16 toggles during TX).
+            # Forward power is in 0x1F00 pwr_raw (cubic fit); this is a flag only.
+            pass
 
         # Periodic stats (doesn't send keep-alive — that's handled above)
         now = time.monotonic()
@@ -769,10 +807,29 @@ async def _broadcast_audio(pcm: bytes):
     if out_len < 16: return
     out = np.interp(np.linspace(0, len(arr)-1, out_len),
                     np.arange(len(arr)), arr).astype(np.int16)
-    frame = out.tobytes()
+    pcm16 = out.tobytes()
+
+    # Build the list of tagged WS frames to send. Each frame is a 1-byte codec
+    # tag + payload so the client decodes correctly without a control-channel
+    # race. Opus emits one frame per complete 320-sample (20 ms) packet; the
+    # encoder buffers partial tails internally to keep frame boundaries clean.
+    frames: list[bytes] = []
+    if opus_enabled and opus_encoder is not None:
+        try:
+            for pkt in opus_encoder.push(pcm16):
+                frames.append(bytes([AUDIO_TAG_OPUS]) + pkt)
+        except Exception as e:
+            logger.warning("Opus encode failed, sending PCM: %s", e)
+            frames = [bytes([AUDIO_TAG_PCM]) + pcm16]
+    else:
+        frames = [bytes([AUDIO_TAG_PCM]) + pcm16]
+
+    if not frames: return
     dead = set()
     for ws in list(audio_rx_clients):
-        try: await ws.send_bytes(frame)
+        try:
+            for frame in frames:
+                await ws.send_bytes(frame)
         except: dead.add(ws)
     audio_rx_clients.difference_update(dead)
 
@@ -844,14 +901,35 @@ async def ws_ctrl(ws: WebSocket):
                             dsp_proc.modulator.set_mode(mode)  # TX uses same mode
                     await ws.send_text(f"getMode:{mode}")
                 elif cmd == "setSampleRate":
-                    # Spectrum/IQ width selector (39k/78k/156k/312k) — the
-                    # far-left sample-rate dropdown. Re-sends 0x0020 STREAM_CTRL.
-                    # NOTE: rate-field mapping is unconfirmed; only "78k" is
-                    # known-good today, others fall back with a warning until a
-                    # multi-rate capture proves the field (see sunsdr_direct.py).
+                    # Spectrum/IQ width selector (39k/78k/156k/312k).
+                    # Reboots device with 0x0001 word[11] = rate index.
                     ok = await radio.set_sample_rate(val.lower())
                     if ok:
+                        # Update DSP pipeline to match new IQ rate
+                        new_hz = sunsdr_direct.SAMPLE_RATES.get(val.lower(), 78125)
+                        if dsp_proc:
+                            dsp_proc.set_iq_sample_rate(new_hz)
                         await _send_ctrl(f"setSampleRate:{val.lower()}")
+                elif cmd == "setOpus":
+                    # RX audio codec toggle. "on"/"true" → Opus (~18-24 kbps),
+                    # else Int16 PCM (~256 kbps). Each /WSaudioRX frame carries a
+                    # 1-byte codec tag so the client always knows how to decode.
+                    global opus_enabled
+                    want = val.lower() in ("on", "true", "1", "opus")
+                    if want and opus_encoder is None:
+                        # libopus unavailable at startup — stay on PCM.
+                        await _send_ctrl("setOpus:unavailable")
+                    else:
+                        opus_enabled = want
+                        if opus_encoder is not None:
+                            opus_encoder.reset()
+                        logger.info("RX codec: %s", "Opus" if want else "Int16 PCM")
+                        await _send_ctrl(f"setOpus:{'on' if want else 'off'}")
+                elif cmd == "getOpus":
+                    if opus_encoder is None:
+                        await ws.send_text("setOpus:unavailable")
+                    else:
+                        await ws.send_text(f"setOpus:{'on' if opus_enabled else 'off'}")
                 elif cmd == "setPTT":
                     tx = val.lower() == "true"
                     await radio.set_ptt(tx)
@@ -879,6 +957,11 @@ async def ws_ctrl(ws: WebSocket):
                     await radio.set_volume(vol)
                 elif cmd == "setRFGain":
                     await radio.set_rf_gain(float(val)/100.0)
+                elif cmd == "setATT":
+                    # Hardware ATT/preamp: 0=-20dB, 1=-10dB, 2=0dB, 3=+10dB
+                    level = max(0, min(3, int(float(val))))
+                    await radio.set_attenuator(level)
+                    await _send_ctrl(f"setATT:{level}")
                 elif cmd == "setPreamp":
                     await radio.set_preamp(val.lower() == "true")
                 elif cmd == "setAGC":
@@ -1065,18 +1148,28 @@ async def ws_audio_tx(ws: WebSocket):
                     except Exception:
                         pass
                     _rx_last = _rx_now
-                # Int16 PCM mic frame → modulator queue.
-                # feed_audio() does Hilbert SSB + 24-bit packing per frame.
-                # Run it in the default executor so the asyncio event loop
-                # stays free to broadcast RX audio/spectrum and the GIL isn't
-                # held on the loop thread (which used to jitter the TX pacer's
-                # 5.12 ms cadence → trembling voice at the far end). Awaiting
-                # here keeps per-connection frames strictly serial, so the
-                # modulator's non-thread-safe streaming state stays consistent.
+                # Decode codec-tagged mic frame → PCM → modulator.
+                # Tag byte: 0x00 = Int16 PCM, 0x01 = Opus (like RX path).
+                if len(data) >= 2:
+                    tag = data[0]
+                    frame = data[1:]
+                    if tag == AUDIO_TAG_OPUS and opus_tx_decoder:
+                        pcm = opus_tx_decoder.decode(frame)
+                        if not pcm:
+                            continue
+                    elif tag == AUDIO_TAG_PCM:
+                        pcm = frame
+                    else:
+                        # legacy: untagged or unknown tag, assume PCM
+                        if tag not in (0x00, 0x01):
+                            logger.warning("TX audio: unknown tag 0x%02X, len=%d", tag, len(data))
+                        pcm = data
+                else:
+                    pcm = data
                 if dsp_proc and dsp_proc.modulator and getattr(radio, '_ptt_active', False):
                     try:
                         await loop.run_in_executor(
-                            None, dsp_proc.modulator.feed_audio, data, tx_rate)
+                            None, dsp_proc.modulator.feed_audio, pcm, tx_rate)
                     except Exception:
                         pass
                     # ── End-to-end TX chain level probe (1 Hz) ──

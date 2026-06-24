@@ -37,14 +37,17 @@ OperationalConfig
 | IQPacket | sub_type, counter, payload, sample_count | UDP stream packet parsed by `_process_iq_stream()` |
 | IQSample | i, q, normalized_value | 24-bit signed I/Q sample converted to complex64 |
 | DemodulatorState | mode, ptt, volume, filter, agc_gain | Software demodulation state inside `AudioDemodulator` |
-| RXAudioFrame | pcm_bytes, sample_rate, frame_length | Int16 PCM frame broadcast to `/WSaudioRX` clients |
+| RXAudioFrame | pcm_bytes, sample_rate, frame_length | tagged dual-codec frame (Opus/PCM) broadcast to `/WSaudioRX` clients |
 | SpectrumFrame | bins, quantized_bytes, percentile | FFT-derived waterfall and S-meter source; server quantizes 512 dB bins to uint8 (0 = -120 dB, 255 = 0 dB) |
 | WaterfallRenderState | accum_buffer, accum_count, decimate, noise_pctl, headroom, gain, bias | Browser-side waterfall rendering state in `controls.js`: accumulates ~10 frames (38 Hz -> ~3.8 Hz), computes a per-row adaptive noise floor (30th percentile), then stretches contrast with bias/gain over a blue->cyan->yellow->red colour ramp |
 | SMeterState | smoothed_value, attack_alpha, release_alpha | Browser-side S-meter smoothing in `updateSMeter`: asymmetric exponential filter (attack alpha 0.5, release alpha 0.15) for a stable needle |
 | WDSPConfig | available, enabled, nr2Level, nr2_enabled, nbEnabled, anfEnabled, nfEnabled, agcMode, notches | Runtime DSP feature configuration |
 | TLSConfig | certfile, keyfile, disabled | HTTPS startup decision |
 | FrontendPreference | callsign, AF gain, squelch, saved frequency cookies, WDSP cookie state | Browser-persisted settings |
-| MemoryChannel | index, frequency, mode, label | Planned service-side memory record expected by frontend manager |
+| MemoryChannel | index, frequency, mode, label | Memory record persisted server-side via `/api/mem_channels` (`mem_channels.json`) |
+| TXModulationFrame | pcm_bytes, sample_rate, hilbert_iq | Browser mic PCM (`/WSaudioTX`) modulated to 24-bit IQ via Hilbert SSB and queued as `0xFFFD` TX packets |
+| TXDriveConfig | drive_pct, taper_byte | TX power level sent as the DRIVE command (`0x0017`); `byte = round(255·√(drive%/100))` in the trailing word |
+| BandPowerConfig | bands[low,high,power], default | Runtime per-band drive %, persisted to `band_power.json`, served by `/api/band_power` |
 
 ## 7.3 Relationships
 
@@ -66,6 +69,8 @@ OperationalConfig
 | Connected WebSockets | `server.py` global sets | Runtime only |
 | Radio state | `SunSDR2DXClient` instance | Runtime only |
 | DSP state | `AudioDemodulator` instance | Runtime only; frontend cookies may replay settings |
+| Per-band TX power | `sunsdr_direct` runtime table + `band_power.json` | Filesystem (JSON) |
+| Memory channels | `/api/mem_channels` + `mem_channels.json` | Filesystem (JSON) |
 | UI state | `mobileState`, DOM, cookies | Browser session/cookies |
 | Waterfall render state | `controls.js` waterfall module (`wfAccum`, `wfAccumCount`, `WF_*`) | Browser runtime only |
 | Smoothed S-meter value | `mobileState.currentSMeter` via `updateSMeter` | Browser runtime only |
@@ -77,6 +82,5 @@ OperationalConfig
 | Entity | Reason Deferred |
 |--------|-----------------|
 | ATRMeterData | Frontend exists, backend endpoint absent |
-| TXModulationFrame | Browser sends TX audio, but server-side RF/audio modulation path is not implemented |
 | AuthUser | No server-side user database or auth routes in current backend |
 | LogbookEntry | Menu item only; no model in current backend |

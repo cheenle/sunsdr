@@ -58,7 +58,7 @@ Browser (iOS Safari)
 | Endpoint | Direction | Payload |
 |----------|-----------|---------|
 | `/WSCTRX` | Bidirectional text | Control commands (`setFreq:`, `setMode:`, `getWDSPStatus:`, etc.) |
-| `/WSaudioRX` | Server → client binary | 16 kHz Int16 PCM audio |
+| `/WSaudioRX` | Server → client binary | RX audio, 1-byte codec tag per frame: `0x00`=16 kHz Int16 PCM, `0x01`=Opus (16 kHz mono). Default Opus. |
 | `/WSaudioTX` | Client → server | TX audio placeholder (not yet consumed by backend) |
 | `/WSspectrum` | Server → client binary | 512-byte uint8 dB rows (0=-120dB, 255=0dB) |
 | `/WSATR1000` | Bidirectional JSON | ATR-1000 tuner proxy (placeholder) |
@@ -84,9 +84,15 @@ TX output power is set by the **DRIVE command (0x0017)**, NOT by software IQ gai
 - **Per-band power is user-configurable**, persisted to `band_power.json`, edited via `/api/band_power` and the **Band Power** menu panel. `band_power_for(freq_hz)` looks up the % for the current band; `BAND_POWER_DEFAULT` (100) covers out-of-band frequencies.
 - **Software IQ gain stays gentle** (`dsp.py` `TX_DRIVE_GAIN=2.5`, `TX_IQ_PEAK=0.5`): the software layer only produces clean SSB that barely engages the tanh soft-limiter; the device drive does the power scaling.
 
-### TX power telemetry blind spot
+### TX power telemetry (0x1F00)
 
-The device **stops sending 0x1F00 telemetry while keyed** (verified: zero TX-tagged 0x1F00 frames in any capture). So `W=` in the server log reflects only the idle/RX baseline, not forward power. **Read actual TX power from the ATR-1000 tuner** (or a wattmeter). Confirmed working values: Tune ~12W, SSB voice 30–40W PEP into the tuner. The 0x1F01 frame is logged (TX-only, 1 Hz) as a candidate location for a forward-power field.
+The device **does** send 0x1F00 while keyed (verified: 273 TX-state packets in `sunsdr_sdr_tx.pcap` with pwr_raw 47-48). Fields:
+- `off14` u16 = pwr_raw (idle ~9, TX 47-77)
+- `off16` u16 = SWR × 100 (132-137 range across captures → 1.32-1.37 SWR)
+- `off18` f32 = temp °C (reliable)
+- `off26` f32 = always 1.0000 (device placeholder, never changes)
+
+Power is cubic fit: `watts = (pwr_raw - 9)^3 × 1.91e-5`. Confirmed: Tune ~12W, SSB voice 30–40W PEP via ATR-1000.
 
 ## Dependencies
 
@@ -126,7 +132,7 @@ The IQ processing loop sends both heartbeat (0x0018 to port 50001 every 0.5s) an
 - **WDSP is optional** (AD-008) — demods work without it; `get_wdsp_status()` reports `available: true/false`
 - **Spectrum quantization is server-side** (AD-005) — waterfall canvas gets 512 uint8 values, not raw float dB
 - **PTT release is safety-critical** (AD-007) — frontend has ACK retry + watchdog; backend has forced-RX handler on `s:` command
-- **Audio format is Int16 PCM** (AD-004) — Opus negotiation removed; 16 kHz resampled server-side from 15625 Hz native rate
+- **RX audio is tagged dual-codec** (AD-004) — each `/WSaudioRX` frame carries a 1-byte codec tag (`0x00`=Int16 PCM, `0x01`=Opus 16 kHz mono); default Opus (~18-24 kbps vs ~256 kbps PCM), switchable via `setOpus:` (Audio Codec menu). Server encodes via a direct `ctypes` libopus binding in `web_control/opus_rx.py` (NOT `opuslib` — arm64 macOS can't call the variadic `opus_encoder_ctl` through ctypes, so bitrate is set via the `max_data_bytes` cap on `opus_encode`). Falls back to PCM if libopus is missing. 16 kHz resampled server-side from 15625 Hz native rate
 
 ## Architecture decisions
 
@@ -141,4 +147,4 @@ See `SDD/08-architecture-decisions.md` for all 9 ADs with rationale. Key ones:
 - `/WSATR1000` accepts connections but doesn't interface with real tuner hardware
 - `/api/mem_channels` implemented (GET/POST with JSON persistence to `mem_channels.json`)
 - `/api/band_power` implemented (GET/POST with JSON persistence to `band_power.json`; frontend **Band Power** menu panel edits per-band drive %)
-- Spectrum bandwidth fixed at 78 kHz (156 kHz switch deferred — would require parameterizing the whole RX decimation chain + a fresh 0x0020 capture; low benefit for SSB)
+- Sample-rate selector (39/78/156/312 kHz) has frontend (**Sample Rate** menu) + backend: `setSampleRate:` → `radio.set_sample_rate()` → sends `0x0001` HW_INIT with word[11]=rate_index (0=39k, 1=78k, 2=156k, 3=312k) during a full re-boot sequence. **Verified 2025-06-24** via ExpertSDR3 capture analysis and direct device testing. The rate is set by `0x0001` (NOT `0x0020`), see `PROTOCOL.md` §4.3 and `sunsdr_direct.py` `build_hw_init()`. Rate change requires a full re-boot because 0x0001 must precede the frequency and stream-start commands.

@@ -1,3 +1,9 @@
+// ── Audio codec tags (1-byte prefix on each /WSaudioTX frame) ──────
+// Must be global so both RX (AudioRX_start) and TX (OpusEncoderProcessor)
+// methods can reference them.  0x00 = Int16 PCM, 0x01 = Opus.
+var AUDIO_TAG_PCM = 0x00;
+var AUDIO_TAG_OPUS = 0x01;
+
 //Mobile detection///////////////////////////////////////////////////////////////////////////
 /* eslint-disable */
 const IS_MOBILE = (function (a) {
@@ -256,7 +262,7 @@ function AudioRX_start(){
 				_netRxKbps = _netRxKbps * 0.3 + rxkbps * 0.7;
 				_netTxKbps = _netTxKbps * 0.3 + txkbps * 0.7;
 			}
-			var mode = "Int16";
+			var mode = (window.__rxLastCodec === 'opus') ? "Opus" : "Int16";
 			// 桌面端显示
 			var brEl = document.getElementById('div-bitrates');
 			if (brEl) { brEl.textContent = "RX " + _netRxKbps.toFixed(1) + "K  TX " + _netTxKbps.toFixed(1) + "K  (" + mode + ")"; }
@@ -299,6 +305,54 @@ function AudioRX_start(){
 			console.error('音频解码错误:', e);
 			return null;
 		}
+	}
+
+	// ── Tag-aware RX 解码 ───────────────────────────────────────────
+	// 后端给每个 /WSaudioRX 二进制帧加 1 字节编解码标签：
+	//   0x00 = Int16 PCM（无压缩，旧格式）
+	//   0x01 = Opus 包（16 kHz 单声道，约 18-24 kbps）
+	// 没有标签字节（旧后端）时按纯 Int16 PCM 回退处理。
+	// AUDIO_TAG_PCM / AUDIO_TAG_OPUS 现在是全局常量，最上面定义。
+	var rxOpusDecoder = null;
+
+	function getRxOpusDecoder() {
+		if (rxOpusDecoder) return rxOpusDecoder;
+		try {
+			if (typeof OpusDecoder === 'undefined' || typeof _opus_decoder_create === 'undefined') {
+				return null;  // WASM 尚未就绪
+			}
+			rxOpusDecoder = new OpusDecoder(16000, 1);
+			console.log('✅ RX Opus 解码器已就绪 (16kHz mono)');
+		} catch (e) {
+			console.warn('⚠️ RX Opus 解码器创建失败，回退 PCM:', e);
+			rxOpusDecoder = null;
+		}
+		return rxOpusDecoder;
+	}
+
+	// 把一个 WS 音频帧解成 Float32Array（按标签分流）。
+	function decodeRxAudioFrame(data) {
+		if (!data || data.byteLength < 1) return null;
+		var bytes = new Uint8Array(data);
+		var tag = bytes[0];
+		var payload = data.slice(1);  // 去掉标签字节
+		window.__rxLastCodec = (tag === AUDIO_TAG_OPUS) ? 'opus' : 'pcm';
+
+		if (tag === AUDIO_TAG_OPUS) {
+			var dec = getRxOpusDecoder();
+			if (!dec) return null;  // 无解码器，丢弃这帧（避免噪声）
+			try {
+				// decode_float 返回 Float32Array（已是 [-1,1]）
+				var f32 = dec.decode_float(payload);
+				// 复制出来，避免 WASM 堆内存被下一帧覆盖
+				return new Float32Array(f32);
+			} catch (e) {
+				console.warn('Opus 解码失败:', e);
+				return null;
+			}
+		}
+		// 默认 / 0x00：Int16 PCM
+		return decodeInt16Audio(payload);
 	}
 
     // 显式使用 48kHz 以与后端匹配
@@ -361,8 +415,8 @@ function AudioRX_start(){
                     if (!window.__rxBytes) window.__rxBytes = 0;
                     if (msg && msg.data && msg.data.byteLength) window.__rxBytes += msg.data.byteLength;
                     
-                    // 后端固定发送 Int16 PCM（15625Hz 解调后重采样到 16kHz）
-                    var float32Data = decodeInt16Audio(msg.data);
+                    // 后端给每帧加 1 字节编解码标签（PCM/Opus），按标签解码
+                    var float32Data = decodeRxAudioFrame(msg.data);
                     if (float32Data) {
                         window.__pushRxFrame(float32Data);
                     }
@@ -435,8 +489,8 @@ function AudioRX_start(){
                 if (!window.__rxBytes) window.__rxBytes = 0;
                 if (msg && msg.data && msg.data.byteLength) window.__rxBytes += msg.data.byteLength;
                 
-                // 后端固定发送 Int16 PCM
-                var float32Data = decodeInt16Audio(msg.data);
+                // 后端给每帧加 1 字节编解码标签（PCM/Opus），按标签解码
+                var float32Data = decodeRxAudioFrame(msg.data);
                 if (float32Data) {
                     // 使用 window 暴露的变量
                     window.__rxAccumulatedBuffer.push(float32Data);
@@ -796,6 +850,14 @@ function wsControlTRXcrtol( msg ){
 	else if(action == "getSignalLevel"){SignalLevel=param;drawRXSmeter();}
 	else if(action == "getPTT"){updatePTTStatus(param === "true");}
 	else if(action == "getTXTelem"){updateTXTelem(param);}
+	else if(action == "setOpus"){
+		// 后端 RX 编解码状态同步：on=Opus, off=Int16 PCM, unavailable=libopus 缺失
+		window.__rxLastCodec = (param === 'on') ? 'opus' : 'pcm';
+		if (typeof mobileState !== 'undefined') {
+			mobileState.opusEnabled = (param === 'on');
+		}
+		console.log('🎚️ RX 编解码:', param);
+	}
 	else if(action == "pttError"){
 		console.error('🚨 PTT 错误:', param);
 		if(param === "tot_timeout"){
@@ -1252,9 +1314,7 @@ var SP = {0:0,1:25,2:37,3:50,4:62,5:73,6:84,7:98,8:110,9:123,5:134,10:144,15:154
 var RIG_LEVEL_STRENGTH = {0:-54,1:-48,2:-42,3:-36,4:-30,5:-24,6:-18,7:-12,8:-6,9:0,5:5,10:10,15:15,20:20,25:25,30:30,35:35,40:40,45:45,50:50,55:55,60:60};
 // TX 功率/SWR/温度 遥测显示 (数据来自设备 0x1F00 包, 见 PROTOCOL.md §17.6)
 // 消息格式: getTXTelem:<watts>,<swr>,<temp_c>,<raw>
-// 真实设备 TX 遥测 (后端 getTXTelem:watts,swr,temp,raw — 来自 0x1F00 包)。
-// 复用 S 表下方已有的功率/SWR 显示区 (atr-power / atr-swr / bars)，
-// 该区原本由未实现的 ATR-1000 调谐器代理驱动，这里用真实数据接管。
+// 字段来源: off16 u16 / 100 = SWR, off14 u16 = pwr_raw, off18 f32 = temp °C
 function updateTXTelem(param) {
 	if (!param) return;
 	var p = param.split(",");
@@ -1286,17 +1346,14 @@ function updateTXTelem(param) {
 		swrEl.style.color = swr >= 3 ? '#f44336' : swr >= 2 ? '#ff9800' : '#3b82f6';
 	}
 	if (swrBar && !isNaN(swr)) {
-		// SWR 1..3 映射到 0..100%
 		var spct = Math.max(0, Math.min(100, (swr - 1) / 2 * 100));
 		swrBar.style.width = spct + "%";
 		swrBar.style.background = swr >= 3 ? '#f44336' : swr >= 2 ? '#ff9800' : '#3b82f6';
 	}
 	if (tempEl) tempEl.textContent = (isNaN(temp) ? "--" : temp.toFixed(0) + "°C");
 
-	// 与 ATR1000 模块状态同步，避免它在 PTT 释放时把真实读数清掉
 	if (typeof ATR1000 !== 'undefined') {
 		ATR1000.lastPower = Math.round(watts);
-		ATR1000.lastSWR = isNaN(swr) ? 1.0 : Math.round(swr * 100) / 100;
 	}
 }
 
@@ -1650,7 +1707,10 @@ OpusEncoderProcessor.prototype.onAudioProcess = function( e )
 				// 码率统计：TX（编码后）
 				if (!window.__txBytes) { window.__txBytes = 0; }
 				if (res[idx] && res[idx].byteLength) { window.__txBytes += res[idx].byteLength; }
-				this.wsh.send( res[ idx ] );
+				var tagged = new Uint8Array(1 + res[idx].byteLength);
+				tagged[0] = AUDIO_TAG_OPUS;
+				tagged.set(new Uint8Array(res[idx]), 1);
+				this.wsh.send( tagged );
 			}
 		}
 	}
@@ -1676,7 +1736,10 @@ OpusEncoderProcessor.prototype.onAudioProcess = function( e )
 		    // 码率统计：TX（PCM直发）
 		    if (!window.__txBytes) { window.__txBytes = 0; }
 		    window.__txBytes += int16Frame.byteLength;
-		    this.wsh.send( int16Frame );
+		    var tagged = new Uint8Array(1 + int16Frame.byteLength);
+		    tagged[0] = AUDIO_TAG_PCM;
+		    tagged.set(new Uint8Array(int16Frame.buffer, int16Frame.byteOffset, int16Frame.byteLength), 1);
+		    this.wsh.send( tagged );
 		}
 	}
 	
@@ -1715,8 +1778,33 @@ OpusEncoderProcessor.prototype.onWorkletFrame = function( int16Frame )
         return;
     }
     if (!window.__txBytes) { window.__txBytes = 0; }
-    window.__txBytes += int16Frame.byteLength;
-    this.wsh.send( int16Frame );
+
+    if( encode )
+    {
+        // Opus path: encode Int16 PCM → Opus → tag 0x01
+        var f32 = new Float32Array(int16Frame.length);
+        for (var j = 0; j < int16Frame.length; j++) {
+            f32[j] = int16Frame[j] / 32768.0;
+        }
+        var res = this.opusEncoder.encode_float(f32);
+        for (var idx = 0; idx < res.length; ++idx) {
+            window.__txBytes += (res[idx].byteLength || res[idx].length || 0);
+            var opusBytes = new Uint8Array(res[idx]);
+            var tagged = new Uint8Array(1 + opusBytes.length);
+            tagged[0] = AUDIO_TAG_OPUS;
+            tagged.set(opusBytes, 1);
+            this.wsh.send( tagged );
+        }
+    }
+    else
+    {
+        // PCM path: tag 0x00
+        window.__txBytes += int16Frame.byteLength;
+        var tagged = new Uint8Array(1 + int16Frame.byteLength);
+        tagged[0] = AUDIO_TAG_PCM;
+        tagged.set(new Uint8Array(int16Frame.buffer, int16Frame.byteOffset, int16Frame.byteLength), 1);
+        this.wsh.send( tagged );
+    }
 };
 
 var MediaHandler = function( audioProcessor )
@@ -1942,7 +2030,7 @@ MediaHandler.prototype.error = function( err ) {
 }
 
 
-var isRecording = false, encode = false;
+var isRecording = false, encode = true;
 var wsAudioTX = "";
 var ap = "";
 var mh = "";
@@ -1958,7 +2046,7 @@ function AudioTX_start()
 	}
 	
 	isRecording = false;
-	encode = false;
+	encode = true;
 	setWSStatus('status-tx', 'connecting');
 	wsAudioTX = new WebSocket( (location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSaudioTX' );
 	wsAudioTX.onopen = appendwsAudioTXOpen;

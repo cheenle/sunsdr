@@ -35,75 +35,62 @@ IF_OFFSET = 30500.0   # RX DDS = VFO + IF_OFFSET (verified from pcap)
 SESSION_ID = 0x04B0   # low 16 bits of stream counter
 
 # ── Spectrum / IQ sample rate ──────────────────────────────────────
-# The manual's left-corner indicator (39/78/156/312 kHz) selects the RX IQ
-# stream rate. These are multiples of 5^7 (78125):
+# ── IQ Sample Rates ─────────────────────────────────────────────────
+# The SunSDR2 DX supports 4 IQ sample rates, multiples of 5^7 (78125):
 #   39 kHz  = 78125 / 2     (5^7 / 2)
 #   78 kHz  = 78125         (5^7, the verified default)
 #   156 kHz = 78125 * 2
 #   312 kHz = 78125 * 4
-# The device is told which rate to use via the 0x0020 STREAM_CTRL packet.
 #
-# ⚠ WHICH payload field carries the rate enum is NOT yet confirmed. We only
-# have a single 78 kHz ExpertSDR3 capture. The default packet below is a
-# byte-for-byte reproduction of that capture (78 kHz). To confirm the field,
-# capture 0x0020 at each of the 4 settings in ExpertSDR3 and diff offsets
-# 32 / 36 / 40 (the unexplained config words) — then fill in STREAM_RATE_FIELD
-# below. Until then, only the 78 kHz default is known-good.
-SAMPLE_RATE_78K = 78125
-SAMPLE_RATES = {
+# The rate is selected by 0x0001 HW_INIT word[11] (NOT 0x0020 STREAM_CTRL):
+#   word[11]=0 → 39k, 1→78k, 2→156k, 3→312k
+# Verified 2025-06-24 via ExpertSDR3 capture + direct device test.
+# See PROTOCOL.md §4.3 for full payload decode.
+
+SAMPLE_RATES: dict[str, int] = {
     "39k":  78125 // 2,    # 39062
     "78k":  78125,         # default, verified
     "156k": 78125 * 2,     # 156250
     "312k": 78125 * 4,     # 312500
 }
 
-# Default STREAM_CTRL (0x0020) payload — verified byte-for-byte against the
-# 78 kHz ExpertSDR3 capture. 13 little-endian u32 words.
-#   idx  value  current interpretation (PROTOCOL.md §4.6)
-#    0   0      RX channel
-#    1   1      TX channel
-#    2   0
-#    3   0
-#    4   0
-#    5   100    last octet of PC IP?
-#    6   0
-#    7   0
-#    8   30     ← candidate rate/config field
-#    9   700    ← candidate rate/config field (most suspicious)
-#   10   7      ← candidate rate/config field
-#   11   100
-#   12   300
-STREAM_CTRL_WORDS_78K = [0, 0, 1, 0, 0, 100, 0, 0, 30, 700, 7, 100, 300]
-STREAM_CTRL_TRAILING = 0x64  # 100
-
-# Placeholder: index into STREAM_CTRL_WORDS_78K that encodes the rate enum,
-# and the per-rate value to write there. UNCONFIRMED — leave None so we keep
-# emitting the known-good 78 kHz packet until a multi-rate capture proves the
-# mapping. Once confirmed, e.g. STREAM_RATE_FIELD = 9 and fill STREAM_RATE_ENUM.
-STREAM_RATE_FIELD = None
-STREAM_RATE_ENUM = {
-    # "39k": <value>, "78k": 700, "156k": <value>, "312k": <value>,
+# 0x0001 HW_INIT word[11] rate index mapping
+HW_INIT_RATE_INDEX: dict[str, int] = {
+    "39k": 0,
+    "78k": 1,
+    "156k": 2,
+    "312k": 3,
 }
 
+# 0x0020 STREAM_CTRL fixed payload (13 u32 LE words — rate-independent)
+# word[1] = 0 matches the original 78k capture that had working TX.
+# ExpertSDR3 uses word[1]=1, but changing it to 1 killed TX power on SunSDR2.
+STREAM_CTRL_WORDS = [0, 0, 1, 0, 0, 100, 0, 0, 30, 700, 7, 100, 300]
+STREAM_CTRL_TRAILING = 0x64  # 100
 
-def build_stream_ctrl(sample_rate_key: str = "78k") -> bytes:
-    """Build the 0x0020 STREAM_CTRL packet.
 
-    With STREAM_RATE_FIELD unset (the current state), this always reproduces
-    the verified 78 kHz packet regardless of sample_rate_key, so behaviour is
-    unchanged from the old hardcoded hex. Once the rate field is confirmed,
-    set STREAM_RATE_FIELD / STREAM_RATE_ENUM and this starts honouring the key.
-    """
-    words = list(STREAM_CTRL_WORDS_78K)
-    if STREAM_RATE_FIELD is not None and sample_rate_key in STREAM_RATE_ENUM:
-        words[STREAM_RATE_FIELD] = STREAM_RATE_ENUM[sample_rate_key]
-    elif sample_rate_key != "78k":
-        logger.warning(
-            "Sample rate %s requested but rate field unconfirmed — "
-            "emitting 78 kHz STREAM_CTRL. Capture 0x0020 at each rate to map it.",
-            sample_rate_key)
-    payload = struct.pack("<%dI" % len(words), *words)
+def build_stream_ctrl() -> bytes:
+    """Build the 0x0020 STREAM_CTRL packet (rate-independent, always the same)."""
+    payload = struct.pack("<%dI" % len(STREAM_CTRL_WORDS), *STREAM_CTRL_WORDS)
     return build_packet(CmdID.STREAM_CTRL, payload, trailing=STREAM_CTRL_TRAILING)
+
+
+def build_hw_init(rate_key: str = "78k") -> bytes:
+    """Build 0x0001 HW_INIT with the IQ sample rate encoded in word[11].
+
+    word[11] = rate index: 0=39k, 1=78k, 2=156k, 3=312k
+    word[10] = word[11] * 65536 + 1  (redundant encoding)
+    Payload is exactly 50 bytes (12 words + 2B zero pad) to match ExpertSDR3.
+    Trailing is fixed 0x509E9C00 (verified from ExpertSDR3 capture).
+    """
+    rate_index = HW_INIT_RATE_INDEX.get(rate_key, 1)  # default 78k
+    words = [
+        0, 50, 50, 50, 50, 50, 50, 50, 50, 0,          # calibration params
+        rate_index * 65536 + 1,                           # word[10]: rate high
+        rate_index,                                       # word[11]: ★ rate index ★
+    ]
+    payload = struct.pack("<%dI" % len(words), *words) + b'\x00\x00'
+    return build_packet(CmdID.HW_INIT, payload, trailing=0x509E9C00)
 
 # ── Per-band TX power (drive %) ─────────────────────────────────────
 # EDIT THESE to set max output power per band. drive % maps to the 0x0017
@@ -176,7 +163,8 @@ class CmdID:
     SET_PARAM_1B = 0x001B  # Parameter set
     SET_PARAM_1D = 0x001D  # Parameter set
     SET_PARAM_1E = 0x001E  # Parameter set
-    STREAM_CTRL  = 0x0020  # Stream config (70 bytes)
+    HW_INIT      = 0x0001  # Hardware init + IQ sample rate selector
+    STREAM_CTRL  = 0x0020  # Stream config (52 bytes, rate-independent)
     SET_PARAM_21 = 0x0021  # Parameter set
     SET_PARAM_22 = 0x0022  # Parameter set (30 bytes)
     SET_PARAM_24 = 0x0024  # Parameter set
@@ -259,17 +247,20 @@ class SunSDR2DXClient:
             self._sock.sendto(data, (self.host, CTRL_PORT))
 
     async def _send_boot_sequence(self):
-        """Complete boot sequence — verified byte-for-byte against ExpertSDR3 pcap."""
-        # Use EXACT hex from pcap for all boot commands (no dynamic building)
+        """Complete boot sequence — verified byte-for-byte against ExpertSDR3 pcap.
+
+        The only dynamic element is 0x0001 HW_INIT (word[11] = IQ sample rate index).
+        All other commands are fixed hex from the capture.
+        """
+        # Phase 1-2: Start Operation + pre-config (fixed hex)
         boot_hex = [
-            # Start Operation + pre-config
             "32ff0200040000000000010000000000000000000000",
             "32ff5f000600000000000100000000000000000000000000",
             "32ff5f000600000000000100000000000000000000000000",
             "32ff5f000600000000000100000000000000000000000000",
             "32ff1d00040000000000010000000000000000000000",
             "32ff1b00040000000000010000000000000000000000",
-            "32ff0500040000000000010000000000000002000000",
+            "32ff0500040000000000010000000000000001000000",  # trail=1 matches ExpertSDR3 boot
             "32ff1800040000000000010000000000000000000000",
             "32ff19000400000000000100000000000000bb000000",
             "32ff2100040000000000010000000000000001000000",
@@ -279,14 +270,16 @@ class SunSDR2DXClient:
             "32ff5a000000000000000100000000000000",
             "32ff5a000000000000000100000000000000",
             "32ff5a000000000000000100000000000000",
-            # HW init
-            "32ff01003200000000000100000000000000320000003200000032000000320000003200000032000000320000003200000000000000010001000100000000000000c025",
         ]
         for h in boot_hex:
             await self._send_raw(bytes.fromhex(h))
             await asyncio.sleep(0.03)
 
-        # Frequencies (dynamic — need current VFO)
+        # Phase 3: HW_INIT (0x0001) — dynamic: encodes IQ sample rate
+        await self._send_raw(build_hw_init(self.sample_rate_key))
+        await asyncio.sleep(0.03)
+
+        # Phase 4: Frequencies (dynamic — need current VFO)
         dds = int((self.rx_freq + IF_OFFSET) * 10)
         vfo = int(self.rx_freq * 10)
         freq_cmds = [
@@ -298,27 +291,36 @@ class SunSDR2DXClient:
             await self._send_raw(cmd)
             await asyncio.sleep(0.03)
 
-        # Post-init + stream start (exact pcap hex)
+        # Phase 5: Post-init + stream start (fixed hex)
         post_hex = [
             "32ff17000400000000000100000000000000dc000000",
             "32ff1e00040000000000010000000000000000000000",
             "32ff1500040000000000010000000000000001000000",
             "32ff07001a000000000001000000000000000000000000000000000000000000000000000000000000000000",
             "32ff2400040000000000010000000000000000000000",
-            "STREAM_CTRL",  # 0x0020 — built dynamically from self.sample_rate_key
+        ]
+        for h in post_hex:
+            await self._send_raw(bytes.fromhex(h))
+            await asyncio.sleep(0.03)
+
+        # ★ 0x0020 STREAM_CTRL — fixed, rate-independent
+        await self._send_raw(build_stream_ctrl())
+        await asyncio.sleep(0.03)
+
+        # Post-stream commands
+        post2_hex = [
             "32ff1800040000000000010000000000000000000000",
             "32ff2600040000000000010000000000000000000000",
             "32ff27001000000000000100000000000000dc460300b6d20000dc460300b6d20000",
             "32ff22000c00000000000100000000000000000000000084d71700000000",
         ]
-        for h in post_hex:
-            if h == "STREAM_CTRL":
-                await self._send_raw(build_stream_ctrl(self.sample_rate_key))
-            else:
-                await self._send_raw(bytes.fromhex(h))
+        for h in post2_hex:
+            await self._send_raw(bytes.fromhex(h))
             await asyncio.sleep(0.03)
 
-        logger.info("Boot sequence complete")
+        logger.info("Boot sequence complete (rate=%s, word[11]=%d)",
+                     self.sample_rate_key,
+                     HW_INIT_RATE_INDEX.get(self.sample_rate_key, 1))
 
     # ── Frequency ──────────────────────────────────────────────
 
@@ -364,17 +366,24 @@ class SunSDR2DXClient:
     async def set_sample_rate(self, key: str) -> bool:
         """Switch the spectrum/IQ sample rate (39k/78k/156k/312k).
 
-        Re-sends 0x0020 STREAM_CTRL with the rate field set. NOTE: the rate
-        field mapping is unconfirmed (see STREAM_RATE_FIELD) — until a
-        multi-rate capture proves it, only "78k" actually changes hardware
-        behaviour; other keys log a warning and re-send the 78 kHz packet.
-        Returns True if the key is valid."""
+        Requires a full re-boot because the rate is encoded in 0x0001 HW_INIT
+        word[11] which must be sent BEFORE frequency and stream-start commands.
+        See PROTOCOL.md §4.3 for the word[11] mapping.
+
+        Returns True if the key is valid and reboot was triggered.
+        """
         if key not in SAMPLE_RATES:
             logger.warning("Unknown sample rate key: %s", key)
             return False
+
+        old_key = self.sample_rate_key
         self.sample_rate_key = key
-        await self._send_raw(build_stream_ctrl(key))
-        logger.info("Sample rate set to %s (%d Hz)", key, SAMPLE_RATES[key])
+        logger.info("Sample rate: %s → %s (%d Hz), rebooting...",
+                     old_key, key, SAMPLE_RATES[key])
+
+        # Full re-boot with the new rate encoded in 0x0001
+        await self._send_boot_sequence()
+        logger.info("Sample rate switch complete: %s", key)
         return True
 
     # ── Mode / Filter / AGC ───────────────────────────────────
@@ -430,8 +439,22 @@ class SunSDR2DXClient:
     async def set_preamp(self, enable: bool):
         self.preamp = enable
 
-    async def set_attenuator(self, db: int):
-        self.attenuator = db
+    async def set_attenuator(self, level: int):
+        """Set hardware ATT/preamp via 0x0005 SET_PARAM_5 trailing word.
+
+        Verified against ExpertSDR3 capture (2025-06-24):
+          trail=0 → -20 dB attenuator
+          trail=1 → -10 dB attenuator
+          trail=2 → 0 dB (bypass)
+          trail=3 → +10 dB preamp
+        """
+        level = max(0, min(3, int(level)))
+        self.attenuator = level
+        await self._send_raw(
+            build_packet(CmdID.SET_PARAM_5, struct.pack("<I", 0), trailing=level))
+        labels = {-2: "-20dB", -1: "-10dB", 0: "0dB", 1: "+10dB"}
+        label = labels.get(level - 2, f"{level}")
+        logger.info("ATT/Preamp: %s (trail=%d)", label, level)
 
     async def set_antenna(self, port: int):
         self.antenna = max(1, min(3, port))

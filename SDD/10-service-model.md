@@ -6,7 +6,7 @@
 |---------|------|--------|----------------|
 | StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` |
 | ControlService | Core | Implemented | WebSocket command parsing, radio/DSP dispatch, state responses |
-| RXAudioService | Core | Implemented | Broadcast demodulated Int16 PCM to browser clients |
+| RXAudioService | Core | Implemented | Broadcast demodulated audio to browser clients via tagged dual-codec (Opus/PCM) |
 | TXAudioIngressService | Core | Implemented | Accept browser mic PCM, modulate to SunSDR TX IQ (`TXModulator`), queue `0xFFFD` packets |
 | TXPowerService | Core | Implemented | Set device DRIVE (`0x0017`) with per-band power; re-send on QSY/PTT |
 | BandPowerService | Core | Implemented | `/api/band_power` GET/POST; persist per-band drive % to `band_power.json` |

@@ -33,15 +33,15 @@ Runtime facts are derived from the current repository, primarily `server.py`, `s
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-SUNMRRC-2026-001 |
-| SDD Version | V3.0 |
-| Baseline Date | 2026-06-21 |
+| SDD Version | V3.3 |
+| Baseline Date | 2026-06-24 |
 | Status | Living design baseline |
 | Project | SunMRRC |
 | Primary Radio | SunSDR2 DX |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy |
 | Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API |
 | Transport | HTTPS/WSS for browser, UDP for SunSDR2 DX |
-| Default Production Entry | `https://radio.vlsc.net:8889` |
+| Default Production Entry | `https://radio.vlsc.net:8080` |
 
 ## System at a Glance
 
@@ -62,12 +62,13 @@ SunSDR2 DX hardware
 | Area | Status | Notes |
 |------|--------|-------|
 | Mobile UI | Implemented | `static/index.html`, `mobile.css`, `mobile.js` |
-| RX audio | Implemented | IQ demodulation to Int16 PCM over `/WSaudioRX` |
+| RX audio | Implemented | IQ demodulation to tagged dual-codec (Opus/PCM) over `/WSaudioRX` |
 | Spectrum waterfall | Implemented | Quantized 512-bin frames over `/WSspectrum` |
 | Radio control | Implemented | Frequency, DSP mode, PTT, tune, gain, filter, AGC/preamp controls |
 | WDSP controls | Implemented when libwdsp is available | NR2, NB, ANF, NF, AGC, notches |
 | HTTPS/WSS | Implemented | Auto-detects `certs/fullchain.pem` and `certs/radio.vlsc.net.key`; `DISABLE_SSL=1` for HTTP |
-| TX microphone modulation | Not yet complete | `/WSaudioTX` receives frames, but server-side audio modulation into SunSDR TX path is unresolved |
-| ATR-1000 | Frontend legacy/planned | UI references exist; backend `/WSATR1000` endpoint exists as placeholder (accepts connections, no hardware interface yet) |
-| CW/FT8/recordings links | Frontend legacy/planned | Menu links exist; corresponding pages are not present in this repository snapshot |
-| Memory channel API | Implemented | `MemoryChannelManager` uses `/api/mem_channels` (GET/POST with JSON persistence) |
+| TX voice modulation | Implemented | `/WSaudioTX` mic PCM → Hilbert SSB → 24-bit IQ → `0xFFFD` TX stream; on-air verified (Tune ~12 W, voice 30–40 W PEP) |
+| TX power / drive | Implemented | Device DRIVE command (`0x0017`), runtime per-band power via `/api/band_power` + Band Power menu panel (persisted to `band_power.json`) |
+| Memory channel API | Implemented | `/api/mem_channels` GET/POST with JSON persistence (`mem_channels.json`) |
+| ATR-1000 | Frontend legacy/planned | UI references exist; backend `/WSATR1000` is not implemented in this codebase |
+| CW/FT8 menu links | Removed | Dead links cleaned from the menu; pages not present in this repository snapshot. Recordings page is present (`recordings.html`) |

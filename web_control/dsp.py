@@ -24,6 +24,17 @@ AUDIO_DECIM = 5
 AUDIO_RATE = IQ_SAMPLE_RATE // AUDIO_DECIM   # 15625 Hz
 FFT_SIZE = 2048
 
+
+def set_iq_sample_rate(hz: int) -> int:
+    """Update the global IQ sample rate, audio rate, and decimation factor."""
+    global IQ_SAMPLE_RATE, AUDIO_RATE, AUDIO_DECIM
+    IQ_SAMPLE_RATE = hz
+    AUDIO_DECIM = max(1, round(hz / 15625))
+    AUDIO_RATE = hz // AUDIO_DECIM
+    logger.info("IQ sample rate: %d Hz → decim=%d → audio: %d Hz",
+                 hz, AUDIO_DECIM, AUDIO_RATE)
+    return AUDIO_RATE
+
 # ── TX chain (verified from device/captures/sunsdr_sdr_tx.pcap) ─────
 # ExpertSDR3 transmits IQ at HALF the RX rate: 5.12 ms/packet × 200
 # samples = 39,063 Hz (5^7 / 2), the lowest of the manual's 39/78/156/312
@@ -231,6 +242,25 @@ class AudioDemodulator:
             logger.debug(f"WDSP unavailable: {e}")
 
     # ── Control ────────────────────────────────────────────────
+
+    def set_sample_rate(self, hz: int):
+        """Update IQ sample rate and rebuild all rate-dependent components."""
+        if hz == self.sample_rate:
+            return
+        self.sample_rate = hz
+        self.decim = max(1, round(hz / 15625))
+        self.audio_rate = hz // self.decim
+        self.audio_buffer = deque(maxlen=self.audio_rate * 2)
+        self._build_filters()
+        self._st_usb.fill(0); self._st_lsb.fill(0); self._st_lpf.fill(0)
+        if self._wdsp:
+            try:
+                self._wdsp.close()
+            except: pass
+            self._wdsp = None
+        self._init_wdsp()
+        logger.info("AudioDemodulator rate: %d Hz, decim=%d, audio: %d Hz",
+                     self.sample_rate, self.decim, self.audio_rate)
 
     def set_mode(self, mode: str):
         self.mode = mode.upper()
@@ -871,6 +901,11 @@ class StreamProcessor:
             self.demodulator.audio_buffer.extend(audio.tolist())
             chunk = self.demodulator.get_audio_chunk()
             if chunk: self.audio_chunks.append(chunk)
+
+    def set_iq_sample_rate(self, hz: int):
+        """Update IQ sample rate for the demodulator + global state."""
+        set_iq_sample_rate(hz)
+        self.demodulator.set_sample_rate(hz)
 
     def get_audio(self) -> bytes | None:
         return self.audio_chunks.popleft() if self.audio_chunks else None

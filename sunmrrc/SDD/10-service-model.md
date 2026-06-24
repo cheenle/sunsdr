@@ -6,15 +6,17 @@
 |---------|------|--------|----------------|
 | StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` |
 | ControlService | Core | Implemented | WebSocket command parsing, radio/DSP dispatch, state responses |
-| RXAudioService | Core | Implemented | Broadcast demodulated Int16 PCM to browser clients |
-| TXAudioIngressService | Core | Transport only | Accept TX audio WebSocket connection; backend modulation not implemented |
+| RXAudioService | Core | Implemented | Broadcast demodulated audio to browser clients via tagged dual-codec (Opus/PCM) |
+| TXAudioIngressService | Core | Implemented | Accept browser mic PCM, modulate to SunSDR TX IQ (`TXModulator`), queue `0xFFFD` packets |
+| TXPowerService | Core | Implemented | Set device DRIVE (`0x0017`) with per-band power; re-send on QSY/PTT |
+| BandPowerService | Core | Implemented | `/api/band_power` GET/POST; persist per-band drive % to `band_power.json` |
 | SpectrumService | Core | Implemented | Broadcast quantized FFT rows for waterfall |
 | SunSDRDeviceService | Core | Implemented via shared import | Connect and command SunSDR2 DX over UDP |
 | IQProcessingService | Core | Implemented | Receive IQ, decode samples, feed DSP, derive audio/spectrum |
 | DSPService | Core | Implemented/conditional | Software demodulation and optional WDSP controls |
+| MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence (`mem_channels.json`) |
 | TLSStartupService | Support | Implemented | Choose HTTPS or HTTP runtime |
 | ProcessRestartService | Support | Implemented | Controlled restart and log capture through `restart.sh` |
-| MemoryChannelService | Planned | Missing backend | Frontend expects `/api/mem_channels` |
 | ATRService | Planned | Missing backend | Frontend references ATR status/control |
 | CW/FT8/RecordingServices | Planned/legacy links | Missing pages/backend in this snapshot | Menu targets only |
 
@@ -51,7 +53,9 @@ TLSStartupService
 | StaticUIService | GET path | Static bytes or fallback `index.html` | HTTP/HTTPS |
 | ControlService | Command strings | Response/broadcast strings | WS/WSS `/WSCTRX` |
 | RXAudioService | PCM from DSP | Int16 binary frames | WS/WSS `/WSaudioRX` |
-| TXAudioIngressService | Binary/text from browser | Currently none | WS/WSS `/WSaudioTX` |
+| TXAudioIngressService | Binary PCM / text control from browser | Modulated 24-bit IQ queued to device TX stream | WS/WSS `/WSaudioTX` |
+| BandPowerService | GET / POST JSON | Per-band drive table, persisted to `band_power.json` | HTTP/HTTPS `/api/band_power` |
+| MemoryChannelService | GET / POST JSON | Memory channel list, persisted to `mem_channels.json` | HTTP/HTTPS `/api/mem_channels` |
 | SpectrumService | Float spectrum array | uint8 binary frames | WS/WSS `/WSspectrum` |
 | SunSDRDeviceService | Method calls | UDP packets and mirrored state | In-process + UDP |
 | DSPService | IQ/audio samples and config setters | PCM, status dict | In-process |
@@ -71,6 +75,7 @@ TLSStartupService
 | `tune:true/false` | none | Calls `radio.set_tune()` |
 | `setAFGain:<0-100>` | none | Sets demodulator volume and radio volume |
 | `setRFGain:<0-100>` | none | Calls radio RF gain |
+| `setDrive:<0-100>` | none | Calls `radio.set_drive()` → device DRIVE command (`0x0017`) sets TX power |
 | `setFilter:<lo>,<hi>` | none | Reconfigures demodulator filter and radio filter |
 | `setWDSP*` | broadcast/state | Updates DSP settings and broadcasts where applicable |
 | `s:` | `getPTT:false` | Safety backup to force RX |

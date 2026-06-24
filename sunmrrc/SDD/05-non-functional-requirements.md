@@ -25,7 +25,7 @@
 
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
-| NFR-020 | Secure browser origin | HTTPS/WSS in mobile production | Critical | Load `https://radio.vlsc.net:8889` |
+| NFR-020 | Secure browser origin | HTTPS/WSS in mobile production | Critical | Load `https://radio.vlsc.net:8080` |
 | NFR-021 | TLS material isolation | Key files are referenced, never embedded in docs/code output | Critical | Repository and SDD review |
 | NFR-022 | HTTP fallback control | HTTP only when certs missing or `DISABLE_SSL=1` | High | Startup log review |
 | NFR-023 | Auth boundary clarity | No false claim of server-side auth | High | `server.py` route review |
@@ -63,5 +63,6 @@
 | NFR-060 | RX sample format | Browser RX receives Int16 PCM decoded to Float32 | Critical | `decodeInt16Audio` path and listening test |
 | NFR-061 | Demodulation quality | USB/LSB/AM/FM/CW modes map to DSP concept where supported | High | Mode change and listening test |
 | NFR-062 | WDSP quality | NR2/NB/ANF/NF/AGC available when library loads | Medium | `getWDSPStatus` response |
-| NFR-063 | TX audio quality | Defined later after TX modulation is implemented | Open | Future loopback/RF test |
+| NFR-063 | TX audio quality | Mic → Hilbert SSB → 24-bit IQ at `TX_IQ_PEAK` ceiling with gentle make-up gain; tanh soft-limiter barely engaged; phase-continuous resampler/jitter buffer prevent clicks | High | On-air listening report; on-air verified (voice 30–40 W PEP) |
+| NFR-065 | TX output power | Per-band drive (`0x0017`) sets power; square-root taper byte; ALC unsupported in firmware so drive is the sole power lever | High | Wattmeter / ATR-1000 reading (Tune ~12 W observed) |
 | NFR-064 | S-meter readability | Needle smoothed with asymmetric exponential filter (attack alpha=0.5, release alpha=0.15) so it tracks rising signals fast and decays slowly without per-frame jitter | Medium | Mobile S-meter observation during signal changes |

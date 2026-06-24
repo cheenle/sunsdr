@@ -77,7 +77,7 @@ SunSDR2 DX
 | Verify RX | Power on UI, confirm `/WSaudioRX` connected and audio/bitrate active |
 | Verify control | Change frequency/mode and confirm UI ack plus radio behavior |
 | Verify PTT safety | Press/release PTT; confirm `getPTT:false` after release |
-| Verify TX voice/power | Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (Tune ~12 W, voice 30–40 W PEP). Note: `W=` in `server.log` reads 0 during TX — the device stops `0x1F00` telemetry while keyed (not a fault). |
+| Verify TX voice/power | Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (Tune ~12 W, voice 30–40 W PEP). Note: `W=` in `server.log` reads 0 during TX — device sends `0x1F00` in all modes (verified: 273 TX packets). |
 | Adjust per-band power | Menu → Band Power; set each band's drive %, save (POST `/api/band_power`), confirm immediate re-apply on the current frequency |
 
 ## 12.7 Logs and Artifacts

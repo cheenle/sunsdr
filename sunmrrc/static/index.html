@@ -33,7 +33,7 @@
     <input type="range" id="SQUELCH" min="0" max="100" value="0" style="display:none;">
     <!-- Opus编码开关：默认关闭。后端只接受 Int16 PCM（CLAUDE.md AD-004，
          Opus 协商已移除）。勾选会发 Opus 压缩流，后端按 PCM 解码 → 噪声。 -->
-    <input type="checkbox" id="encode" class="none" alt="Encode TX with opus codec" style="display:none;">
+    <input type="checkbox" id="encode" class="none" alt="Encode TX with opus codec" style="display:none;" checked>
     
     <!-- Main container with bottom navigation -->
     <div class="mobile-modern-container">
@@ -126,44 +126,24 @@
                     <button class="quick-btn band-btn" id="band-btn">20m</button>
                     <button class="quick-btn filter-btn" id="filter-btn">MID</button>
                     <button class="quick-btn agc-btn" id="agc-btn" title="点按切换 AGC">AGC</button>
+                    <button class="quick-btn att-btn" id="att-btn" title="点按切换 ATT/Preamp">ATT</button>
                 </div>
             </section>
 
-            <!-- DSP Controls - 显式WDSP控制面板 (高品质手机端测试用) -->
+            <!-- DSP Controls - 紧凑单行 -->
             <section class="dsp-controls-section" id="dsp-controls">
                 <div class="dsp-header">
-                    <span class="dsp-title">DSP</span>
                     <label class="dsp-switch">
                         <input type="checkbox" id="dsp-main-toggle">
                         <span class="dsp-slider"></span>
+                        <span class="dsp-switch-label">DSP</span>
                     </label>
-                </div>
-                <div class="dsp-buttons-row" id="dsp-buttons">
-                    <button class="dsp-btn" id="dsp-nr2-btn">
-                        <span class="dsp-btn-icon nr2-icon"></span>
-                        <span class="dsp-btn-label">NR2</span>
-                        <span class="dsp-btn-status" id="dsp-nr2-status">L</span>
-                    </button>
-                    <button class="dsp-btn" id="dsp-nb-btn">
-                        <span class="dsp-btn-icon nb-icon">&#x26A1;</span>
-                        <span class="dsp-btn-label">NB</span>
-                        <span class="dsp-btn-status" id="dsp-nb-status">OFF</span>
-                    </button>
-                    <button class="dsp-btn" id="dsp-anf-btn">
-                        <span class="dsp-btn-icon anf-icon">&#x25C9;</span>
-                        <span class="dsp-btn-label">ANF</span>
-                        <span class="dsp-btn-status" id="dsp-anf-status">OFF</span>
-                    </button>
-                    <button class="dsp-btn" id="dsp-nf-btn">
-                        <span class="dsp-btn-icon nf-icon">&#x23F8;</span>
-                        <span class="dsp-btn-label">NF</span>
-                        <span class="dsp-btn-status" id="dsp-nf-status">OFF</span>
-                    </button>
-                    <button class="dsp-btn" id="dsp-agc-btn">
-                        <span class="dsp-btn-icon agc-icon">&#x25F0;</span>
-                        <span class="dsp-btn-label">AGC</span>
-                        <span class="dsp-btn-status" id="dsp-agc-status">MED</span>
-                    </button>
+                    <div class="dsp-buttons-row" id="dsp-buttons">
+                        <button class="dsp-btn" id="dsp-nr2-btn"><span class="dsp-btn-label">NR2</span><span class="dsp-btn-status" id="dsp-nr2-status">L</span></button>
+                        <button class="dsp-btn" id="dsp-nb-btn"><span class="dsp-btn-label">NB</span><span class="dsp-btn-status" id="dsp-nb-status">OFF</span></button>
+                        <button class="dsp-btn" id="dsp-anf-btn"><span class="dsp-btn-label">ANF</span><span class="dsp-btn-status" id="dsp-anf-status">OFF</span></button>
+                        <button class="dsp-btn" id="dsp-agc-btn"><span class="dsp-btn-label">AGC</span><span class="dsp-btn-status" id="dsp-agc-status">MED</span></button>
+                    </div>
                 </div>
             </section>
 
@@ -176,15 +156,9 @@
                 </div>
             </section>
 
-            <!-- TX Drive (软件发射功率) - 精简版 -->
-            <section class="volume-control-compact">
-                <div class="volume-row-compact">
-                    <span class="volume-icon-small">&#x1F4E1;</span>
-                    <input type="range" id="main-tx-drive" class="volume-slider-compact" min="0" max="100" value="50" oninput="setTXDrive(this.value)">
-                    <span class="volume-value-small" id="main-tx-drive-value">50%</span>
-                </div>
-            </section>
-            
+            <!-- TX Drive: default max, hidden slider for band power interaction -->
+            <input type="range" id="main-tx-drive" style="display:none;" min="0" max="100" value="100">
+
             <!-- Frequency tuning - 单行布局（左右调谐） -->
             <section class="frequency-tuning-grid">
                 <div class="tuning-row single-row">
@@ -249,6 +223,7 @@
                 <li><a href="#" class="menu-item" data-action="txeq">TX Equalizer</a></li>
                 <li><a href="#" class="menu-item" data-action="bandpower">Band Power</a></li>
                 <li><a href="#" class="menu-item" data-action="samplerate">Sample Rate</a></li>
+                <li><a href="#" class="menu-item" data-action="audiocodec">Audio Codec</a></li>
                 <li><a href="recordings.html" class="menu-item">Recordings</a></li>
                 <li><a href="#" class="menu-item" data-action="about">About</a></li>
                 <li><a href="#" class="menu-item" id="fullscreen-btn" data-action="fullscreen">Fullscreen</a></li>
@@ -269,12 +244,12 @@
     <script src="/ui_utils.js"></script>
     <script src="/modules/opus_wasm.js"></script>
     <script src="/modules/settings_manager.js"></script>
-    <script src="/controls.js?v=5.4.1"></script>
+    <script src="/controls.js?v=5.5.1"></script>
     <script src="/modules/opus_codec.js"></script>
     <script src="/modules/tx_audio_eq.js"></script>
     <script src="/modules/ptt_manager.js"></script>
     <script src="/modules/tune_cq.js"></script>
-    <script src="/mobile.js?v=5.6.0"></script>
+    <script src="/mobile.js?v=5.7.0"></script>
     <script src="/tx_button.js"></script>
 </body>
 </html>

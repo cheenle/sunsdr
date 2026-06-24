@@ -122,6 +122,7 @@ var mobileState = {
     currentMode: 'USB',
     currentVFO: 'VFO-A',
     currentSampleRate: '78k',  // 频谱/IQ 采样率档位 (39k/78k/156k/312k)
+    opusEnabled: true,         // RX 音频编码：true=Opus 压缩，false=Int16 PCM
     isTransmitting: false,
     tuneStep: 1,  // 默认步进 1kHz
     tuneStepIndex: 1,  // 当前步进索引 (1kHz在数组中的位置)
@@ -207,6 +208,7 @@ function updateModeButtonLabel(mode) {
 function refreshCycleButtonLabels() {
     updateBandButtonLabel(getCurrentMobileBand());
     updateModeButtonLabel(mobileState.currentMode);
+    updateATTButton();
 }
 
 // ---- 频道记忆核心 (V5.6.5 完全服务导向) ----
@@ -672,6 +674,8 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         updateFrequencyDisplay();
         refreshCycleButtonLabels();
+        // TX Drive default to max 100%
+        setTimeout(() => setTXDrive(100), 1500);
         updateMemButtons();
         // 从服务端加载频道记忆（HTTP API，不依赖 WebSocket）
         loadMemoryFromServer();
@@ -809,24 +813,12 @@ function loadAudioSettingsFromCookies() {
         }
     }
     
-    // 加载MIC增益
-    var micSlider = document.getElementById('mobile-mic-gain');
-    var micValue = document.getElementById('mobile-mic-value');
-    if (micSlider) {
-        var micCookie = '50'; // 默认值
-        try {
-            if (typeof loadUserAudioSetting === 'function') {
-                micCookie = loadUserAudioSetting('mobile_mic_gain', '150');
-            } else if (typeof getCookie === 'function') {
-                var c = getCookie('mobile_mic_gain');
-                if (c) micCookie = c;
-            }
-        } catch (e) {
-            console.warn('加载MIC增益设置失败:', e);
-        }
-        micSlider.value = parseInt(micCookie);
-        if (micValue) micValue.textContent = micCookie + '%';
+    // MIC gain fixed at maximum
+    if (typeof AudioTX_SetGAIN === 'function') {
+        AudioTX_SetGAIN(2.0);  // 200% max
     }
+    var cAfEl2 = document.getElementById('C_af');
+    if (cAfEl2) cAfEl2.value = 1000;
     
     // 移动端 TX EQ 预设自动设置
     // 如果用户未设置过 TX EQ 预设，自动使用"手机优化"预设
@@ -2107,6 +2099,9 @@ function handleQuickButton(button) {
     } else if (button.id === 'agc-btn') {
         // AGC 模式循环切换
         cycleAGC();
+    } else if (button.id === 'att-btn') {
+        // ATT/Preamp 循环切换
+        cycleATT();
     } else if (button.id === 'step-btn') {
         // 步进切换
         cycleStep();
@@ -2242,6 +2237,9 @@ function handleMenuItem(action) {
             break;
         case 'samplerate':
             showSampleRateSelector();
+            break;
+        case 'audiocodec':
+            showAudioCodecSelector();
             break;
         case 'audio':
             showAudioPanel();
@@ -2404,6 +2402,32 @@ function selectSampleRate(rate) {
     closeModalPanel();
 }
 
+// 音频编解码（带宽）选择器 — Opus 压缩 vs Int16 PCM
+// Opus 把 RX 音频从 ~256 kbps 压到 ~18-24 kbps（>10倍），明显省流量；
+// Int16 PCM 无压缩、零延迟、零编解码失真，带宽充足时可用。
+function showAudioCodecSelector() {
+    const current = mobileState.opusEnabled !== false ? 'opus' : 'pcm';
+    let html = '<div class="modal-panel"><h3>音频编码 / 带宽</h3><div class="mode-grid">';
+    const opts = [
+        { key: 'opus', label: 'Opus 压缩', desc: '约 18-24 kbps，省流量' },
+        { key: 'pcm',  label: 'Int16 PCM', desc: '约 256 kbps，无压缩' },
+    ];
+    opts.forEach(o => {
+        const active = current === o.key ? 'active' : '';
+        html += `<button class="mode-select-btn ${active}" onclick="selectOpus('${o.key}')">${o.label}<br><small style="font-size:11px;opacity:0.7;">${o.desc}</small></button>`;
+    });
+    html += '</div><button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';
+    showModalPanel(html);
+}
+
+function selectOpus(key) {
+    const on = (key === 'opus');
+    mobileState.opusEnabled = on;
+    sendWebSocketMessage("setOpus:" + (on ? 'on' : 'off'));
+    console.log('选择音频编码:', on ? 'Opus' : 'Int16 PCM');
+    closeModalPanel();
+}
+
 // ---- 记忆管理面板 ----
 function showMemoryPanel() {
     const channels = readMemoryChannels();
@@ -2540,34 +2564,12 @@ function showSettingsPanel() {
     // 静噪值（0-100）
     var sqlValue = squelchEl ? parseInt(squelchEl.value) : 0;
     
-    // MIC增益（从Cookie获取，默认50%）
-    var micValue = 50;
-    try {
-        var micCookie = '';
-        if (typeof loadUserAudioSetting === 'function') {
-            micCookie = loadUserAudioSetting('mobile_mic_gain', '');
-        } else if (typeof getCookie === 'function') {
-            micCookie = getCookie('mobile_mic_gain');
-        }
-        if (micCookie) {
-            micValue = parseInt(micCookie);
-        }
-    } catch (e) {
-        console.warn('加载MIC增益失败:', e);
-    }
-    
     let html = '<div class="modal-panel"><h3>Audio Settings</h3>';
 
     // AF Gain
     html += '<div class="setting-item">';
     html += '<label>AF Gain: <span id="af-value-display">' + afPercent + '%</span></label>';
     html += '<input type="range" id="mobile-af-gain" min="0" max="100" value="' + afPercent + '" oninput="setAFGain(this.value)">';
-    html += '</div>';
-
-    // MIC Gain
-    html += '<div class="setting-item">';
-    html += '<label>MIC Gain: <span id="mic-value-display">' + micValue + '%</span></label>';
-    html += '<input type="range" id="mobile-mic-gain" min="0" max="200" value="' + micValue + '" oninput="setMicGain(this.value)">';
     html += '</div>';
 
     // Squelch
@@ -4239,6 +4241,30 @@ function updateAGCButton() {
     var cur = (typeof wdspState !== 'undefined' && typeof wdspState.agcMode === 'number') ? wdspState.agcMode : 3;
     btn.textContent = 'AGC:' + (names[cur] || 'MED');
     btn.title = 'AGC 模式：' + (names[cur] || 'MED') + ' · 点按循环切换';
+}
+
+// ATT/Preamp 循环：-20dB → -10dB → 0dB → +10dB
+var ATT_LEVELS = [
+    {label: '-20dB', trail: 0},
+    {label: '-10dB', trail: 1},
+    {label: '0dB',   trail: 2},
+    {label: '+10dB', trail: 3}
+];
+var attLevel = 2;  // default: 0dB
+
+function cycleATT() {
+    attLevel = (attLevel + 1) % ATT_LEVELS.length;
+    var lvl = ATT_LEVELS[attLevel];
+    sendCommand('setATT', lvl.trail.toString());
+    updateATTButton();
+}
+
+function updateATTButton() {
+    var btn = document.getElementById('att-btn');
+    if (!btn) return;
+    var lvl = ATT_LEVELS[attLevel];
+    btn.textContent = 'ATT:' + lvl.label;
+    btn.title = 'ATT/Preamp: ' + lvl.label + ' · 点按循环切换';
 }
 
 // 获取 WDSP 状态（从后端）

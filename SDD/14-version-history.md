@@ -9,6 +9,22 @@
 | SDD V3.0 | 2026-06-21 | OpenCode | Re-baselined entire SDD to current `sunmrrc` codebase: FastAPI/Uvicorn, SunSDR2 DX direct UDP, mobile RX/control, HTTPS/WSS, explicit gaps |
 | SDD V3.1 | 2026-06-21 | OpenCode | Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate `/WSspectrum` route |
 | SDD V3.2 | 2026-06-23 | Claude | TX voice modulation and TX power control documented as implemented: device DRIVE (`0x0017`) per-band power, `/api/band_power` + Band Power UI, `/api/mem_channels` graduated to implemented, AD-010 added, CW/FT8 dead links removed |
+| SDD V3.3 | 2026-06-24 | Claude | Tagged dual-codec audio transport (RX Opus/PCM + TX Opus uplink); corrected `0x1F00` telemetry field offsets (SWR = off16 u16/100, not off26 f32); AD-004 expanded to cover TX path; AD-011 added for SWR field correction; ATT/sample-rate controls documented; TXPLAN phased roadmap marked complete |
+
+## Key Changes in SDD V3.3
+
+| Chapter | Change |
+|---------|--------|
+| 1 | Updated capability boundaries: device DOES send 0x1F00 during TX; SWR from off16 u16/100 |
+| 8 | AD-004 expanded to dual-codec RX+TX; AD-010 telemetry note corrected; AD-011 added (SWR field) |
+| 9 | WS table updated for tagged codec; signal processing adds Opus encode step; known gaps updated |
+| 11 | Added RxOpusEncoder/TxOpusDecoder components; updated ControlsJS and audio WS descriptions |
+| 14 | Added this V3.3 changelog |
+| STATUS.md | Complete rewrite — TX implemented, telemetry corrected, codec documented |
+| README.md | Features table updated; AD-004 description corrected; WS endpoints updated |
+| CLAUDE.md | TX telemetry section rewritten with verified 0x1F00 offsets |
+| PROTOCOL.md | 0x1F00 field docs corrected: off16 u16/100 = SWR |
+| TXPLAN.md | Marked as completed — all phases implemented |
 
 ## Key Changes in SDD V3.2
 

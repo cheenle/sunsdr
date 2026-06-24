@@ -77,7 +77,7 @@ python3 device/scripts/analyze_tx.py device/captures/sunsdr_sdr_tx.pcap
 | 连续重采样 + jitter buffer | `dsp.py` `feed_audio`/`get_mic_iq` | overlap-save SSB，先攒 12 包再放，消欠载咔哒 |
 | LSB/USB 边带 | `dsp.py` `set_mode`/`feed_audio`/`set_tune_wav` | TX 调制器现按 mode 选边带（conj=LSB）|
 | 前端改发 PCM | `static/index.html` `#encode` 去掉 checked | 前端原默认 Opus，后端只认 Int16 PCM；改为 PCM 直发 |
-| 设备遥测解码 | `server.py` 0x1F00 分支 | power@off14 / temp@off18 / swr@off26 → 前端 ATR 显示 |
+| 设备遥测解码 | `server.py` 0x1F00 分支 | power@off14 / temp@off18 / swr@off16 (u16/100) → 前端 ATR 显示 |
 
 > ⚠️ `TX_IQ_PEAK=0.4` 与遥测功率标定（`TELEM_PWR_BASELINE/SCALE`）均为试验值，
 > 需在真机上对照已知输出功率/SWR 校准。

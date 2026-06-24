@@ -24,7 +24,7 @@ The current codebase is intentionally narrower than the older MRRC documentation
 |---------|--------|-------------|
 | Static mobile PWA-style UI | Implemented | Mobile layout with safe-area support, manifest, service worker, bottom PTT area |
 | Control WebSocket | Implemented | `/WSCTRX` handles `PING`, frequency, mode, PTT, tune, gain, filter, WDSP commands |
-| RX audio WebSocket | Implemented | `/WSaudioRX` broadcasts 16 kHz Int16 PCM frames to browser clients |
+| RX audio WebSocket | Implemented | `/WSaudioRX` broadcasts tagged dual-codec frames (0x00=PCM, 0x01=Opus 16 kHz mono); default Opus |
 | TX voice modulation | Implemented | `/WSaudioTX` mic frames → Hilbert SSB → 24-bit IQ → `0xFFFD` TX stream; on-air verified (Tune ~12 W, voice 30–40 W PEP) |
 | TX power / drive control | Implemented | Device DRIVE command (`0x0017`) with per-band power; confirmed on-air |
 | Per-band power UI | Implemented | Menu → Band Power panel + `/api/band_power` (persisted to `band_power.json`) |
@@ -40,8 +40,8 @@ The current codebase is intentionally narrower than the older MRRC documentation
 
 | Capability | Boundary |
 |------------|----------|
-| TX power telemetry | Device stops sending `0x1F00` while keyed; forward power/SWR read from the ATR-1000 tuner, not in-stream telemetry |
-| ATR-1000 | Frontend hooks and status placeholders exist, but no `/WSATR1000` server endpoint is implemented here |
+| TX power telemetry | Device sends `0x1F00` in all modes (verified: 273 TX-state packets in captures). off16 u16/100 = SWR, off14 u16 = pwr_raw (cubic fit → watts), off18 f32 = temp °C |
+| ATR-1000 | Frontend hooks and status placeholders exist; `/WSATR1000` endpoint accepts connections but does not interface with real tuner hardware |
 | Recordings | `recordings.html` page exists; CW/FT8 menu links were removed (target pages absent) |
 | Authentication | Cookie/callsign helpers exist; no server-side auth boundary is implemented in `server.py` |
 

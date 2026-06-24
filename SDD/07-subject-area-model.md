@@ -37,7 +37,7 @@ OperationalConfig
 | IQPacket | sub_type, counter, payload, sample_count | UDP stream packet parsed by `_process_iq_stream()` |
 | IQSample | i, q, normalized_value | 24-bit signed I/Q sample converted to complex64 |
 | DemodulatorState | mode, ptt, volume, filter, agc_gain | Software demodulation state inside `AudioDemodulator` |
-| RXAudioFrame | pcm_bytes, sample_rate, frame_length | Int16 PCM frame broadcast to `/WSaudioRX` clients |
+| RXAudioFrame | pcm_bytes, sample_rate, frame_length | tagged dual-codec frame (Opus/PCM) broadcast to `/WSaudioRX` clients |
 | SpectrumFrame | bins, quantized_bytes, percentile | FFT-derived waterfall and S-meter source; server quantizes 512 dB bins to uint8 (0 = -120 dB, 255 = 0 dB) |
 | WaterfallRenderState | accum_buffer, accum_count, decimate, noise_pctl, headroom, gain, bias | Browser-side waterfall rendering state in `controls.js`: accumulates ~10 frames (38 Hz -> ~3.8 Hz), computes a per-row adaptive noise floor (30th percentile), then stretches contrast with bias/gain over a blue->cyan->yellow->red colour ramp |
 | SMeterState | smoothed_value, attack_alpha, release_alpha | Browser-side S-meter smoothing in `updateSMeter`: asymmetric exponential filter (attack alpha 0.5, release alpha 0.15) for a stable needle |

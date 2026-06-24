@@ -118,7 +118,7 @@ Maximum tested payload: 68 bytes (HW_INIT).
 
 | ID | Name | Payload size | Trailing | Direction | Purpose |
 |----|------|-------------|----------|-----------|---------|
-| `0x0001` | HW_INIT | 68 bytes | `0xC025` | PC→Dev | Hardware init with calibration blob |
+| `0x0001` | **HW_INIT** | 50 bytes | `0xC025` | PC→Dev | **Hardware init + IQ sample rate selector.** Sets device calibration profile AND IQ sample rate via word[11]. See §4.3 for payload decode. |
 | `0x0002` | START_OPS | 4 (`uint32 0`) | 0 | PC→Dev | **Must be first.** Power-on TRX. |
 | `0x0005` | SET_PARAM_5 | 4 (`uint32`) | 0 | PC→Dev | Mode / attenuator / preamp config. Value `2` at boot. |
 | `0x0006` | PTT | 4 (`uint32 0`) | **1=TX, 0=RX** | PC→Dev | Push-to-talk. Trail word controls state. |
@@ -187,15 +187,52 @@ The boot sequence is a fixed-order **30-packet** initialization sent with 30ms g
 0x005A  32ff5a000000000000000100000000000000
 ```
 
-### 4.3 Phase 3: Hardware init (1 packet)
+### 4.3 Phase 3: Hardware init + IQ sample rate (1 packet)
+
+**`0x0001` HW_INIT** serves dual purpose: hardware calibration blob AND IQ sample rate selector.
+
+The payload is 50 bytes (not 68 as previously thought — the extra bytes were trailing garbage in early captures).
 
 ```
 0x0001  32ff01003200000000000100000000000000
-        32000000320000003200000032000000     ← payload (68 bytes)
+        32000000320000003200000032000000     ← payload (50 bytes = 12.5 words)
         32000000320000003200000000000000
         010001000100000000000000
         c0250000                             ← trailing = 0xC025
 ```
+
+**Payload decoded (12 × uint32 LE words):**
+
+| Word | Value | Interpretation |
+|------|-------|---------------|
+| [0] | 0 | Index/Channel |
+| [1] | 50 (0x32) | Calibration param 1 |
+| [2] | 50 | Calibration param 2 |
+| [3] | 50 | Calibration param 3 |
+| [4] | 50 | Calibration param 4 |
+| [5] | 50 | Calibration param 5 |
+| [6] | 50 | Calibration param 6 |
+| [7] | 50 | Calibration param 7 |
+| [8] | 50 | Calibration param 8 |
+| [9] | 0 | Reserved |
+| **[10]** | **rate×65536+1** | **IQ rate high word** (1, 65537, 131073, 196609) |
+| **[11]** | **rate_index** | **★ IQ SAMPLE RATE ★** `0`=39k, `1`=78k, `2`=156k, `3`=312k |
+
+**Trailing:** `0xC025` (little-endian).
+
+**IQ sample rate mapping (verified 2025-06-24 via capture + direct device test):**
+
+| word[11] | Rate key | IQ sample rate | IQ pkts/s | Spectrum width |
+|----------|----------|---------------|-----------|---------------|
+| 0 | `39k` | 39,062.5 Hz | ~195 | ±19.5 kHz |
+| 1 | `78k` | 78,125 Hz | ~390 | ±39 kHz |
+| 2 | `156k` | 156,250 Hz | ~781 | ±78 kHz |
+| 3 | `312k` | 312,500 Hz | ~1562 | ±156 kHz |
+
+**Critical:** This command must be sent BEFORE the frequency commands (0x0009/0x0008).
+The device applies the rate on the next 0x0020 STREAM_CTRL and requires a full
+boot sequence to change rates — changing word[11] alone without a reboot has
+no effect.
 
 ### 4.4 Phase 4: Frequencies (3 packets, dynamically built)
 
@@ -242,24 +279,27 @@ RX_FREQ: 32ff08000800000000000100000000000000000000008dcb430000000000
 
 **Key**: `STREAM_CTRL` (0x0020, line 5 of Phase 5) is the command that starts the IQ data flow from the device to the PC on port 50002.
 
-### 4.6 STREAM_CTRL payload decoded (60 bytes)
+**Note**: The IQ sample rate is NOT controlled by 0x0020. Rate changes to 0x0020
+word[8]/[9]/[10]/[12] have no effect on the device's IQ output rate (verified
+2025-06-24 via brute-force testing of all candidate fields). The IQ sample rate
+is set by `0x0001` word[11] earlier in the boot sequence (see §4.3).
+
+### 4.6 STREAM_CTRL payload decoded (52 bytes)
 
 ```
 Byte offset | Size | LE value      | Decoded    | Interpretation
 0-3         | u32  | 0x00000000    | 0          | RX channel
 4-7         | u32  | 0x00000001    | 1          | TX channel
-8-11        | u32  | 0x00000000    | 0          |
+8-11        | u32  | 0x00000001    | 1          | Stream enable?
 12-15       | u32  | 0x00000000    | 0          |
-16-19       | u32  | 0x00000064    | 100        | Last octet of PC IP (192.168.16.100)?
+16-19       | u32  | 0x00000064    | 100        | Last octet of PC IP (192.168.16.100)
 20-23       | u32  | 0x00000000    | 0          |
 24-27       | u32  | 0x00000000    | 0          |
-28-31       | u32  | 0x00000000    | 0          |
-32-35       | u32  | 0x0000001e    | 30         | Timeout / config flag?
-36-39       | u32  | 0x000002bc    | 700        | Buffer / rate param?
-40-43       | u32  | 0x00000007    | 7          | Flags?
-44-47       | u32  | 0x00000064    | 100        |
-48-51       | u32  | 0x0000012c    | 300        | Buffer size?
-52-55       | u32  | 0x00000064    | 100        |
+28-31       | u32  | 0x0000001e    | 30         | Config flag
+32-35       | u32  | 0x000002bc    | 700        | Config param (fixed — not rate)
+36-39       | u32  | 0x00000007    | 7          | Config param (fixed — not rate)
+40-43       | u32  | 0x00000064    | 100        | Destination port-related?
+44-47       | u32  | 0x0000012c    | 300        | Buffer/block size (fixed — not rate)
 ```
 
 Trailing word for STREAM_CTRL is `0x64` (100).
@@ -370,7 +410,8 @@ for i in range(n):
 - **Output type**: `numpy.complex64`
 - **Samples per packet**: ≤ 200 (exact count depends on packet size)
 - **Packet rate**: `78,125 / 200 = 390.625` packets/sec
-- **True IQ sample rate**: **78,125 Hz** (5⁷)
+- **IQ sample rates**: 39,062.5 / 78,125 / 156,250 / 312,500 Hz (selected by `0x0001` word[11], see §4.3)
+- **Default IQ sample rate**: **78,125 Hz** (5⁷)
 
 ### 6.3 Stream keep-alive (PC → Device on port 50002)
 
@@ -645,7 +686,7 @@ All WDSP state is mirrored in the demodulator for front-end queries:
 | Endpoint | Type | Direction | Payload | Rate |
 |----------|------|-----------|---------|------|
 | `/WSCTRX` | Text | Bidirectional | `cmd:val` or `cmd` (PING/PONG) | On demand |
-| `/WSaudioRX` | Binary | Server → Client | Int16 PCM, 16 kHz | ~32 KB/s |
+| `/WSaudioRX` | Binary | Server → Client | 1-byte codec tag + payload (`0x00`=Int16 PCM 16 kHz, `0x01`=Opus 16 kHz mono). Default Opus, switch via `setOpus:` | ~2–3 KB/s (Opus) / ~32 KB/s (PCM) |
 | `/WSaudioTX` | Binary | Client → Server | Not consumed (placeholder) | — |
 | `/WSspectrum` | Binary | Server → Client | 512 uint8, 0=-120dB, 255=0dB | ~19 KB/s @ 38 Hz |
 | `/WSATR1000` | Text (JSON) | Bidirectional | `{"action":"sync"}` etc. | 2 Hz (heartbeat) |
@@ -680,6 +721,9 @@ Format: `command:value` (colon-separated). Special commands without colon: `PING
 | `setPreamp` | `setPreamp:true` | `radio.set_preamp()` |
 | `setAGC` | `setAGC:AUTO` | `radio.set_agc_mode()` |
 | `setFilter` | `setFilter:200,2800` | `demodulator.reconfigure_filter()` + `radio.set_filter()` |
+| `setSampleRate` | `setSampleRate:78k` | `radio.set_sample_rate()` → re-boots device with `0x0001` word[11] set to the rate index. Keys: `39k`/`78k`/`156k`/`312k`. Requires full boot sequence — not a mid-stream change. See §4.3 for word[11] mapping. |
+| `setOpus` | `setOpus:on` | RX codec toggle. `on`/`true` → Opus (~24 kbps); else Int16 PCM (~256 kbps). Server replies `setOpus:on`/`off`/`unavailable`. |
+| `getOpus` | `getOpus` | Query current RX codec → `setOpus:on`/`off`/`unavailable`. |
 
 #### WDSP commands (all DSP-side, broadcast to all clients)
 | Command | Example | Method called |
@@ -869,9 +913,13 @@ if (newLevel >= currentLevel) {
 ### 13.2 Audio playback (controls.js)
 
 ```
-WSaudioRX binary message → Int16Array
+WSaudioRX binary message
   ↓
-Convert to Float32 (÷32768)
+read 1-byte codec tag (byte 0): 0x00=PCM, 0x01=Opus
+  ↓                              ↓
+Int16Array (PCM)          OpusDecoder.decode_float (libopus WASM)
+  ↓                              ↓
+Convert to Float32 (÷32768)   Float32 directly
   ↓
 AudioWorklet (rx_worklet_processor.js)
   or ScriptProcessorNode fallback
@@ -879,7 +927,11 @@ AudioWorklet (rx_worklet_processor.js)
 AudioContext.destination → speakers/headphones
 ```
 
-Format: 16 kHz mono Int16 PCM. The server handles all resampling from 15,625 Hz native rate.
+Format: 16 kHz mono, tagged dual-codec (AD-004). Each frame carries a 1-byte
+codec tag — `0x00` raw Int16 PCM (~256 kbit/s) or `0x01` Opus (~18–24 kbit/s,
+default). The client inspects the tag per frame and decodes accordingly, so the
+codec can switch mid-stream with no handshake (`setOpus:` toggle in the Audio
+Codec menu). The server handles all resampling from the 15,625 Hz native rate.
 
 ### 13.3 PTT safety flow (AD-007)
 
@@ -948,7 +1000,8 @@ Server backup:
 │                                                                   │
 │  ┌─ WEBSOCKET BROADCAST ───────────────────────────────────────┐ │
 │  │ → /WSspectrum: 512-byte uint8 rows (38 Hz, ~19 KB/s/client) │ │
-│  │ → /WSaudioRX: Int16 PCM frames (30.5 Hz, ~40 KB/s/client)   │ │
+│  │ → /WSaudioRX: tagged frames — Opus ~2-3 KB/s (default) or   │ │
+│  │   Int16 PCM ~32 KB/s; 1-byte codec tag per frame (AD-004)   │ │
 │  │ → /WSCTRX: getSignalLevel:N (text, ~38 Hz)                  │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 │                                                                   │
@@ -1175,13 +1228,20 @@ the reference):
 
 | Sub-type | Size | Content |
 |----------|------|---------|
-| `0x1F00` | 34 B | `off14` u16 raw level, `off18` f32 temp °C, `off26` f32 SWR |
+| `0x1F00` | 34 B | `off14` u16 raw level, `off16` u16 SWR×100, `off18` f32 temp °C |
 | `0x1F01` | 22 B | Mostly zeros — TX status flags |
 
-`server.py` decodes `0x1F00` into `getTXTelem:watts,swr,temp,raw` for the UI (temp and SWR
-are reliable; the watts field is a rough linear approximation pending wattmeter calibration).
+`server.py` decodes `0x1F00` into `getTXTelem:watts,swr,temp,raw` for the UI:
+- **off14 u16** = pwr_raw (forward power envelope, idle baseline ~9, TX range 47-77)
+- **off16 u16** = SWR × 100 (132=1.32 in TUNE, 134-137=1.34-1.37 TX/RX). Device reports SWR in all modes.
+- **off18 f32** = temperature °C (reliable, ≈45-49°C)
+- **off22 f32** = TUNE measurement, 0.0 during normal TX
+- **off26 f32** = constant 1.0000 (device placeholder, never changes)
+- **off30 f32** = mirrors off22 during TUNE
 
-> **On-air finding (2026-06-23):** the device **stops sending `0x1F00` entirely while keyed** —
+The device **does** send `0x1F00` while keyed (verified 2026-06-24: 273 TX packets in
+`sunsdr_sdr_tx.pcap` with pwr_raw 47-48). SWR field at off16 varies across captures
+(1.32-1.37), confirming it reflects real antenna match conditions.
 > verified across multiple PTT windows, zero `0x1F00` frames arrive between PTT-ON and PTT-OFF.
 > The `0x1F00` values the server logs are therefore the **idle/RX baseline only**, NOT forward
 > power. A `W=0.0` line during TX is a *measurement blind spot*, not zero output. Real forward
@@ -1199,7 +1259,7 @@ are reliable; the watts field is a rough linear approximation pending wattmeter 
 | TX sample rate | implied 78,125 Hz | **39,063 Hz** | ✅ modulate at 39 kHz |
 | Pre-TX silence | none | ~17 zero packets | ✅ settling pad after PTT |
 | Stream byte 4-7 | n/a | packet counter (resets per PTT) | ✅ documented |
-| TX power telemetry | assumed 0x1F00 | **device stops 0x1F00 while keyed** | ⚠️ read from ATR-1000 |
+| TX power telemetry | 0x1F00 verified | device sends 0x1F00 in all modes (273 TX packets) | ✅ off16 u16/100 = SWR, off14 pwr_raw |
 
 ### 17.8 TX chain — as implemented
 
@@ -1321,16 +1381,18 @@ Per-band drive % is **user-editable and persisted**, not hardcoded:
 Captured per-band calibration reference values (TCI, from ExpertSDR3): 3.5 MHz→0xC8 (62%),
 7 MHz→0xFF (100%), 14 MHz→0xDC (74%), 21 MHz→0xC5 (60%), 28 MHz→0xDA (73%).
 
-### 18.5 TX power telemetry blind spot
+### 18.5 TX power telemetry (0x1F00)
 
-**The device stops sending `0x1F00` telemetry while keyed** (verified: zero TX-tagged
-0x1F00 frames across all captures and live logs). Consequently:
+The device **does** send `0x1F00` while keyed (verified 2026-06-24: 273 TX-state packets
+in `sunsdr_sdr_tx.pcap` with pwr_raw 47-48). The earlier finding of zero TX frames was
+incorrect — likely due to the old capture only containing RX-idle data.
 
-- `W=` in `server.log` reflects only the idle/RX baseline — `W=0.0` during TX is a
-  **measurement blind spot, not zero output**. Do not use it to judge TX power.
-- Forward power must be read from the **ATR-1000 tuner** or an external wattmeter.
-- `0x1F01` (22 B) is logged TX-only at 1 Hz as a candidate location for an in-stream
-  forward-power field, but no usable power figure has been decoded from it yet.
+- **off14 u16** = pwr_raw (forward power envelope, idle baseline ~9). Power formula:
+  `watts = (pwr_raw - 9)³ × 1.91e-5` (cubic fit; approximate, calibrate against wattmeter).
+- **off16 u16** = SWR × 100 (132-137 range → 1.32-1.37 SWR). Verified across 323+ packets.
+- **off18 f32** = temperature °C (~45-49°C, reliable).
+- **off26 f32** = constant 1.0000 (device placeholder, never changes — NOT real SWR).
+- `0x1F01` (22 B) is a TX-status flag (trailing bit 16 toggles during TX).
 
 ### 18.6 Software IQ level (decoupled from power)
 

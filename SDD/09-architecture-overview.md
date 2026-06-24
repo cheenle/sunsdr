@@ -46,8 +46,8 @@ SunSDR2 DX
 | Endpoint | Client File | Server Handler | Payload |
 |----------|-------------|----------------|---------|
 | `/WSCTRX` | `controls.js`, `mobile.js`, modules | `ws_ctrl()` | Text commands and text responses |
-| `/WSaudioRX` | `controls.js` | `ws_audio_rx()` | Binary Int16 PCM server -> client |
-| `/WSaudioTX` | `controls.js`, `tx_button.js`, `tx_capture_worklet.js` | `ws_audio_tx()` | Binary Int16 PCM mic frames → `TXModulator` → SunSDR TX IQ |
+| `/WSaudioRX` | `controls.js` | `ws_audio_rx()` | Binary tagged dual-codec (0x00=PCM / 0x01=Opus) server → client |
+| `/WSaudioTX` | `controls.js`, `tx_button.js`, `tx_capture_worklet.js` | `ws_audio_tx()` | Binary tagged mic frames (Opus/PCM) → decode → `TXModulator` → SunSDR TX IQ |
 | `/WSspectrum` | `controls.js` | `ws_spectrum()` | Binary uint8 spectrum rows |
 
 ## 9.4 Control Command Architecture
@@ -59,6 +59,9 @@ SunSDR2 DX
 | Radio | `setFreq`, `setPTT`, `tune`, `setAFGain`, `setRFGain`, `setPreamp`, `setAGC`, `setFilter`, `setDrive` | `SunSDR2DXClient` and demodulator |
 | DSP | `setMode`, `setWDSPEnabled`, `setWDSPNR2Level`, `setWDSPNR2`, `setWDSPNB`, `setWDSPANF`, `setWDSPNFEnabled`, `setWDSPAGC`, notch commands | `AudioDemodulator` |
 | Safety/Misc | `s`, `cq` | Force RX, unblock CQ state machine |
+| Codec | `setOpus`, `getOpus` | Toggle RX audio codec between Opus and Int16 PCM |
+| ATT | `setATT` | Hardware attenuator: 0=-20dB, 1=-10dB, 2=0dB, 3=+10dB |
+| Sample Rate | `setSampleRate` | IQ bandwidth selector: 39k/78k/156k/312k via 0x0001 HW_INIT |
 
 ## 9.5 Signal Processing Architecture
 
@@ -73,10 +76,13 @@ UDP IQ packet
   |    -> _broadcast_spectrum() uint8 quantize -> WSspectrum (when spectrum_clients present)
   -> AudioDemodulator -> PCM audio buffer
   -> server resample to 16 kHz
+  -> Opus encode (or PCM passthrough) with 1-byte codec tag
   -> WSaudioRX broadcast
 ```
 
 The browser renders each waterfall row by accumulating ~10 frames (38 Hz -> ~3.8 Hz), subtracting a per-row adaptive noise floor (30th percentile), then biasing the noise to a blue baseline and stretching signal contrast before mapping through a black/blue/cyan/yellow/red colour ramp. The S-meter applies asymmetric exponential smoothing client-side (attack alpha 0.5 / release alpha 0.15) so the needle rises fast and falls slowly.
+
+RX audio is tagged dual-codec: each `/WSaudioRX` binary frame carries a 1-byte prefix (0x00=Int16 PCM, 0x01=Opus 16 kHz mono). The client inspects the tag and decodes accordingly — Opus via WASM `OpusDecoder`, PCM via `decodeInt16Audio()`. Default is Opus (~18-24 kbps); switchable via `setOpus:` / Audio Codec menu. Falls back to PCM if `libopus` is unavailable on the server.
 
 ## 9.6 Frontend Architecture
 
@@ -115,6 +121,6 @@ server.py
 | Gap | Impact |
 |-----|--------|
 | Fixed local IQ bind/send IPs in `server.py` | Deployment tied to current LAN topology |
-| `/WSATR1000` absent | ATR UI status remains placeholder/failing connection; TX forward power must be read from the tuner directly |
-| CW/FT8/recording pages absent | Menu links removed from the navigation; pages not present in this snapshot |
-| TX forward-power telemetry unavailable while keyed | Device stops `0x1F00` during TX; no in-stream wattage readout |
+| `/WSATR1000` stub | ATR UI status remains placeholder; accepts connections but doesn't interface with real tuner hardware |
+| CW/FT8 pages absent | Menu links removed from the navigation; pages not present in this snapshot |
+| TX power formula uncalibrated | Cubic fit `(pwr_raw-9)³ × 1.91e-5` approximate; needs calibration against known wattmeter |

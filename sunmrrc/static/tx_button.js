@@ -153,11 +153,21 @@ async function TXControl(action) {
                             }
                             if (encode && ap && ap.opusEncoder) {
                                 const packets = ap.opusEncoder.encode_float(warmup);
-                                for (let k = 0; k < packets.length; k++) { 
-                                    wsAudioTX.send(packets[k]); 
+                                for (let k = 0; k < packets.length; k++) {
+                                    // Prepend Opus tag byte (0x01) — server expects
+                                    // tagged frames on /WSaudioTX, same as RX path.
+                                    const tagged = new Uint8Array(1 + packets[k].byteLength);
+                                    tagged[0] = 0x01; // AUDIO_TAG_OPUS
+                                    tagged.set(new Uint8Array(packets[k]), 1);
+                                    wsAudioTX.send(tagged);
                                 }
                             } else if (ap && ap.i16arr) {
-                                wsAudioTX.send(new Int16Array(warmup.length));
+                                // Prepend PCM tag byte (0x00)
+                                const i16 = new Int16Array(warmup.length);
+                                const tagged = new Uint8Array(1 + i16.byteLength);
+                                tagged[0] = 0x00; // AUDIO_TAG_PCM
+                                tagged.set(new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength), 1);
+                                wsAudioTX.send(tagged);
                             }
                         }
                     } catch(e) { 

@@ -1,21 +1,21 @@
 # TX 发射链路完善计划
 
-## 当前状态 (2026-06-21)
+> **状态: ✅ 全部完成 (2026-06-24)**
+> 
+> 所有 Phase 0-4 已实施并通过端到端验证。此文档保留为历史参考。
 
-### ✅ 已完成
-- TUNE 功能：PTT 激活 + 1kHz WAV 循环发射，功率表有 5W 输出
-- DSP 调制器升级：`scipy.signal.hilbert` 替代导数近似，支持 USB/LSB/AM/FM/CW
-- `set_tune()` 实现：从 `pass` 改为调用 `set_ptt()`
-- TX IQ 包发送：从 `b'\x00'*1200` 改为调用 `dsp_proc.get_tx_iq()`
-- 独立线程 TX 包时序：`time.sleep()` 比 `asyncio.sleep()` 精度高
+## 最终状态
 
-### 🔶 部分完成（有残留噗噗声）
-- WAV 调制链路：零填充 Hilbert + cross-fade 循环，信号本体干净（std=0.003），但仍有周期性噗噗声
-- **推测根因**：硬件 TX 缓冲对包时序敏感，线程 2.56ms 间隔仍有微秒级抖动
-
-### ❌ 未完成
-- 实时麦克风 TX：`/WSaudioTX` handler 收到数据但未接入调制器
-- Phase 0 协议修复：心跳包长度、源端口、HW_INIT 尾部
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| TUNE 功能 | ✅ | PTT 激活 + WAV 循环发射，Tune ~12W |
+| DSP 调制器 | ✅ | Hilbert SSB，USB/LSB/AM/FM/CW |
+| 实时麦克风 TX | ✅ | Opus/PCM tagged uplink → `feed_audio()` → SSB IQ |
+| 协议修复 | ✅ | 心跳尾部 8B、复用 radio._sock |
+| TX 功率控制 | ✅ | DRIVE 0x0017 trailing word，per-band 面板 |
+| TX 遥测 | ✅ | 0x1F00 off16 u16/100 = SWR |
+| 前端 TX | ✅ | AudioWorklet + Opus 编码 + 标签字节 |
+| 噗噗声消除 | ✅ | Jitter buffer + TX ramp + 自适应 pacer |
 
 ## 关键经验
 

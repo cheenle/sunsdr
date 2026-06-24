@@ -45,3 +45,14 @@ wdsp/
 .idea/
 *.swp
 *.swo
+
+# Large device captures (> 1 MB) — keep locally, not in repo
+device/captures/*_both.pcap
+device/captures/*_full.pcap
+device/captures/*_tx.pcap
+device/captures/tune_only.pcap
+device/captures/*_direct.pcap
+
+# Device captures and analysis artifacts (large binary files, not source)
+device/captures/
+device/scripts/
