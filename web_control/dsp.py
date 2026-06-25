@@ -61,6 +61,15 @@ TX_AUDIO_PER_PKT = round(TX_PACKET_SAMPLES * AUDIO_RATE / TX_IQ_SAMPLE_RATE)  # 
 # TX_DRIVE_GAIN drives peaks into the tanh knee near 1.0 and lifts RMS to ~0.33,
 # matching the genuine client. Device drive remains the RF power control.
 TX_IQ_PEAK = 1.0
+# Tune carrier amplitude scale (fraction of TX_IQ_PEAK). Tune is a CONTINUOUS
+# constant-envelope tone (RMS ≈ peak), so its average power equals its PEP —
+# far more thermal load on the PA than voice (which is ~3:1 crest factor, low
+# average). At full scale Tune hits ~80 W continuous, which stresses the PA.
+# Scale the tune wav down so Tune lands at a safe ~10 W for antenna tuning,
+# WITHOUT touching voice power (voice uses TX_DRIVE_GAIN, a separate path).
+# Power vs scale is ∝ amplitude² (verified empirically: scale 0.15 → 1.7 W,
+# matching 80 W × 0.15² = 1.8 W). So target ~10 W → scale = √(10/80) ≈ 0.35.
+TX_TUNE_SCALE = 0.35
 # Leading zero-IQ packets after PTT assert, covering PA/relay settling
 # (~17 zero packets observed before audio energy in the reference burst).
 TX_SETTLE_PACKETS = 17
@@ -612,10 +621,12 @@ class TXModulator:
         fade = np.linspace(0, 1, fade_len, dtype=np.float64)
         iq[:fade_len] = iq[:fade_len] * (1 - fade) + iq[-fade_len:] * fade
 
-        # Normalize to the verified TX peak (~0.09), not the old 0.3.
+        # Normalize to TX_IQ_PEAK, then scale by TX_TUNE_SCALE so the Tune
+        # carrier transmits at a safe ~10 W (continuous constant-envelope tone
+        # is far more PA thermal load than voice — see TX_TUNE_SCALE comment).
         peak = np.max(np.abs(iq))
         if peak > 1e-6:
-            iq = (iq / peak) * TX_IQ_PEAK
+            iq = (iq / peak) * TX_IQ_PEAK * TX_TUNE_SCALE
         self._tune_iq = iq.astype(np.complex64)
         self._tune_pos = 0
         self._tune_wav = np.asarray(data, dtype=np.float32)
