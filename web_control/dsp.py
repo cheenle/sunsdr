@@ -1004,6 +1004,23 @@ class TXModulator:
         x64, self._tx_aa_zi = sosfilt(self._tx_aa_sos, x64, zi=self._tx_aa_zi)
         x = x64.astype(np.float32)
 
+        # ── 0.5. Mic auto-level: iOS Safari ScriptProcessor PCM arrives at
+        #    RMS ~0.005 (24× quieter than Opus-encoded AudioWorklet output).
+        #    Apply a very slow-tracking gain that lifts quiet input without
+        #    over-amplifying.  Gain is capped conservatively (8×) because the
+        #    downstream drive_gain (3×) provides additional make-up.
+        mic_rms = float(np.sqrt(np.mean(x**2) + 1e-12))
+        if not hasattr(self, '_tx_mic_gain'):
+            self._tx_mic_gain = 1.0
+        if mic_rms > 1e-5:
+            alpha = 0.002  # ~500 frames → ~10 s convergence
+            target = 0.06
+            ideal = target / mic_rms
+            self._tx_mic_gain = (self._tx_mic_gain * (1 - alpha)
+                                 + min(ideal, 12.0) * alpha)
+            self._tx_mic_gain = max(1.0, min(self._tx_mic_gain, 8.0))
+        x = x * self._tx_mic_gain
+
         # ── 1. Continuous fractional resampler input_rate → audio_rate ──
         self._in_buf = np.concatenate([self._in_buf, x])
         step = input_rate / self.audio_rate          # input samples per output

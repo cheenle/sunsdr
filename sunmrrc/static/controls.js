@@ -1791,7 +1791,7 @@ OpusEncoderProcessor.prototype.onAudioProcess = function( e )
 	newAccumulator.set(downsampledBuffer, this.frameAccumulator.length);
 	this.frameAccumulator = newAccumulator;
 	
-	if( encode )
+	var useOpus = !!(document.getElementById("encode") && document.getElementById("encode").checked); if(useOpus)
 	{
 		// 处理累积缓冲区中的完整帧
 		while (this.frameAccumulator.length >= opusFrameSize)
@@ -1952,7 +1952,7 @@ OpusEncoderProcessor.prototype.onWorkletFrame = function( int16Frame )
     }
     if (!window.__txBytes) { window.__txBytes = 0; }
 
-    if( encode )
+    var useOpus = !!(document.getElementById("encode") && document.getElementById("encode").checked); if(useOpus)
     {
         this.sendOpusWorkerFrame(int16Frame);
     }
