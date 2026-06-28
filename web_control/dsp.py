@@ -8,7 +8,7 @@ RX DDS = VFO + 30500 Hz IF offset
 Audio output: 15625 Hz (5× decimation)
 """
 
-import math, logging, struct, threading, time
+import math, logging, os, struct, threading, time
 import numpy as np
 from collections import deque
 from dataclasses import dataclass
@@ -1018,6 +1018,27 @@ class TXModulator:
         x64 = x.astype(np.float64)
         x64, self._tx_aa_zi = sosfilt(self._tx_aa_sos, x64, zi=self._tx_aa_zi)
         x = x64.astype(np.float32)
+
+        # ── Diagnostic: save DC-blocked + anti-alias filtered audio ──
+        if not hasattr(self, '_tx_diag_buf'):
+            self._tx_diag_buf = bytearray()
+        int16 = np.clip(x * 32767, -32768, 32767).astype(np.int16)
+        self._tx_diag_buf.extend(int16.tobytes())
+        # flush to disk every ~2s
+        if len(self._tx_diag_buf) >= 64000:
+            import wave as _wv, time as _tm
+            cap = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                               "sunmrrc", "captures")
+            os.makedirs(cap, exist_ok=True)
+            ts = _tm.strftime("%Y%m%d_%H%M%S")
+            p = cap / f"tx_post_dcblock_{ts}.wav"
+            with _wv.open(str(p), "wb") as wf:
+                wf.setnchannels(1); wf.setsampwidth(2)
+                wf.setframerate(int(input_rate))
+                wf.writeframes(bytes(self._tx_diag_buf))
+            logger.info("TX post-DC-block capture: %s (%d samples)",
+                        p.name, len(self._tx_diag_buf)//2)
+            self._tx_diag_buf = bytearray()
 
         # ── 1. Continuous fractional resampler input_rate → audio_rate ──
         self._in_buf = np.concatenate([self._in_buf, x])
