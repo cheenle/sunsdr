@@ -1631,10 +1631,12 @@ async def ws_audio_tx(ws: WebSocket):
         _capture_tx_pcm(pcm, tag, wire_bytes, _pace_now, _pace_interval_ms)
         if dsp_proc and dsp_proc.modulator and getattr(radio, '_ptt_active', False):
             try:
-                await loop.run_in_executor(
+                n_pkts = await loop.run_in_executor(
                     None, dsp_proc.modulator.feed_audio, pcm, tx_rate)
-            except Exception:
-                pass
+                if n_pkts == 0 and len(pcm) > 0:
+                    logger.debug("TX feed_audio: %d bytes → 0 packets", len(pcm))
+            except Exception as e:
+                logger.warning("TX feed_audio error: %s", e)
             # ── End-to-end TX chain level probe (1 Hz) ──
             try:
                 _now_lvl = time.monotonic()

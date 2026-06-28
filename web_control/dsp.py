@@ -12,7 +12,7 @@ import math, logging, struct, threading, time
 import numpy as np
 from collections import deque
 from dataclasses import dataclass
-from scipy.signal import hilbert
+from scipy.signal import hilbert, butter, sosfilt
 
 logger = logging.getLogger(__name__)
 
@@ -995,7 +995,6 @@ class TXModulator:
         #    content from folding back into the voice band.  (The browser-
         #    side COMFORT EQ preset also cuts highs, so this is a safety net.)
         if not hasattr(self, '_tx_aa_sos'):
-            from scipy.signal import butter, sosfilt
             self._tx_aa_sos = butter(4, 3600, btype='low', fs=input_rate,
                                      output='sos')
             # sosfilt requires zi dtype to match signal dtype (float64)
