@@ -349,6 +349,7 @@ class AudioDemodulator:
 
     def _init_wdsp(self):
         self._wdsp = None
+        self._wdsp_iq = None
         self._wdsp_warm = 0
         self._wdsp_accum = np.array([], dtype=np.float32)
         self._wdsp_bs = 256  # must match buffer_size (no zero-padding!)
@@ -375,19 +376,33 @@ class AudioDemodulator:
             import wdsp_wrapper
             wdsp_wrapper._wdsp = ctypes.CDLL(_lib)
             wdsp_wrapper.WDSP_AVAILABLE = True
-            from wdsp_wrapper import WDSPProcessor, WDSPMode, WDSPAGCMode
-            # WDSP is ALWAYS constructed at the voice rate (AUDIO_RATE = 15625).
-            # It only ever processes voice modes (SSB/AM/CW); WFM bypasses it.
-            # The native lib SEGFAULTs at 39 kHz, so we must NOT pass audio_rate
-            # here (which is 39062.5 in WFM). Voice modes run at exactly 15625,
-            # so this matches the audio it actually sees.
+            from wdsp_wrapper import (WDSPProcessor, WDSPIQProcessor,
+                                       WDSPMode, WDSPAGCMode)
+            # ── Audio-rate WDSP (channel 0) — fallback path ────────
             self._wdsp = WDSPProcessor(
                 sample_rate=int(AUDIO_RATE), buffer_size=self._wdsp_bs,
                 mode=WDSPMode.USB, enable_nr2=True, enable_nb=False,
                 enable_anf=False, agc_mode=WDSPAGCMode.SLOW)
-            # Apply the default NR2 level (50) — was silently ignored before.
             self._wdsp.set_nr2_level(self._nr2_level)
-            logger.info("WDSP ready (AGC SLOW + NR2 level=%d)", self._nr2_level)
+
+            # ── I/Q-rate WDSP (channel 1) — primary path ───────────
+            # Runs at the full IQ sample rate.  NR2/ANF/SNB process
+            # complex I/Q BEFORE demodulation — the "IF-SDR" path.
+            bs_iq = 1024 if self.sample_rate >= 78125 else 512
+            wdsp_mode = {"USB": WDSPMode.USB, "LSB": WDSPMode.LSB,
+                         "CW": WDSPMode.CW, "AM": WDSPMode.AM}.get(
+                             self.mode, WDSPMode.USB)
+            self._wdsp_iq = WDSPIQProcessor(
+                iq_sample_rate=int(self.sample_rate),
+                buffer_size=bs_iq,
+                mode=wdsp_mode,
+                enable_nr2=True, enable_nb=False, enable_anf=True,
+                agc_mode=WDSPAGCMode.SLOW)
+            self._wdsp_iq.set_nr2_level(self._nr2_level)
+
+            logger.info("WDSP ready (AGC SLOW + NR2 level=%d, "
+                        "IQ path @ %d Hz bs=%d channel=1)",
+                        self._nr2_level, int(self.sample_rate), bs_iq)
         except Exception as e:
             logger.debug(f"WDSP unavailable: {e}")
 
@@ -432,6 +447,13 @@ class AudioDemodulator:
                      "CW": WDSPMode.CW, "AM": WDSPMode.AM}.get(self.mode, WDSPMode.USB)
                 self._wdsp.set_mode(m)
             except: pass
+        if self._wdsp_iq:
+            try:
+                from wdsp_wrapper import WDSPMode
+                m = {"USB": WDSPMode.USB, "LSB": WDSPMode.LSB,
+                     "CW": WDSPMode.CW, "AM": WDSPMode.AM}.get(self.mode, WDSPMode.USB)
+                self._wdsp_iq.set_mode(m)
+            except: pass
 
     def set_volume(self, vol: float):
         self._volume = max(0.0, min(1.0, vol))
@@ -469,7 +491,7 @@ class AudioDemodulator:
             "nf": self._nf_enabled,
             "agcMode": self._agc_mode,
             "notches": notches,
-            "available": self._wdsp is not None,
+            "available": self._wdsp_iq is not None or self._wdsp is not None,
         }
 
     def set_wdsp_enabled(self, on: bool):
@@ -479,11 +501,15 @@ class AudioDemodulator:
         self._nr2_level = max(0, min(100, level))
         if self._wdsp:
             self._wdsp.set_nr2_level(self._nr2_level)
+        if self._wdsp_iq:
+            self._wdsp_iq.set_nr2_level(self._nr2_level)
 
     def set_nr2_enabled(self, on: bool):
         self._nr2_enabled = on
         if self._wdsp:
             self._wdsp.set_nr2_enabled(on)
+        if self._wdsp_iq:
+            self._wdsp_iq.set_nr2_enabled(on)
 
     def set_nb_enabled(self, on: bool):
         self._nb_enabled = on
@@ -505,6 +531,8 @@ class AudioDemodulator:
         self._agc_mode = max(0, min(4, mode))
         if self._wdsp:
             self._wdsp.set_agc(self._agc_mode)
+        if self._wdsp_iq:
+            self._wdsp_iq.set_agc_mode(self._agc_mode)
 
     def add_notch(self, freq_hz: float, width_hz: float):
         idx = len(self._notches)
@@ -569,6 +597,24 @@ class AudioDemodulator:
         # Sideband selection + detection
         from scipy.signal import lfilter
         mode = self.mode
+
+        # ── WDSP I/Q-level path (primary) ──────────────────────────
+        # For SSB/AM/CW, feed the IF-shifted complex baseband through
+        # WDSP's NR2→ANF→SNB→demod→AGC chain at the full IQ rate.
+        # This gives NR2/ANF access to complete complex-domain phase
+        # and 78+ kHz spectral context — 5× the audio-rate path.
+        is_fm = mode in ("NFM", "FM", "WFM")
+        if not is_fm and self._wdsp_enabled and self._wdsp_iq is not None:
+            try:
+                wdsp_audio = self._wdsp_iq.process_iq(bb)
+                if wdsp_audio is not None and len(wdsp_audio) > 0:
+                    # WDSP output is already demodulated + AGC'd audio.
+                    # Apply the user volume trim and return directly.
+                    audio = wdsp_audio.astype(np.float64) * self._volume
+                    self.audio_buffer.extend(audio.tolist())
+                    return audio.astype(np.float32)
+            except Exception:
+                pass  # fall through to Python demodulator on any error
         if mode == "AM":
             audio = np.abs(bb).astype(np.float64)
             audio, self._st_lpf = lfilter(self._lpf, [1.0], audio, zi=self._st_lpf)

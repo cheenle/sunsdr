@@ -604,3 +604,189 @@ class WDSPProcessor:
             _wdsp.SetChannelState(ctypes.c_int(self.channel),
                                   ctypes.c_int(0), ctypes.c_int(0))
             _wdsp.CloseChannel(ctypes.c_int(self.channel))
+
+
+# ── I/Q-Level Processor ────────────────────────────────────────────
+
+class WDSPIQProcessor:
+    """WDSP processor operating on raw I/Q BEFORE demodulation.
+
+    Uses a dedicated WDSP channel (channel=1) at the full IQ sample rate
+    (e.g. 78125 Hz).  fexchange0 receives interleaved I/Q (real/imaginary
+    in left/right channels), letting NR2/ANF/SNB algorithms exploit the
+    complete complex-domain phase and wide spectral context before the
+    signal is degraded by demodulation noise-aliasing.
+
+    This is the "IF-SDR" architecture — noise reduction at the
+    intermediate-frequency level, exactly where WDSP was designed to run.
+    """
+
+    def __init__(self, iq_sample_rate: int = 78125, buffer_size: int = 1024,
+                 mode: int = WDSPMode.USB, enable_nr2: bool = True,
+                 enable_nb: bool = False, enable_anf: bool = True,
+                 agc_mode: int = WDSPAGCMode.SLOW):
+        if not WDSP_AVAILABLE:
+            raise RuntimeError("WDSP library not available")
+
+        self.iq_rate = iq_sample_rate
+        self.buffer_size = buffer_size
+        self.channel = 1          # dedicated IQ channel (0 = audio-rate)
+        self._nr2 = enable_nr2
+        self._nr2_level = 30
+        self._mode = mode
+
+        # Pre-allocated work buffers sized for IQ blocks.
+        # fexchange0 expects interleaved pairs: [I0, Q0, I1, Q1, ...]
+        # at the IQ sample rate.  Output is the WDSP-demodulated audio.
+        self._in = np.zeros(buffer_size * 2, dtype=np.float64)
+        self._out = np.zeros(buffer_size * 2, dtype=np.float64)
+        # Streaming buffers: variable-length IQ input → block drain
+        self._iq_buffer = np.array([], dtype=np.float64)
+        self._audio_buffer = np.array([], dtype=np.float64)
+
+        assert self._in.flags["C_CONTIGUOUS"] and self._in.dtype == np.float64
+        assert self._out.flags["C_CONTIGUOUS"] and self._out.dtype == np.float64
+
+        self._init_iq(mode, agc_mode, enable_nb, enable_anf)
+
+    def _init_iq(self, mode, agc, nb, anf):
+        """Open a WDSP channel at the IQ sample rate.
+
+        The OpenChannel sample_rate parameters tell WDSP the input rate.
+        WDSP internally handles the IF shift / demodulation based on the
+        mode and its built-in frequency offset settings.
+        """
+        _wdsp.OpenChannel(
+            ctypes.c_int(self.channel),
+            ctypes.c_int(self.buffer_size),
+            ctypes.c_int(self.buffer_size),
+            ctypes.c_int(self.iq_rate),
+            ctypes.c_int(self.iq_rate),
+            ctypes.c_int(self.iq_rate),
+            ctypes.c_int(0), ctypes.c_int(1),
+            ctypes.c_double(0), ctypes.c_double(0),
+            ctypes.c_double(0), ctypes.c_double(0),
+            ctypes.c_int(0))
+        _wdsp.SetRXAMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
+        # Panel gain for IQ input: keep conservative (0.5) — the IQ amplitude
+        # from the device is consistent and doesn't need heavy pre-gain.
+        _wdsp.SetRXAPanelGain1(ctypes.c_int(self.channel),
+                               ctypes.c_double(0.5))
+        _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(agc))
+
+        if self._nr2:
+            _wdsp.SetRXAEMNRRun(ctypes.c_int(self.channel), ctypes.c_int(1))
+            if _check_symbol("SetRXAEMNRgainMethod"):
+                _wdsp.SetRXAEMNRgainMethod(ctypes.c_int(self.channel),
+                                           ctypes.c_int(0))
+            if _check_symbol("SetRXAEMNRnpeMethod"):
+                _wdsp.SetRXAEMNRnpeMethod(ctypes.c_int(self.channel),
+                                          ctypes.c_int(0))
+            if _check_symbol("SetRXAEMNRaeRun"):
+                _wdsp.SetRXAEMNRaeRun(ctypes.c_int(self.channel),
+                                      ctypes.c_int(1))
+            if _check_symbol("SetRXAEMNRPosition"):
+                _wdsp.SetRXAEMNRPosition(ctypes.c_int(self.channel),
+                                         ctypes.c_int(0))
+            self._apply_iq_nr2(self._nr2_level)
+
+        if anf:
+            _wdsp.SetRXAANFRun(ctypes.c_int(self.channel), ctypes.c_int(1))
+        if nb:
+            if _check_symbol("SetRXASNBARun"):
+                _wdsp.SetRXASNBARun(ctypes.c_int(self.channel), ctypes.c_int(1))
+
+    # ── NR2 (delegated to the same zeta/psi AE control) ─────
+
+    def _apply_iq_nr2(self, level: int):
+        clamped = max(0, min(100, level))
+        t = clamped / 100.0
+        zeta = 0.50 - (t ** 0.6) * 0.42
+        psi  = 0.01 + (t ** 0.8) * 0.07
+        if _check_symbol("SetRXAEMNRaeZetaThresh"):
+            _wdsp.SetRXAEMNRaeZetaThresh(
+                ctypes.c_int(self.channel), ctypes.c_double(zeta))
+        if _check_symbol("SetRXAEMNRaePsi"):
+            _wdsp.SetRXAEMNRaePsi(
+                ctypes.c_int(self.channel), ctypes.c_double(psi))
+
+    # ── Core I/Q processing ──────────────────────────────────
+
+    def process_iq(self, iq: np.ndarray) -> np.ndarray | None:
+        """Process raw I/Q through WDSP → return demodulated float32 audio.
+
+        iq: complex64 or complex128, variable length.
+        Returns: float32 audio array with len(output) ≈ len(iq) / decim_factor,
+                 or None if not enough data has accumulated.
+        """
+        n_in = len(iq)
+        if n_in == 0:
+            return np.array([], dtype=np.float32)
+
+        # Convert complex IQ to interleaved float64: [I0, Q0, I1, Q1, ...]
+        iq64 = iq.astype(np.complex128)
+        interleaved = np.empty(n_in * 2, dtype=np.float64)
+        interleaved[0::2] = iq64.real
+        interleaved[1::2] = iq64.imag
+
+        # Accumulate into the IQ buffer
+        self._iq_buffer = np.concatenate([self._iq_buffer, interleaved])
+        bs2 = self.buffer_size * 2  # 2 floats per sample (I+Q)
+
+        while len(self._iq_buffer) >= bs2:
+            chunk = self._iq_buffer[:bs2]
+            self._iq_buffer = self._iq_buffer[bs2:]
+
+            # chunk is already interleaved I/Q — copy directly
+            self._in[:] = chunk
+
+            err = ctypes.c_int(0)
+            _wdsp.fexchange0(
+                ctypes.c_int(self.channel),
+                self._in.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                self._out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                ctypes.byref(err))
+
+            if err.value not in (0, -2):
+                # err < 0: warmup transient, output still usable
+                if err.value < 0:
+                    logger.debug("WDSP IQ fexchange0 warmup err=%d", err.value)
+                else:
+                    logger.warning("WDSP IQ fexchange0 error=%d", err.value)
+                    continue
+
+            # WDSP output is demodulated audio in left channel
+            audio_block = self._out[0::2].copy()
+            self._audio_buffer = np.concatenate([self._audio_buffer, audio_block])
+
+        # Return what we have — caller consumes time-aligned audio
+        if len(self._audio_buffer) > 0:
+            result = self._audio_buffer.astype(np.float32, copy=False)
+            self._audio_buffer = np.array([], dtype=np.float64)
+            return result
+
+        return None
+
+    # ── Control methods ──────────────────────────────────────
+
+    def set_mode(self, mode: int):
+        self._mode = mode
+        _wdsp.SetRXAMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
+
+    def set_nr2_level(self, level: int):
+        self._nr2_level = max(0, min(100, level))
+        self._apply_iq_nr2(self._nr2_level)
+
+    def set_nr2_enabled(self, on: bool):
+        self._nr2 = on
+        _wdsp.SetRXAEMNRRun(ctypes.c_int(self.channel),
+                            ctypes.c_int(1 if on else 0))
+
+    def set_agc_mode(self, mode: int):
+        _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
+
+    def close(self):
+        if WDSP_AVAILABLE:
+            _wdsp.SetChannelState(ctypes.c_int(self.channel),
+                                  ctypes.c_int(0), ctypes.c_int(0))
+            _wdsp.CloseChannel(ctypes.c_int(self.channel))
