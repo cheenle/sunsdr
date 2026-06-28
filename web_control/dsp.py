@@ -123,7 +123,7 @@ TX_HILBERT_MARGIN = 256
 # ceiling is fixed at TX_IQ_PEAK and does NOT scale with drive, so drive moves
 # the level under a constant clip point instead of moving the clip point too
 # (the old bug that guaranteed ~7× overdrive at every drive setting).
-TX_DRIVE_GAIN = 2.0           # fixed make-up gain. RF power is set at the
+TX_DRIVE_GAIN = 2.3           # fixed make-up gain — sweet spot: peaks ~0.87,
 # DEVICE (0x0017 drive); this only lifts the mic audio into a healthy digital
 # level. LOWERED 5.0→3.0 (2026-06-24): the browser now does the peak-average
 # reduction (tx_audio_eq.js compressor ratio 6:1 + makeup gain), so the IQ
