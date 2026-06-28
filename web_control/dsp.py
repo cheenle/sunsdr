@@ -1019,26 +1019,11 @@ class TXModulator:
         x64, self._tx_aa_zi = sosfilt(self._tx_aa_sos, x64, zi=self._tx_aa_zi)
         x = x64.astype(np.float32)
 
-        # ── Diagnostic: save DC-blocked + anti-alias filtered audio ──
+        # ── Diagnostic: accumulate DC-blocked audio, flush on PTT release ──
         if not hasattr(self, '_tx_diag_buf'):
             self._tx_diag_buf = bytearray()
         int16 = np.clip(x * 32767, -32768, 32767).astype(np.int16)
         self._tx_diag_buf.extend(int16.tobytes())
-        # flush to disk every ~2s
-        if len(self._tx_diag_buf) >= 64000:
-            import wave as _wv, time as _tm
-            cap = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                               "sunmrrc", "captures")
-            os.makedirs(cap, exist_ok=True)
-            ts = _tm.strftime("%Y%m%d_%H%M%S")
-            p = cap / f"tx_post_dcblock_{ts}.wav"
-            with _wv.open(str(p), "wb") as wf:
-                wf.setnchannels(1); wf.setsampwidth(2)
-                wf.setframerate(int(input_rate))
-                wf.writeframes(bytes(self._tx_diag_buf))
-            logger.info("TX post-DC-block capture: %s (%d samples)",
-                        p.name, len(self._tx_diag_buf)//2)
-            self._tx_diag_buf = bytearray()
 
         # ── 1. Continuous fractional resampler input_rate → audio_rate ──
         self._in_buf = np.concatenate([self._in_buf, x])
@@ -1167,6 +1152,25 @@ class TXModulator:
 
     def reset_mic(self):
         """Clear all mic state (call on PTT assert)."""
+        # Flush DC-blocked diagnostic capture before clearing
+        if hasattr(self, '_tx_diag_buf') and len(self._tx_diag_buf) > 0:
+            try:
+                import wave as _wv, time as _tm
+                cap = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                   "sunmrrc", "captures")
+                os.makedirs(cap, exist_ok=True)
+                ts = _tm.strftime("%Y%m%d_%H%M%S")
+                p = os.path.join(cap, f"tx_post_dcblock_{ts}.wav")
+                with _wv.open(p, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(16000)
+                    wf.writeframes(bytes(self._tx_diag_buf))
+                logger.info("TX post-DC-block: %s (%d samples)",
+                            os.path.basename(p), len(self._tx_diag_buf)//2)
+            except Exception as e:
+                logger.warning("TX post-DC-block save failed: %s", e)
+        self._tx_diag_buf = bytearray()
         self._audio_buf = np.array([], dtype=np.float32)
         self._in_buf = np.array([], dtype=np.float32)
         self._rs_phase = 0.0
