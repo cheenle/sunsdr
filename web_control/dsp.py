@@ -989,6 +989,19 @@ class TXModulator:
         if len(x) == 0:
             return 0
 
+        # ── 0. Anti-alias LPF: 16 kHz mic carries up to 8 kHz energy,
+        #    but after resampling to 15625 Hz the Nyquist is only 7.8 kHz.
+        #    A gentle 4th-order Butterworth at 3.6 kHz prevents 7.8+ kHz
+        #    content from folding back into the voice band.  (The browser-
+        #    side COMFORT EQ preset also cuts highs, so this is a safety net.)
+        if not hasattr(self, '_tx_aa_sos'):
+            from scipy.signal import butter, sosfilt
+            self._tx_aa_sos = butter(4, 3600, btype='low', fs=input_rate,
+                                     output='sos')
+            self._tx_aa_zi = np.zeros((self._tx_aa_sos.shape[0], 2),
+                                      dtype=np.float32)
+        x, self._tx_aa_zi = sosfilt(self._tx_aa_sos, x, zi=self._tx_aa_zi)
+
         # ── 1. Continuous fractional resampler input_rate → audio_rate ──
         self._in_buf = np.concatenate([self._in_buf, x])
         step = input_rate / self.audio_rate          # input samples per output

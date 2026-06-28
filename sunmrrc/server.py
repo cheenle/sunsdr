@@ -229,7 +229,7 @@ RECORDINGS_DIR = STATIC_DIR / "recordings"
 TX_UPLINK_CAPTURE_DIR = Path(__file__).parent / "captures"
 TX_WS_JITTER_PRIME_FRAMES = 6       # 120 ms of 20 ms mic frames before drain
 TX_WS_JITTER_REPRIME_FRAMES = 3     # 60 ms after a browser/worker stall
-TX_WS_JITTER_MAX_FRAMES = 80        # bound latency if a mobile browser bursts
+TX_WS_JITTER_MAX_FRAMES = 20        # 400 ms — drop > flush for real-time QSO
 
 
 def _write_wav(path: Path, pcm: bytes, rate: int):
