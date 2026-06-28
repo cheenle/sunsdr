@@ -671,10 +671,11 @@ class WDSPIQProcessor:
             ctypes.c_double(0), ctypes.c_double(0),
             ctypes.c_int(0))
         _wdsp.SetRXAMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
-        # Panel gain for IQ input: keep conservative (0.5) — the IQ amplitude
-        # from the device is consistent and doesn't need heavy pre-gain.
+        # Panel gain for IQ input: 2.0 gives WDSP's AGC enough signal to
+        # work with.  Raw IQ has smaller amplitude than demodulated audio,
+        # so the value is 4× the audio-rate channel (0.5 → 2.0).
         _wdsp.SetRXAPanelGain1(ctypes.c_int(self.channel),
-                               ctypes.c_double(0.5))
+                               ctypes.c_double(2.0))
         _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(agc))
 
         if self._nr2:

@@ -609,7 +609,10 @@ class AudioDemodulator:
             try:
                 wdsp_audio = self._wdsp_iq.process_iq(bb)
                 if len(wdsp_audio) > 0:
-                    audio = wdsp_audio.astype(np.float64) * self._volume
+                    # WDSP's AGC targets a moderate level; apply volume
+                    # + 2× post-gain to match the built-in AGC loudness.
+                    audio = wdsp_audio.astype(np.float64) * self._volume * 2.0
+                    np.clip(audio, -1.0, 1.0, out=audio)
                     self.audio_buffer.extend(audio.tolist())
                     return audio.astype(np.float32)
             except Exception:
