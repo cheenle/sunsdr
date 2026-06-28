@@ -601,15 +601,14 @@ class AudioDemodulator:
         # ── WDSP I/Q-level path (primary) ──────────────────────────
         # For SSB/AM/CW, feed the IF-shifted complex baseband through
         # WDSP's NR2→ANF→SNB→demod→AGC chain at the full IQ rate.
-        # This gives NR2/ANF access to complete complex-domain phase
-        # and 78+ kHz spectral context — 5× the audio-rate path.
+        # process_iq() auto-calibrates the output ratio on the first
+        # completed fexchange0 block and returns time-aligned audio
+        # proportional to the IQ input length — no bursting / clicking.
         is_fm = mode in ("NFM", "FM", "WFM")
         if not is_fm and self._wdsp_enabled and self._wdsp_iq is not None:
             try:
                 wdsp_audio = self._wdsp_iq.process_iq(bb)
-                if wdsp_audio is not None and len(wdsp_audio) > 0:
-                    # WDSP output is already demodulated + AGC'd audio.
-                    # Apply the user volume trim and return directly.
+                if len(wdsp_audio) > 0:
                     audio = wdsp_audio.astype(np.float64) * self._volume
                     self.audio_buffer.extend(audio.tolist())
                     return audio.astype(np.float32)

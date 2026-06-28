@@ -643,6 +643,8 @@ class WDSPIQProcessor:
         # Streaming buffers: variable-length IQ input → block drain
         self._iq_buffer = np.array([], dtype=np.float64)
         self._audio_buffer = np.array([], dtype=np.float64)
+        self._ratio: float | None = None  # calibrated on first fexchange0 block
+        self._decim = max(1, self.iq_rate // 15625)  # IQ→audio rate decimation
 
         assert self._in.flags["C_CONTIGUOUS"] and self._in.dtype == np.float64
         assert self._out.flags["C_CONTIGUOUS"] and self._out.dtype == np.float64
@@ -652,17 +654,18 @@ class WDSPIQProcessor:
     def _init_iq(self, mode, agc, nb, anf):
         """Open a WDSP channel at the IQ sample rate.
 
-        The OpenChannel sample_rate parameters tell WDSP the input rate.
-        WDSP internally handles the IF shift / demodulation based on the
-        mode and its built-in frequency offset settings.
+        WDSP receives I/Q at the full IQ rate and outputs audio at the
+        same rate (1:1).  Python decimates afterward — this avoids the
+        uncertainty of WDSP internal decimation behaviour across builds.
         """
+        self._out_rate = self.iq_rate  # WDSP outputs at IQ rate
         _wdsp.OpenChannel(
             ctypes.c_int(self.channel),
-            ctypes.c_int(self.buffer_size),
-            ctypes.c_int(self.buffer_size),
-            ctypes.c_int(self.iq_rate),
-            ctypes.c_int(self.iq_rate),
-            ctypes.c_int(self.iq_rate),
+            ctypes.c_int(self.buffer_size),   # input buffer size
+            ctypes.c_int(self.buffer_size),   # output buffer size (same)
+            ctypes.c_int(self.iq_rate),       # input sample rate
+            ctypes.c_int(self.iq_rate),       # output sample rate
+            ctypes.c_int(self.iq_rate),       # DSP rate
             ctypes.c_int(0), ctypes.c_int(1),
             ctypes.c_double(0), ctypes.c_double(0),
             ctypes.c_double(0), ctypes.c_double(0),
@@ -712,12 +715,12 @@ class WDSPIQProcessor:
 
     # ── Core I/Q processing ──────────────────────────────────
 
-    def process_iq(self, iq: np.ndarray) -> np.ndarray | None:
-        """Process raw I/Q through WDSP → return demodulated float32 audio.
+    def process_iq(self, iq: np.ndarray) -> np.ndarray:
+        """Process raw I/Q through WDSP → return time-aligned float32 audio.
 
-        iq: complex64 or complex128, variable length.
-        Returns: float32 audio array with len(output) ≈ len(iq) / decim_factor,
-                 or None if not enough data has accumulated.
+        iq: complex64 or complex128, variable length (typically ~200).
+        Returns: float32 audio, len ≈ len(iq) * (audio_rate / iq_rate).
+                 Never returns None — returns zeros if no data yet.
         """
         n_in = len(iq)
         if n_in == 0:
@@ -731,13 +734,12 @@ class WDSPIQProcessor:
 
         # Accumulate into the IQ buffer
         self._iq_buffer = np.concatenate([self._iq_buffer, interleaved])
-        bs2 = self.buffer_size * 2  # 2 floats per sample (I+Q)
+        bs2 = self.buffer_size * 2  # 2 floats per I/Q pair
 
         while len(self._iq_buffer) >= bs2:
             chunk = self._iq_buffer[:bs2]
             self._iq_buffer = self._iq_buffer[bs2:]
 
-            # chunk is already interleaved I/Q — copy directly
             self._in[:] = chunk
 
             err = ctypes.c_int(0)
@@ -748,24 +750,44 @@ class WDSPIQProcessor:
                 ctypes.byref(err))
 
             if err.value not in (0, -2):
-                # err < 0: warmup transient, output still usable
                 if err.value < 0:
                     logger.debug("WDSP IQ fexchange0 warmup err=%d", err.value)
                 else:
                     logger.warning("WDSP IQ fexchange0 error=%d", err.value)
                     continue
 
-            # WDSP output is demodulated audio in left channel
-            audio_block = self._out[0::2].copy()
+            # WDSP output: demodulated audio in left channel at IQ rate.
+            # Decimate to the voice rate (~15625 Hz).
+            raw_audio = self._out[0::2].copy()
+            audio_block = raw_audio[::self._decim]
+            if self._ratio is None:
+                self._ratio = len(audio_block) / self.buffer_size
+                logger.info("WDSP IQ output ratio: %.3f audio/IQ "
+                            "(block=%d→%d, decim=%d)",
+                            self._ratio, self.buffer_size,
+                            len(audio_block), self._decim)
             self._audio_buffer = np.concatenate([self._audio_buffer, audio_block])
 
-        # Return what we have — caller consumes time-aligned audio
-        if len(self._audio_buffer) > 0:
-            result = self._audio_buffer.astype(np.float32, copy=False)
-            self._audio_buffer = np.array([], dtype=np.float64)
+        # Return time-aligned audio: n_in IQ samples × ratio = audio samples
+        if self._ratio is None:
+            # No blocks completed yet — return silence
+            return np.zeros(0, dtype=np.float32)
+
+        want = max(1, int(n_in * self._ratio))
+        if len(self._audio_buffer) >= want:
+            result = self._audio_buffer[:want].astype(np.float32, copy=False)
+            self._audio_buffer = self._audio_buffer[want:]
             return result
 
-        return None
+        # Underflow: drain what we have, pad with silence.  Underflow
+        # is normal during warmup (first few calls before the first
+        # fexchange0 block completes).
+        available = len(self._audio_buffer)
+        result = np.zeros(want, dtype=np.float32)
+        if available > 0:
+            result[:available] = self._audio_buffer[:available].astype(np.float32)
+            self._audio_buffer = np.array([], dtype=np.float64)
+        return result
 
     # ── Control methods ──────────────────────────────────────
 
