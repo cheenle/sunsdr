@@ -12,7 +12,7 @@ import math, logging, struct, threading, time
 import numpy as np
 from collections import deque
 from dataclasses import dataclass
-from scipy.signal import hilbert, butter, sosfilt
+from scipy.signal import hilbert, butter, sosfilt, lfilter
 
 logger = logging.getLogger(__name__)
 
@@ -989,22 +989,20 @@ class TXModulator:
         if len(x) == 0:
             return 0
 
-        # ── 0. DC-blocking highpass (20 Hz, 1-pole IIR) ──────────
+        # ── 0. DC-blocking highpass (20 Hz) ─────────────────────
         # Browser mic → Opus encode → decode chain introduces per-frame
-        # DC offsets up to 2% of full scale.  Without this, the frame
-        # boundaries click/pop in the modulated RF output.
-        if not hasattr(self, '_tx_dc_x1'):
-            self._tx_dc_x1 = 0.0
-            self._tx_dc_y1 = 0.0
+        # DC offsets.  scipy lfilter with state persistence.
+        if not hasattr(self, '_tx_dc_zi'):
+            # 1st-order highpass: H(z) = (1 - z^-1) / (1 - a*z^-1)
             fc = 20.0
-            self._tx_dc_a = np.exp(-2.0 * math.pi * fc / input_rate)
-        y = np.empty_like(x)
-        y[0] = x[0] - self._tx_dc_x1 + self._tx_dc_a * self._tx_dc_y1
-        for i in range(1, len(x)):
-            y[i] = x[i] - x[i-1] + self._tx_dc_a * y[i-1]
-        self._tx_dc_x1 = x[-1]
-        self._tx_dc_y1 = y[-1]
-        x = y
+            a = math.exp(-2.0 * math.pi * fc / input_rate)  # ~0.992
+            self._tx_dc_b = np.array([1.0, -1.0], dtype=np.float64)
+            self._tx_dc_a = np.array([1.0, -a], dtype=np.float64)
+            self._tx_dc_zi = np.array([0.0], dtype=np.float64)
+        x64 = x.astype(np.float64)
+        x64, self._tx_dc_zi = lfilter(
+            self._tx_dc_b, self._tx_dc_a, x64, zi=self._tx_dc_zi)
+        x = x64.astype(np.float32)
 
         # ── 1. Anti-alias LPF: 16 kHz mic carries up to 8 kHz energy,
         #    but after resampling to 15625 Hz the Nyquist is only 7.8 kHz.
