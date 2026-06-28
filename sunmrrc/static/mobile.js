@@ -1573,6 +1573,18 @@ function syncWDSPStateToBackend() {
                     var agcMode = (wdspState.agcMode !== undefined && wdspState.agcMode !== null) ? wdspState.agcMode : 3;
                     sendCommand('setWDSPAGC', agcMode.toString());
                 }, 400);
+                setTimeout(function() {
+                    var atk = (wdspState.agcAttack !== undefined) ? wdspState.agcAttack : 2;
+                    sendCommand('setWDSPAGCAttack', atk.toString());
+                }, 500);
+                setTimeout(function() {
+                    var dec = (wdspState.agcDecay !== undefined) ? wdspState.agcDecay : 100;
+                    sendCommand('setWDSPAGCDecay', dec.toString());
+                }, 600);
+                setTimeout(function() {
+                    var hng = (wdspState.agcHang !== undefined) ? wdspState.agcHang : 500;
+                    sendCommand('setWDSPAGCHang', hng.toString());
+                }, 700);
             }
         } else if (retryCount < maxRetries) {
             retryCount++;
@@ -4106,14 +4118,17 @@ const NR2_LEVEL_NAMES = ['OFF', 'MIN', 'LO', 'MED', 'HI'];
 
 // WDSP 状态（默认与后端配置一致）
 var wdspState = {
-    enabled: true,  // 与 MRRC.conf 中的 enabled = True 一致
-    nr2: true,      // NR2 默认启用
-    nr2Level: 1,    // 默认极温和 (0=关, 1=极, 2=低, 3=中, 4=高)
+    enabled: true,
+    nr2: true,
+    nr2Level: 1,
     nb: true,
     anf: false,
-    nf: false,      // NF 手动陷波滤波器（用于消除特定频率 CW 噪音）
-    nfNotches: [],  // 陷波点列表 [{fcenter, fwidth, active}]
-    agcMode: 3
+    nf: false,
+    agcMode: 3,       // SLOW
+    agcAttack: 2,     // ms
+    agcDecay: 100,    // ms
+    agcHang: 500,     // ms
+    nfNotches: []     // 陷波点列表 [{fcenter, fwidth, active}]
 };
 
 // 从Cookie加载WDSP状态
@@ -4131,6 +4146,9 @@ function loadWDSPStateFromCookies() {
                 wdspState.nf = settings.nf !== undefined ? settings.nf : false;
                 wdspState.nfNotches = settings.nfNotches || [];
                 wdspState.agcMode = settings.agcMode !== undefined ? settings.agcMode : 3;
+                wdspState.agcAttack = settings.agcAttack !== undefined ? settings.agcAttack : 2;
+                wdspState.agcDecay = settings.agcDecay !== undefined ? settings.agcDecay : 100;
+                wdspState.agcHang = settings.agcHang !== undefined ? settings.agcHang : 500;
                 console.log('🔧 WDSP状态已从Cookie加载:', wdspState);
             }
         }
@@ -4639,7 +4657,29 @@ function updateDSPAGCUI() {
 // 初始化 DSP 控制面板 UI
 function showWDSPSettings() {
     var nr2Level = wdspState.nr2Level || 1;
+    var agcMode = wdspState.agcMode || 3;
+    var agcAttack = wdspState.agcAttack || 2;
+    var agcDecay = wdspState.agcDecay || 100;
+    var agcHang = wdspState.agcHang || 500;
     var html = '<div class="modal-panel" style="max-width:400px;"><h3>⚙ WDSP 设置</h3>';
+
+    // ── AGC 模式 ──
+    html += '<div class="setting-section"><h4>AGC 模式</h4><div class="mode-grid">';
+    var AGC_NAMES = ['OFF','LONG','SLOW','MED','FAST'];
+    AGC_NAMES.forEach(function(m, i) {
+        html += '<button class="mode-btn' + (agcMode === i ? ' active' : '') + '" onclick="setWDSPAGC(' + i + ');closeModalPanel();showWDSPSettings();">' + m + '</button>';
+    });
+    html += '</div></div>';
+
+    // ── AGC 微调 ──
+    html += '<div class="setting-section"><h4>AGC 微调</h4>';
+    html += '<label>Attack: <span id="wdsp-agc-attack-v">' + agcAttack + 'ms</span></label>';
+    html += '<input type="range" min="1" max="20" value="' + agcAttack + '" oninput="setAGCFine(\'attack\',this.value)" style="width:100%">';
+    html += '<label>Decay: <span id="wdsp-agc-decay-v">' + agcDecay + 'ms</span></label>';
+    html += '<input type="range" min="20" max="1000" value="' + agcDecay + '" oninput="setAGCFine(\'decay\',this.value)" style="width:100%">';
+    html += '<label>Hang: <span id="wdsp-agc-hang-v">' + agcHang + 'ms</span></label>';
+    html += '<input type="range" min="0" max="2000" value="' + agcHang + '" oninput="setAGCFine(\'hang\',this.value)" style="width:100%">';
+    html += '</div>';
 
     // ── NR2 降噪 ──
     html += '<div class="setting-section"><h4>NR2 降噪强度</h4>';
@@ -4647,45 +4687,21 @@ function showWDSPSettings() {
     html += '<span id="wdsp-nr2-label" style="color:var(--accent-primary)">' + NR2_LEVEL_NAMES[nr2Level] + '</span>';
     html += '</div>';
 
-    // ── AGC ──
-    html += '<div class="setting-section"><h4>AGC 模式</h4><div class="mode-grid">';
-    ['OFF','LONG','SLOW','MED','FAST'].forEach(function(m,i){
-        html += '<button class="mode-btn' + (wdspState.agcMode === i ? ' active' : '') + '" onclick="setAGCMode(' + i + ')">' + m + '</button>';
-    });
-    html += '</div></div>';
-
-    // ── AGC 微调 ──
-    html += '<div class="setting-section"><h4>AGC 微调</h4>';
-    html += '<label>Attack: <span id="wdsp-agc-attack-v">2ms</span></label>';
-    html += '<input type="range" min="1" max="20" value="2" oninput="setAGCFine(\'attack\',this.value)" style="width:100%">';
-    html += '<label>Decay: <span id="wdsp-agc-decay-v">100ms</span></label>';
-    html += '<input type="range" min="20" max="1000" value="100" oninput="setAGCFine(\'decay\',this.value)" style="width:100%">';
-    html += '<label>Hang: <span id="wdsp-agc-hang-v">500ms</span></label>';
-    html += '<input type="range" min="0" max="2000" value="500" oninput="setAGCFine(\'hang\',this.value)" style="width:100%">';
-    html += '</div>';
-
     // ── 滤波器 ──
     html += '<div class="setting-section"><h4>滤波器</h4>';
-    html += '<button class="dsp-btn" style="width:48%;margin:2px" onclick="toggleWDSPNB()">NB: <span id="wdsp-nb-v">' + (wdspState.nb ? 'ON' : 'OFF') + '</span></button>';
-    html += '<button class="dsp-btn" style="width:48%;margin:2px" onclick="toggleWDSPANF()">ANF: <span id="wdsp-anf-v">' + (wdspState.anf ? 'ON' : 'OFF') + '</span></button>';
-    html += '<button class="dsp-btn" style="width:48%;margin:2px" onclick="toggleWDSPNF()">NF: <span id="wdsp-nf-v">' + (wdspState.nf ? 'ON' : 'OFF') + '</span></button>';
-    html += '</div>';
-
-    // ── S-Meter ──
-    html += '<div class="setting-section"><h4>信号强度 (WDSP S-Meter)</h4>';
-    html += '<span id="wdsp-smeter" style="font-size:20px;color:var(--accent-primary)">-- dB</span>';
-    html += '<button class="dsp-btn" style="margin-left:8px" onclick="refreshSMeter()">刷新</button>';
+    html += '<button class="dsp-btn" style="width:32%;margin:1px" onclick="toggleWDSPNB();closeModalPanel();showWDSPSettings();">NB<br><span id="wdsp-nb-v">' + (wdspState.nb ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-btn" style="width:32%;margin:1px" onclick="toggleWDSPANF();closeModalPanel();showWDSPSettings();">ANF<br><span id="wdsp-anf-v">' + (wdspState.anf ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-btn" style="width:32%;margin:1px" onclick="toggleWDSPNF();closeModalPanel();showWDSPSettings();">NF<br><span id="wdsp-nf-v">' + (wdspState.nf ? 'ON' : 'OFF') + '</span></button>';
     html += '</div>';
 
     html += '<button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';
     showModalPanel(html);
-    refreshSMeter();
 }
 
 // ── Slider → NR2 level ──
 function setNR2FromSlider(val) {
     var pct = parseInt(val);
-    var level = Math.round(pct / 25);  // 0-100 → 0-4
+    var level = Math.round(pct / 25);
     level = Math.max(0, Math.min(4, level));
     var label = document.getElementById('wdsp-nr2-label');
     if (label) label.textContent = NR2_LEVEL_NAMES[level] + ' (' + pct + '%)';
@@ -4697,18 +4713,18 @@ function setAGCFine(param, val) {
     var v = parseInt(val);
     var label = document.getElementById('wdsp-agc-' + param + '-v');
     if (label) label.textContent = v + 'ms';
-    if (param === 'attack') sendCommand('setWDSPAGCAttack', v.toString());
-    else if (param === 'decay') sendCommand('setWDSPAGCDecay', v.toString());
-    else if (param === 'hang') sendCommand('setWDSPAGCHang', v.toString());
-}
-
-function setAGCMode(mode) {
-    wdspState.agcMode = mode;
-    sendCommand('setWDSPAGC', mode.toString());
+    // Persist to state + cookies
+    if (param === 'attack') {
+        wdspState.agcAttack = v;
+        sendCommand('setWDSPAGCAttack', v.toString());
+    } else if (param === 'decay') {
+        wdspState.agcDecay = v;
+        sendCommand('setWDSPAGCDecay', v.toString());
+    } else if (param === 'hang') {
+        wdspState.agcHang = v;
+        sendCommand('setWDSPAGCHang', v.toString());
+    }
     saveWDSPStateToCookies();
-    updateDSPAGCUI();
-    closeModalPanel();
-    showWDSPSettings();
 }
 
 function refreshSMeter() {
@@ -4753,7 +4769,9 @@ function initDSPControlPanel() {
 
     const agcBtn = document.getElementById('dsp-agc-btn');
     if (agcBtn) {
-        agcBtn.addEventListener('click', function() { showWDSPSettings(); });
+        agcBtn.addEventListener('click', function() {
+            showWDSPSettings();
+        });
     }
 
     // 更新按钮状态
