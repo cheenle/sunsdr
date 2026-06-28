@@ -428,7 +428,19 @@ function AudioRX_start(){
     (async () => {
         if (useAudioWorklet) {
             try {
-                await AudioRX_context.audioWorklet.addModule(wsUrlWithAuth('/rx_worklet_processor.js?v=5.7.3'));
+                // Pre-flight HEAD request: if auth is stale the middleware
+                // returns 401 (not JS), and addModule() would throw a generic
+                // "failed to fetch" that we cannot distinguish from a network
+                // blip.  Checking the response status lets us redirect to
+                // /login immediately instead of falling back to
+                // ScriptProcessor and looping forever.
+                var preflightResp = await fetch(wsUrlWithAuth('/rx_worklet_processor.js?v=5.8.1'),
+                                                { method: 'HEAD' });
+                if (!preflightResp.ok) {
+                    handleAuthExpired('AudioWorklet pre-flight ' + preflightResp.status);
+                    return;
+                }
+                await AudioRX_context.audioWorklet.addModule(wsUrlWithAuth('/rx_worklet_processor.js?v=5.8.1'));
                 const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
                 AudioRX_source_node = rxNode;
                 // 抖动缓冲按时长配置（worklet 内部按 48kHz 换算样本数）。
@@ -1860,7 +1872,7 @@ OpusEncoderProcessor.prototype.initTxOpusWorker = function()
     }
     var that = this;
     try {
-        this.txOpusWorker = new Worker(wsUrlWithAuth('/tx_opus_worker.js?v=5.8.0'));
+        this.txOpusWorker = new Worker(wsUrlWithAuth('/tx_opus_worker.js?v=5.8.1'));
         this.txOpusWorker.onmessage = function(ev) {
             var d = ev.data || {};
             if (d.type === 'open') {
@@ -2061,7 +2073,7 @@ MediaHandler.prototype.callback = async function( stream )
         this.txWorkletNode = null;
         if (useTXWorklet) {
             try {
-                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=5.7.3'));
+                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=5.8.1'));
                 this.txWorkletNode = new AudioWorkletNode(this.context, 'tx-capture', {
                     numberOfInputs: 1,
                     numberOfOutputs: 0,
