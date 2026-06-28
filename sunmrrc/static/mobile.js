@@ -2651,6 +2651,14 @@ function showSettingsPanel() {
     html += '<input type="range" id="mobile-af-gain" min="0" max="100" value="' + afPercent + '" oninput="setAFGain(this.value)">';
     html += '</div>';
 
+    // Mic Gain (浏览器端前置放大器)
+    var micGain = getCookie('mobile_mic_gain') || 100;
+    html += '<div class="setting-item">';
+    html += '<label>Mic Gain: <span id="mic-gain-display">' + micGain + '%</span></label>';
+    html += '<input type="range" id="mobile-mic-gain" min="10" max="300" value="' + micGain + '" oninput="setMicGain(this.value)">';
+    html += '<small style="color:var(--text-secondary)">手机麦克风前置增益, 默认100%</small>';
+    html += '</div>';
+
     // Mic Drive (TX modulation depth)
     var micDrive = (typeof mobileState !== 'undefined' && mobileState.micDrive) ? mobileState.micDrive : 100;
     html += '<div class="setting-item">';
@@ -2827,7 +2835,7 @@ function setAFGain(value) {
 
 function setMicGain(value) {
     // 更新显示
-    var display = document.getElementById('mic-value-display');
+    var display = document.getElementById('mic-gain-display');
     if (display) display.textContent = value + '%';
     
     // 调用AudioTX_SetGAIN（值范围0-1）
