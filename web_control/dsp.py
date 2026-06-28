@@ -624,22 +624,28 @@ class AudioDemodulator:
                 wdsp_audio = self._wdsp_iq.process_iq(bb)
                 if len(wdsp_audio) > 0:
                     wdsp_rms = float(np.sqrt(np.mean(wdsp_audio**2) + 1e-12))
-                    # WDSP's internal AGC (SLOW) targets a conservative
-                    # RMS — fine for DSP but too quiet for direct int16
-                    # output.  We apply a tracking post-gain that brings
-                    # the RMS up to a target of ~0.2, same as the old
-                    # built-in AGC path.  The EMA is slow (attack ~0.05)
-                    # so it doesn't pump on speech syllabics, and the gain
-                    # cap (80x) prevents runaway on pure noise.
+                    # Adaptive post-gain — LEVELER (not a second AGC).
+                    # WDSP's internal AGC (SLOW) handles fast syllabic
+                    # dynamics.  This EMA runs at a ~5 s time constant so
+                    # it only corrects long-term loudness drift across
+                    # bands / operators.  Fast dynamics stay with WDSP.
+                    #
+                    # Noise gate: RMS below 0.008 is noise floor (no
+                    # signal).  Clamp gain ≤ 5× so silence doesn't get
+                    # amplified to speech-level loudness.
                     target_rms = 0.20 * self._volume
+                    NOISE_RMS = 0.007  # tuned for weak DX signals
                     if not hasattr(self, '_wdsp_post_gain'):
-                        self._wdsp_post_gain = target_rms / max(wdsp_rms, 1e-6)
-                    # Slow EMA: attack=0.05, decay=0.001
-                    alpha = 0.05 if wdsp_rms > 1e-4 else 0.001
-                    ideal = target_rms / max(wdsp_rms, 1e-6)
+                        self._wdsp_post_gain = 5.0  # start low
+                    alpha = 0.002  # ~5 s time constant
+                    if wdsp_rms < NOISE_RMS:
+                        ideal = 3.0   # quiet, not silent
+                        alpha = 0.001  # even slower toward quiet
+                    else:
+                        ideal = target_rms / max(wdsp_rms, 1e-6)
                     self._wdsp_post_gain = (self._wdsp_post_gain * (1 - alpha)
                                             + ideal * alpha)
-                    self._wdsp_post_gain = min(self._wdsp_post_gain, 80.0)
+                    self._wdsp_post_gain = min(self._wdsp_post_gain, 40.0)
                     audio = wdsp_audio.astype(np.float64) * self._wdsp_post_gain
                     np.clip(audio, -1.0, 1.0, out=audio)
                     # Diagnostic ~5s

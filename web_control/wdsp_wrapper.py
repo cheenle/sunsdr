@@ -671,12 +671,20 @@ class WDSPIQProcessor:
             ctypes.c_double(0), ctypes.c_double(0),
             ctypes.c_int(0))
         _wdsp.SetRXAMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
-        # Panel gain for IQ input: 2.0 gives WDSP's AGC enough signal to
-        # work with.  Raw IQ has smaller amplitude than demodulated audio,
-        # so the value is 4× the audio-rate channel (0.5 → 2.0).
         _wdsp.SetRXAPanelGain1(ctypes.c_int(self.channel),
                                ctypes.c_double(2.0))
         _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(agc))
+        # Anti-aliasing: band-limit WDSP output to ≤3.4 kHz so the
+        # downstream Python [::decim] decimation from IQ rate → voice
+        # rate is safe.  Without this, frequencies above the voice-rate
+        # Nyquist (7.8 kHz @ 15625) fold back into the audio band.
+        if _check_symbol("SetRXABandpassFreqs"):
+            _wdsp.SetRXABandpassFreqs(ctypes.c_int(self.channel),
+                                      ctypes.c_double(200.0),
+                                      ctypes.c_double(3400.0))
+        if _check_symbol("SetRXABandpassRun"):
+            _wdsp.SetRXABandpassRun(ctypes.c_int(self.channel),
+                                    ctypes.c_int(1))
 
         if self._nr2:
             _wdsp.SetRXAEMNRRun(ctypes.c_int(self.channel), ctypes.c_int(1))
