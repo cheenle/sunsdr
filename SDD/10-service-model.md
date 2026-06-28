@@ -52,8 +52,8 @@ TLSStartupService
 |---------|-------|--------|----------|
 | StaticUIService | GET path | Static bytes or fallback `index.html` | HTTP/HTTPS |
 | ControlService | Command strings | Response/broadcast strings | WS/WSS `/WSCTRX` |
-| RXAudioService | PCM from DSP | Int16 binary frames | WS/WSS `/WSaudioRX` |
-| TXAudioIngressService | Binary PCM / text control from browser | Modulated 24-bit IQ queued to device TX stream | WS/WSS `/WSaudioTX` |
+| RXAudioService | PCM from DSP | Tagged dual-codec binary frames (1-byte tag: 0x00=Int16 PCM, 0x01=Opus; default Opus) | WS/WSS `/WSaudioRX` |
+| TXAudioIngressService | Tagged Opus/PCM mic frames / text control from browser | Modulated 24-bit IQ queued to device TX stream | WS/WSS `/WSaudioTX` |
 | BandPowerService | GET / POST JSON | Per-band drive table, persisted to `band_power.json` | HTTP/HTTPS `/api/band_power` |
 | MemoryChannelService | GET / POST JSON | Memory channel list, persisted to `mem_channels.json` | HTTP/HTTPS `/api/mem_channels` |
 | SpectrumService | Float spectrum array | uint8 binary frames | WS/WSS `/WSspectrum` |

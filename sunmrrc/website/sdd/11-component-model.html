@@ -115,6 +115,7 @@
             <li><a href="12-operational-model.html">12. Operational Model</a></li>
             <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
             <li><a href="14-version-history.html">14. Version History</a></li>
+            <li><a href="15-ptt-safety-architecture.html">15. PTT Safety</a></li>
         </ul>
     </aside>
     <main class="sdd-content">
@@ -218,19 +219,19 @@
 <td>TXModulator</td>
 <td>Shared DSP</td>
 <td><code>../web_control/dsp.py</code></td>
-<td>Mic PCM → fractional resample → Hilbert SSB → 24-bit IQ → <code>0xFFFD</code> TX packets</td>
+<td>Mic PCM → fractional resampler → overlap-save Hilbert SSB → drive gain (×3.0) → tanh soft limiter @ TX_IQ_PEAK (1.0) → 24-bit IQ packing → jitter-buffered 0xFFFD packet queue. See AD-012 for gain staging.</td>
 </tr>
 <tr>
 <td>TXPacer</td>
 <td>Backend core</td>
 <td><code>server.py</code></td>
-<td>Drains queued TX IQ at 5.12 ms/pkt; sends <code>0xFFFD</code> to device:50002</td>
+<td>Drains queued TX IQ at 5.12 ms/pkt (adaptive ±15% pacing); sends <code>0xFFFD</code> to device:50002</td>
 </tr>
 <tr>
 <td>BandPowerAPI</td>
 <td>Backend core</td>
 <td><code>server.py</code></td>
-<td><code>/api/band_power</code> GET/POST; persists to <code>band_power.json</code>; applies per-band DRIVE</td>
+<td><code>/api/band_power</code> GET/POST; persists to <code>band_power.json</code>; applies per-band DRIVE via sunsdr_direct</td>
 </tr>
 <tr>
 <td>SpectrumWebSocket</td>
@@ -290,7 +291,7 @@
 <td>TXAudioEQ</td>
 <td>Frontend audio</td>
 <td><code>static/modules/tx_audio_eq.js</code></td>
-<td>TX EQ presets and Web Audio nodes</td>
+<td>TX EQ presets (DEFAULT/MEDIUM/STRONG/RAGCHEW), preamp ×1.5, compressor 3:1, anti-alias lowpass 4.5 kHz. Gain-staged for clean SSB envelope (see AD-012).</td>
 </tr>
 <tr>
 <td>SettingsManager</td>
@@ -302,7 +303,7 @@
 <td>OpusCodec</td>
 <td>Frontend audio</td>
 <td><code>static/modules/opus_codec.js</code>, <code>opus_wasm.js</code></td>
-<td>Browser-side Opus support for TX pipeline</td>
+<td>Browser-side WASM Opus encoder/decoder for TX pipeline (28 kbps, VBR, FEC, DTX)</td>
 </tr>
 <tr>
 <td>RxWorklet</td>
@@ -314,19 +315,7 @@
 <td>TxCaptureWorklet</td>
 <td>Frontend audio</td>
 <td><code>static/tx_capture_worklet.js</code></td>
-<td>Dedicated-thread mic capture AudioWorklet (ScriptProcessor fallback) feeding <code>/WSaudioTX</code></td>
-</tr>
-<tr>
-<td>TXModulator</td>
-<td>Shared DSP</td>
-<td><code>../web_control/dsp.py</code></td>
-<td>Consume <code>/WSaudioTX</code> PCM, resample, Hilbert SSB modulate to 24-bit IQ, queue <code>0xFFFD</code> TX packets</td>
-</tr>
-<tr>
-<td>BandPowerAPI</td>
-<td>Backend core</td>
-<td><code>server.py</code></td>
-<td><code>/api/band_power</code> GET/POST; persist per-band drive % to <code>band_power.json</code>; apply to device</td>
+<td>Dedicated-thread mic capture AudioWorklet: 48k→16k box-average downsample, 20ms Int16 frame output, ScriptProcessor fallback</td>
 </tr>
 <tr>
 <td>ServiceWorker</td>
@@ -372,9 +361,18 @@ ControlWebSocket
   -&gt; mobile.js binds mobile-specific UI and DSP panel
   -&gt; tx_button.js owns touch PTT behavior
 
-controls.js
-  -&gt; WSaudioRX receives Int16 frames
-  -&gt; decodeInt16Audio()
+controls.js + tx_audio_eq.js + tx_capture_worklet.js
+  -&gt; MediaHandler.callback() builds the Web Audio TX EQ chain:
+     micSource → preamp(×1.5) → antiAlias(×2) → eqLow → eqMid → eqHigh →
+     midCut → presence → compressor(3:1) → makeup(×1.6) → noiseGate → gain_node →
+     AudioWorklet (tx-capture) or ScriptProcessor
+  -&gt; AudioWorklet downsamples 48k→16k, accumulates 20ms Int16 frames
+  -&gt; OpusEncoderProcessor.onWorkletFrame() tags+encodes (Opus 0x01 or PCM 0x00)
+  -&gt; wsAudioTX.send() binary frames
+
+controls.js RX
+  -&gt; WSaudioRX receives tagged dual-codec frames
+  -&gt; tag byte 0x00=PCM → decodeInt16Audio(), 0x01=Opus → WASM OpusDecoder
   -&gt; AudioContext/Worklet or ScriptProcessor playback
   -&gt; WSspectrum receives uint8 rows
   -&gt; Waterfall_start/stop accumulates WF_DECIMATE frames -&gt; adaptive noise floor (WF_PCTL) -&gt; WF_BIAS/WF_GAIN contrast -&gt; canvas row
@@ -431,7 +429,11 @@ controls.js
 </tr>
 <tr>
 <td>Browser TX EQ</td>
-<td><code>static/modules/tx_audio_eq.js</code>, <code>static/controls.js</code></td>
+<td><code>static/modules/tx_audio_eq.js</code>, <code>static/controls.js</code>, <code>static/tx_capture_worklet.js</code></td>
+</tr>
+<tr>
+<td>TX gain staging</td>
+<td>AD-012, <code>../web_control/dsp.py</code> (<code>TXModulator</code>, <code>TX_DRIVE_GAIN</code>, <code>TX_IQ_PEAK</code>), <code>static/modules/tx_audio_eq.js</code> (<code>AudioTX_preamp</code>)</td>
 </tr>
 <tr>
 <td>Restart/ops</td>
@@ -472,7 +474,7 @@ controls.js
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -124,6 +124,7 @@ var mobileState = {
     currentSampleRate: '78k',  // 频谱/IQ 采样率档位 (39k/78k/156k/312k)
     opusEnabled: true,         // RX 音频编码：true=Opus 压缩，false=Int16 PCM
     opusBitrate: 64000,        // RX Opus 码率 (bps)：默认 64k，WFM 甜点值
+    spectrumFps: 38,           // 频谱下行帧率；远程低带宽档降到 12 fps
     isTransmitting: false,
     tuneStep: 1,  // 默认步进 1kHz
     tuneStepIndex: 1,  // 当前步进索引 (1kHz在数组中的位置)
@@ -1397,6 +1398,18 @@ function updateOpusStatus() {
     }
 }
 
+function setTxOpusEnabled(enabled) {
+    const on = !!enabled;
+    const encodeCheckbox = document.getElementById('encode');
+    if (encodeCheckbox) {
+        encodeCheckbox.checked = on;
+    }
+    if (typeof encode !== 'undefined') {
+        encode = on ? 1 : 0;
+    }
+    updateOpusStatus();
+}
+
 function togglePower() {
     console.log('🔋 togglePower 被调用, 当前 poweron:', (typeof poweron !== 'undefined') ? poweron : 'undefined');
     
@@ -2435,6 +2448,8 @@ function showAudioCodecSelector() {
     const curBr = mobileState.opusBitrate || 64000;
     let html = '<div class="modal-panel"><h3>音频编码 / 带宽</h3><div class="mode-grid">';
     const opts = [
+        { key: 'remote',  label: 'Remote 32k', desc: '远程 · 低带宽稳定' },
+        { key: 'opus32',  label: 'Opus 32k',  desc: '语音省流量' },
         { key: 'opus64',  label: 'Opus 64k',  desc: '推荐 · 音乐好，省流量' },
         { key: 'opus96',  label: 'Opus 96k',  desc: '接近透明，带宽中等' },
         { key: 'opus128', label: 'Opus 128k', desc: '最高音质 Opus' },
@@ -2444,9 +2459,11 @@ function showAudioCodecSelector() {
         let active = '';
         if (o.key === 'pcm') {
             active = !isOpus ? 'active' : '';
+        } else if (o.key === 'remote') {
+            active = (isOpus && curBr === 32000 && mobileState.spectrumFps === 12) ? 'active' : '';
         } else {
             const br = parseInt(o.key.replace('opus', ''), 10) * 1000;
-            active = (isOpus && curBr === br) ? 'active' : '';
+            active = (isOpus && curBr === br && mobileState.spectrumFps !== 12) ? 'active' : '';
         }
         html += `<button class="mode-select-btn ${active}" onclick="selectOpus('${o.key}')">${o.label}<br><small style="font-size:11px;opacity:0.7;">${o.desc}</small></button>`;
     });
@@ -2457,16 +2474,23 @@ function showAudioCodecSelector() {
 function selectOpus(key) {
     if (key === 'pcm') {
         mobileState.opusEnabled = false;
+        mobileState.spectrumFps = 38;
+        setTxOpusEnabled(false);
         sendWebSocketMessage("setOpus:off");
-        console.log('选择音频编码: Int16 PCM');
+        sendWebSocketMessage("setSpectrumFps:38");
+        console.log('选择音频编码: Int16 PCM (RX/TX)');
     } else {
-        const br = parseInt(key.replace('opus', ''), 10) * 1000;
+        const remote = key === 'remote';
+        const br = remote ? 32000 : parseInt(key.replace('opus', ''), 10) * 1000;
         mobileState.opusEnabled = true;
         mobileState.opusBitrate = br;
+        mobileState.spectrumFps = remote ? 12 : 38;
+        setTxOpusEnabled(true);
         // 先开 Opus，再设码率（顺序无关，服务端各自独立处理）
         sendWebSocketMessage("setOpus:on");
-        sendWebSocketMessage("setOpusBitrate:" + br);
-        console.log('选择音频编码: Opus', br / 1000, 'kbps');
+        sendWebSocketMessage("setOpusBitrate:" + Math.round(br / 1000));
+        sendWebSocketMessage(remote ? "setSpectrumFps:12" : "setSpectrumFps:38");
+        console.log('选择音频编码: Opus RX/TX', br / 1000, 'kbps, spectrum', mobileState.spectrumFps, 'fps');
     }
     closeModalPanel();
 }

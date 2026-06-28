@@ -21,7 +21,7 @@ var AudioTX_eqMid = null;      // 中频增强 @ 1500Hz (语音中心频率)
 var AudioTX_eqHigh = null;     // 高频衰减 @ 2700Hz (切除高频噪声)
 var AudioTX_antiAlias = null;  // 抗混叠低通滤波器第一级
 var AudioTX_antiAlias2 = null; // 抗混叠低通滤波器第二级 (更陡峭滚降)
-var AudioTX_preamp = null;     // TX 前置放大器（实质性提升发射功率）
+var AudioTX_preamp = null;     // TX 前置放大器（适度增益，功率由设备端 drive 控制）
 
 // RagChew 专用节点
 var AudioTX_highCut = null;    // 高切低通 @ 3kHz
@@ -39,10 +39,15 @@ var isRagchewMode = false;     // 当前是否为 RagChew 模式
 //   high: 高频衰减 @ 2700Hz (dB)，负值衰减，消除尖锐音
 // 短波通信核心频段：200Hz - 2700Hz
 var TX_EQ_PRESETS = {
+    'COMFORT': {
+        name: '舒适',
+        low: 2, mid: 3, high: -4,
+        desc: '远程通联：自然、清楚、不顶限幅'
+    },
     'DEFAULT': {
         name: '默认',
-        low: 6, mid: 8, high: -6,
-        desc: '基础增强：适度提升发射功率'
+        low: 4, mid: 5, high: -6,
+        desc: '基础增强：清楚但不过推'
     },
     'MEDIUM': {
         name: '中',
@@ -69,16 +74,19 @@ var TX_EQ_PRESETS = {
     }
 };
 
-var currentTX_EQ_Preset = 'DEFAULT';
+var currentTX_EQ_Preset = 'COMFORT';
 
 // 初始化 TX EQ
 function initTX_EQ(context) {
     if (!context) return;
 
     // ========== TX 前置放大器 ==========
-    // 实质性提升发射功率，补偿手机麦克风输出电平低的问题
+    // 提供适度的前置增益补偿手机麦克风。增益不宜过大：
+    // 后续 EQ (+6~12dB) + Hilbert 峰值增强 (~+40%) + 服务器 drive gain (×3.0)
+    // 会把客户端峰值放大到 ~4×TX_IQ_PEAK，导致 tanh 限幅器重度饱和 → 语音失真。
+    // 1.5 (×1.5, +3.5dB) 配合设备端 drive (0x0017) 调功率，让 tanh 只兜底残留瞬态。
     AudioTX_preamp = context.createGain();
-    AudioTX_preamp.gain.setValueAtTime(3.0, context.currentTime);  // +9.5dB 前置增益
+    AudioTX_preamp.gain.setValueAtTime(1.5, context.currentTime);  // +3.5dB 前置增益
 
     // ========== 轻度高切，保留语音完整性 ==========
     AudioTX_antiAlias = context.createBiquadFilter();

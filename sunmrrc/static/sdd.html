@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0f">
+<title>SunMRRC — Architecture (SDD V3.4)</title>
+<link rel="stylesheet" href="/mobile.css">
+<style>
+  body { background:var(--bg-primary); color:var(--text-primary);
+         font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+         padding:16px; max-width:1000px; margin:0 auto; }
+  h1 { color:var(--accent-primary); font-size:22px; margin:0 0 8px; }
+  h2 { color:var(--accent-primary); font-size:17px; margin:24px 0 12px;
+       border-bottom:1px solid var(--border-color); padding-bottom:6px; }
+  h3 { color:var(--text-primary); font-size:14px; margin:18px 0 8px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:12px; }
+  th { background:var(--bg-card); color:var(--accent-primary); text-align:left;
+       padding:6px 8px; border:1px solid var(--border-color); font-weight:600; }
+  td { padding:6px 8px; border:1px solid var(--border-color);
+       background:var(--bg-secondary); }
+  .diagram-card { background:var(--bg-card); border:1px solid var(--border-color);
+                  border-radius:12px; padding:16px; margin:20px 0; }
+  .diagram-card h3 { margin:0 0 8px; color:var(--accent-primary); }
+  .diagram-card svg, .diagram-card img { width:100%; height:auto;
+       border-radius:8px; background:#0a0a0f; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px;
+         font-weight:600; }
+  .tag-ok { background:#1a3a1a; color:#6bcf7f; }
+  .tag-warn { background:#3a2a0a; color:#cfaf4a; }
+  .tag-new { background:#1a2a4a; color:#5b9bd5; }
+  code { background:var(--bg-card); padding:1px 5px; border-radius:4px;
+         font-size:11px; color:var(--accent-primary); }
+  pre { background:var(--bg-card); padding:12px; border-radius:8px;
+        overflow-x:auto; font-size:11px; line-height:1.4;
+        border:1px solid var(--border-color); }
+  .back-link { display:inline-block; margin:16px 0; color:var(--text-secondary);
+               text-decoration:none; font-size:13px; }
+  .back-link:hover { color:var(--accent-primary); }
+  .version { color:var(--text-secondary); font-size:12px; }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="/">← SunMRRC</a>
+<h1>🎛️ SunMRRC Architecture</h1>
+<p class="version">SDD V3.4 — Software Design Description · Baseline 2026-06-26</p>
+
+<h2>System Architecture</h2>
+<div class="diagram-card">
+  <h3>End-to-End System Architecture</h3>
+  <object data="/sdd-assets/system-architecture.svg" type="image/svg+xml"
+          style="width:100%; height:auto; border-radius:8px; background:#0a0a0f;">
+    [SVG: system-architecture.svg]
+  </object>
+  <p style="font-size:11px; color:var(--text-secondary); margin:8px 0 0;">
+    Four-layer architecture: Mobile Browser → FastAPI SunMRRC Server → Shared DSP Modules → SunSDR2 DX Hardware.
+    All WebSocket endpoints shown with protocols and data rates.</p>
+</div>
+
+<h2>TX Audio Gain Staging</h2>
+<div class="diagram-card">
+  <h3>End-to-End TX Gain Staging · AD-012</h3>
+  <object data="/sdd-assets/tx-gain-staging.svg" type="image/svg+xml"
+          style="width:100%; height:auto; border-radius:8px; background:#0a0a0f;">
+    [SVG: tx-gain-staging.svg]
+  </object>
+  <p style="font-size:11px; color:var(--text-secondary); margin:8px 0 0;">
+    Complete TX signal chain from Mic → Client EQ → Opus → WebSocket → Server Hilbert SSB → Drive Gain → tanh Limiter → Device DRIVE.
+    Shows healthy gain values (preamp ×1.5, peak ~0.96 post-tanh, 4% reduction) vs the old distorted path (preamp ×3.0, 75% tanh saturation).</p>
+</div>
+
+<h2>TX Telemetry (0x1F00)</h2>
+<div class="diagram-card">
+  <h3>0x1F00 Verified Field Offsets · AD-011</h3>
+  <object data="/sdd-assets/telemetry-flow.svg" type="image/svg+xml"
+          style="width:100%; height:auto; border-radius:8px; background:#0a0a0f;">
+    [SVG: telemetry-flow.svg]
+  </object>
+  <p style="font-size:11px; color:var(--text-secondary); margin:8px 0 0;">
+    Reverse-engineered from a real 40m drive sweep (expert_40m_drive.pcap, cross-checked against external wattmeter + ExpertSDR3).
+    off30 f32 = forward watts · off16 u16/10 = supply volts · off18 f32 = PA temp °C. The device has NO reverse-power field — cannot compute SWR.</p>
+</div>
+
+<h2>Architecture Decisions</h2>
+<table>
+  <tr><th>ID</th><th>Topic</th><th>Status</th></tr>
+  <tr><td>AD-001</td><td>FastAPI/Uvicorn backend</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-002</td><td>Direct SunSDR2 DX UDP control</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-003</td><td>DSP-owned mode</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-004</td><td>Tagged dual-codec audio transport (Opus + PCM, RX and TX)</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-005</td><td>Quantized spectrum frames</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-006</td><td>HTTPS/WSS by default for mobile</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-007</td><td>PTT release safety flow</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-008</td><td>Optional WDSP</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-009</td><td>Explicit frontend/backend gap tracking</td><td><span class="tag tag-warn">Active</span></td></tr>
+  <tr><td>AD-010</td><td>TX power via device DRIVE (0x0017)</td><td><span class="tag tag-ok">Implemented</span></td></tr>
+  <tr><td>AD-011</td><td>0x1F00 telemetry verified field offsets</td><td><span class="tag tag-new">Corrected 2026-06-25</span></td></tr>
+  <tr><td>AD-012</td><td>TX audio gain staging (preamp ×1.5, tanh soft limiter)</td><td><span class="tag tag-new">Implemented 2026-06-25</span></td></tr>
+</table>
+
+<h2>Key Architecture Facts (V3.4)</h2>
+<table>
+  <tr><th>Area</th><th>Fact</th></tr>
+  <tr><td>TX IQ peak</td><td><code>TX_IQ_PEAK = 1.0</code> (full scale, verified against ExpertSDR3 capture)</td></tr>
+  <tr><td>TX drive gain</td><td><code>TX_DRIVE_GAIN = 3.0</code> (fixed make-up gain, not a power control)</td></tr>
+  <tr><td>Tune scale</td><td><code>TX_TUNE_SCALE = 0.35</code> (safe ~10W continuous for PA thermal protection)</td></tr>
+  <tr><td>Client preamp</td><td>×1.5 (+3.5dB) — gain-staged so tanh barely engages (~4% reduction)</td></tr>
+  <tr><td>TX EQ</td><td>4 presets: DEFAULT/MEDIUM/STRONG/RAGCHEW · Compressor 3:1 · Anti-alias 4.5kHz LP</td></tr>
+  <tr><td>tanh limiter</td><td>Soft magnitude limit at <code>TX_IQ_PEAK=1.0</code> — safety net, not primary gain control</td></tr>
+  <tr><td>Forward power</td><td><code>0x1F00</code> off30 f32 = watts (PEP), direct float, no fit needed</td></tr>
+  <tr><td>Supply voltage</td><td><code>0x1F00</code> off16 u16/10 = volts (NOT SWR — textbook PSU sag, r=-0.79 with power)</td></tr>
+  <tr><td>SWR</td><td>Device sends NO reverse-power field — use external ATR-1000 tuner for SWR</td></tr>
+  <tr><td>Level probes</td><td>1 Hz <code>TX chain in:/an:/drv:/lim:</code> in server.log — diagnose distortion in real time</td></tr>
+  <tr><td>Hilbert SSB</td><td>Overlap-save with MARGIN=256, continuous fractional resampler 16k→15625 Hz</td></tr>
+  <tr><td>TX pacer</td><td>5.12 ms/pkt (195 pkt/s, 39063 Hz IQ) · Adaptive ±15% · Jitter buffer: prime 24/reprime 12</td></tr>
+</table>
+
+<h2>SDD Document Index</h2>
+<table>
+  <tr><th>#</th><th>Chapter</th><th>ART Code</th></tr>
+  <tr><td>1</td><td>Executive Summary</td><td>-</td></tr>
+  <tr><td>2</td><td>Business Direction</td><td>BUS 411</td></tr>
+  <tr><td>3</td><td>Project Definition</td><td>ENG 343</td></tr>
+  <tr><td>4</td><td>System Context</td><td>APP 011</td></tr>
+  <tr><td>5</td><td>Non-Functional Requirements</td><td>ART 0507</td></tr>
+  <tr><td>6</td><td>Use Case Model</td><td>ART 0508</td></tr>
+  <tr><td>7</td><td>Subject Area Model</td><td>APP 408</td></tr>
+  <tr><td>8</td><td>Architecture Decisions</td><td>ART 0513</td></tr>
+  <tr><td>9</td><td>Architecture Overview</td><td>ART 0512</td></tr>
+  <tr><td>10</td><td>Service Model</td><td>ART 0582</td></tr>
+  <tr><td>11</td><td>Component Model</td><td>ART 0515</td></tr>
+  <tr><td>12</td><td>Operational Model</td><td>ART 0522</td></tr>
+  <tr><td>13</td><td>Feasibility Assessment</td><td>ART 0530</td></tr>
+  <tr><td>14</td><td>Version History</td><td>-</td></tr>
+</table>
+
+<p style="color:var(--text-secondary); font-size:11px; margin:24px 0 8px;">
+  IBM Team Solution Design (TeamSD) v2.3.2 · Document ID: SDD-SUNMRRC-2026-001 · Generated 2026-06-26
+</p>
+
+</body>
+</html>

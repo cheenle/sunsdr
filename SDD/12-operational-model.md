@@ -4,12 +4,12 @@
 
 ```text
 Client Browser
-  -> https://radio.vlsc.net:8080
+  -> https://radio.vlsc.net:8889
   -> WSS endpoints on same host/port
 
 SunMRRC Host
   -> python3 server.py under ../venv when available
-  -> Uvicorn on 0.0.0.0:$WEB_PORT
+  -> Uvicorn on [::]:$WEB_PORT (IPv6 dual-stack, all interfaces)
   -> UDP bind 192.168.16.100:50001 for control client
   -> UDP bind 192.168.16.100:50002 for IQ loop
   -> logs to server.log when started by restart.sh
@@ -25,7 +25,7 @@ SunSDR2 DX
 | Name | Default | Purpose |
 |------|---------|---------|
 | `DEVICE_HOST` | `192.168.16.200` | SunSDR2 DX control host for `SunSDR2DXClient` |
-| `WEB_PORT` | `8081` in `start.sh`, `8080` in `restart.sh`, `8081` in `server.py` default | Uvicorn listen port |
+| `WEB_PORT` | `8889` in `restart.sh` and `server.py` default | Uvicorn listen port |
 | `DISABLE_SSL` | unset | Set to `1` to force HTTP even when certs exist |
 | `BACKEND` | `direct` in scripts | Operational marker; current `server.py` uses direct client path |
 | `NO_PROXY` | `127.0.0.1,localhost` in `restart.sh` | Avoid local proxy interference |
@@ -36,9 +36,9 @@ SunSDR2 DX
 
 | Mode | Command | Behavior |
 |------|---------|----------|
-| Simple start | `./start.sh` | Activates `../venv` if present, defaults `WEB_PORT=8081`, execs `python3 server.py` |
-| Background restart | `./restart.sh` | Defaults `WEB_PORT=8080`, kills old cwd-matched server, clears listen port, writes `server.log` |
+| Background restart | `./restart.sh` | Defaults `WEB_PORT=8889`, activates `../venv` if present, kills old cwd-matched server, clears listen port, writes `server.log` |
 | Foreground restart | `./restart.sh -f` | Same cleanup, then runs foreground for live logs |
+| Custom port | `WEB_PORT=8889 ./restart.sh` | Override the listen port via environment |
 | HTTP debug | `DISABLE_SSL=1 ./restart.sh` | Forces HTTP; not suitable for iOS mic/audio validation |
 
 ## 12.4 TLS Operation
@@ -48,7 +48,7 @@ SunSDR2 DX
 | Certificate | `certs/fullchain.pem` |
 | Private key | `certs/radio.vlsc.net.key` |
 | Auto-detection | `_find_ssl()` returns cert/key when both files exist |
-| HTTPS log | `sunmrrc https://0.0.0.0:<port>` and `TLS: <cert>` |
+| HTTPS log | `sunmrrc https://[::]:<port>  password=<...>` and `TLS: <cert>` |
 | HTTP fallback log | Warning that iOS may have no sound/microphone |
 | Expiry support | `certs/check_ssl_expiry.sh`, `certs/expiry_check.log` |
 
@@ -59,7 +59,7 @@ SunSDR2 DX
 | Browser | SunMRRC | HTTPS | `$WEB_PORT` | Static UI |
 | Browser | SunMRRC | WSS/WS | `/WSCTRX` | Control |
 | Browser | SunMRRC | WSS/WS | `/WSaudioRX` | RX audio |
-| Browser | SunMRRC | WSS/WS | `/WSaudioTX` | TX mic uplink (Int16 PCM → SSB modulation) |
+| Browser | SunMRRC | WSS/WS | `/WSaudioTX` | TX mic uplink (tagged Opus/PCM → SSB modulation) |
 | Browser | SunMRRC | WSS/WS | `/WSspectrum` | Waterfall |
 | Browser | SunMRRC | HTTPS | `/api/band_power` | Per-band power get/set |
 | Browser | SunMRRC | HTTPS | `/api/mem_channels` | Memory channel get/set |
@@ -73,11 +73,12 @@ SunSDR2 DX
 |-----------|-------|
 | Verify HTTPS startup | Run `./restart.sh`; inspect `server.log` for HTTPS and TLS lines |
 | Verify radio connect | Inspect `server.log` for `SunSDR2DX: True` and `IQ: port 50002` |
-| Verify mobile entry | Open `https://radio.vlsc.net:8080` from iPhone with correct DNS/LAN routing |
+| Verify mobile entry | Open `https://radio.vlsc.net:8889` from iPhone with correct DNS/LAN routing |
 | Verify RX | Power on UI, confirm `/WSaudioRX` connected and audio/bitrate active |
 | Verify control | Change frequency/mode and confirm UI ack plus radio behavior |
 | Verify PTT safety | Press/release PTT; confirm `getPTT:false` after release |
-| Verify TX voice/power | Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (Tune ~12 W, voice 30–40 W PEP). Note: `W=` in `server.log` reads 0 during TX — device sends `0x1F00` in all modes (verified: 273 TX packets). |
+| Verify TX voice/power | Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (Tune ~12 W, voice 30–40 W PEP). Device telemetry: `W=` in `server.log` from `0x1F00` off30 f32 forward watts; `V=` from off16 u16/10 supply voltage; `T=` from off18 f32 PA temp °C. Telemetry arrives in RX and TX. No device SWR field — use ATR-1000. |
+| Verify TX audio quality | Check `server.log` for "TX chain" level-probe lines at 1 Hz. Healthy gain staging: `in` peak ~0.5 (not 1.0 — that saturates the tanh), `lim` peak ~0.96 (~4% tanh reduction). Underruns should be 0 or near 0 after initial prime. If underruns are frequent (>1/sec), check WiFi latency and the `/tmp/tx_probe.csv` pacer log. |
 | Adjust per-band power | Menu → Band Power; set each band's drive %, save (POST `/api/band_power`), confirm immediate re-apply on the current frequency |
 
 ## 12.7 Logs and Artifacts
@@ -95,7 +96,7 @@ SunSDR2 DX
 
 | Risk | Mitigation |
 |------|------------|
-| Wrong port default between scripts | Treat `restart.sh` as production path and set `WEB_PORT` explicitly when needed |
+| Single listen port | `restart.sh` and `server.py` both default to `8889`; set `WEB_PORT` to override consistently |
 | iOS loaded over HTTP | Use HTTPS domain entry, not raw HTTP IP |
 | Fixed local UDP bind IP does not match host | Update `server.py` or host network before deployment |
 | Old JS cached | `sw.js` bypasses JS/HTML; version query strings also used on scripts |

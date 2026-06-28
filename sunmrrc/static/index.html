@@ -31,8 +31,8 @@
     <!-- 音频增益和静噪隐藏元素 -->
     <input type="range" id="C_af" min="0" max="1000" value="500" style="display:none;">
     <input type="range" id="SQUELCH" min="0" max="100" value="0" style="display:none;">
-    <!-- Opus编码开关：默认关闭。后端只接受 Int16 PCM（CLAUDE.md AD-004，
-         Opus 协商已移除）。勾选会发 Opus 压缩流，后端按 PCM 解码 → 噪声。 -->
+    <!-- TX codec switch. Audio Codec menu keeps this in sync with RX:
+         checked=TX Opus, unchecked=TX Int16 PCM. -->
     <input type="checkbox" id="encode" class="none" alt="Encode TX with opus codec" style="display:none;" checked>
     
     <!-- Main container with bottom navigation -->
@@ -246,12 +246,12 @@
     <script src="/ui_utils.js"></script>
     <script src="/modules/opus_wasm.js"></script>
     <script src="/modules/settings_manager.js"></script>
-    <script src="/controls.js?v=5.7.2"></script>
+    <script src="/controls.js?v=5.8.0"></script>
     <script src="/modules/opus_codec.js"></script>
     <script src="/modules/tx_audio_eq.js"></script>
     <script src="/modules/ptt_manager.js"></script>
     <script src="/modules/tune_cq.js"></script>
-    <script src="/mobile.js?v=5.7.2"></script>
+    <script src="/mobile.js?v=5.8.0"></script>
     <script src="/tx_button.js"></script>
 </body>
 </html>

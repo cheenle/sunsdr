@@ -23,7 +23,7 @@ WIRE FORMAT:
   Each broadcast audio frame is prefixed with a 1-byte codec tag so the client
   can tell PCM from Opus without a control-channel race:
     0x00 = raw Int16 PCM (legacy)
-    0x01 = Opus packet (decode with the frontend OpusDecoder @ 16 kHz mono)
+    0x01 = Opus packet (decode with the frontend OpusDecoder @ 48 kHz mono)
   See AUDIO_TAG_PCM / AUDIO_TAG_OPUS.
 """
 

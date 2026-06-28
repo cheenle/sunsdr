@@ -10,7 +10,43 @@
 | SDD V3.1 | 2026-06-21 | OpenCode | Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate `/WSspectrum` route |
 | SDD V3.2 | 2026-06-23 | Claude | TX voice modulation and TX power control documented as implemented: device DRIVE (`0x0017`) per-band power, `/api/band_power` + Band Power UI, `/api/mem_channels` graduated to implemented, AD-010 added, CW/FT8 dead links removed |
 | SDD V3.3 | 2026-06-24 | Claude | Tagged dual-codec audio transport (RX Opus/PCM + TX Opus uplink); corrected `0x1F00` telemetry field offsets (SWR = off16 u16/100, not off26 f32); AD-004 expanded to cover TX path; AD-011 added for SWR field correction; ATT/sample-rate controls documented; TXPLAN phased roadmap marked complete |
-| **SunMRRC V1.0** | **2026-06-24** | **Claude** | **🎉 Initial production release.** RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, SWR/power/temp telemetry from 0x1F00, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.3 baseline. |
+| SDD V3.4 | 2026-06-26 | Claude | **TX telemetry field correction**: off30 f32 = forward watts (not off14 cubic fit), off16 u16 = supply volts ×10 (NOT SWR), off18 f32 = PA temp °C. Device has NO reverse-power → no SWR. AD-011 completely rewritten. **TX gain staging (AD-012)**: client preamp 3.0→1.5, server TX_DRIVE_GAIN=3.0, TX_IQ_PEAK=1.0 with tanh soft limiter. 9.5.2 TX signal chain architecture + level-probe diagnostics added. SVG architecture diagrams (system, TX gain staging, telemetry flow). **Ch 15 PTT Safety Architecture**: comprehensive 8-layer defense-in-depth model, full component coverage, SVG diagram. |
+| SDD V3.5 | 2026-06-26 | Claude | **Code-sync pass** — reconciled SDD with current source. **Port corrected** to `8889` (server.py default + restart.sh) across all chapters (was `8080`/`8081`). **Bind host** is `[::]` IPv6 dual-stack, not `0.0.0.0`. **`start.sh` removed** — only `restart.sh` exists; ch11 StartScript and ch13 I7 dropped, ch12 startup modes rewritten. **Session auth documented as implemented** (was "no server-side auth"): shared-password `_auth_tokens` + `sunmrrc_auth` cookie + `?token=` WS gating; ch5 NFR-023, ch7, ch11 updated. **Audio transport** reframed as tagged dual-codec (Opus default, Int16 PCM fallback) in the older chapters 2/3/4/5/10 that still said Int16-only. **TX voice** marked High/on-air-verified in ch6 UC-005 and ch13 (was "unresolved"/"not complete"). **Recordings** moved from out-of-scope to implemented (ch3). |
+| **SunMRRC V1.0** | **2026-06-24** | **Claude** | **🎉 Initial production release.** RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.4 baseline. |
+
+## Key Changes in SDD V3.5
+
+| Chapter | Change |
+|---------|--------|
+| 1 | Mobile entry port `8080`→`8889` |
+| 2 | O2 RX audio availability reworded to tagged dual-codec (Opus default) |
+| 3 | RX channel + SC3 reworded to dual-codec; out-of-scope auth narrowed to multi-tenant/per-user (shared-password auth is implemented); recordings moved out of the out-of-scope list |
+| 4 | RX/TX audio WebSocket rows + TX voice flow reworded to tagged dual-codec |
+| 5 | NFR-004 bandwidth = Opus ~18–24 kbps default / PCM ~256 kbps fallback; NFR-060 decode path covers both codecs; NFR-023 rewritten from "no false claim of auth" to documenting the implemented session auth; port refs fixed |
+| 6 | UC-001 entry port fixed; UC-005 boundary line updated — TX voice is implemented and on-air verified |
+| 7 | AuthUser deferred-entity reworded — shared-password session auth exists; only per-user identity is deferred |
+| 10 | RXAudioService / TXAudioIngressService interface rows reworded to tagged dual-codec |
+| 11 | StartScript component row removed (`start.sh` absent); RestartScript description expanded; ops mapping drops `start.sh`; AuthBackend gap reworded to per-user identity; RecordingsPage removed from missing list |
+| 12 | Operational model resynced: port `8889`, bind `[::]`, startup modes rewritten around `restart.sh` only, HTTPS log format `https://[::]:<port>`, connection-matrix TX row dual-codec, port-mismatch risk replaced |
+| 13 | TX voice feasibility High/verified; I7 (`start.sh`) removed as obsolete; mobile-entry port fixed |
+| 14 | Added this V3.5 changelog |
+| README | SDD version bumped; runtime-facts source list drops `start.sh`; default entry port `8889` |
+
+## Key Changes in SDD V3.4
+
+| Chapter | Change |
+|---------|--------|
+| 1 | Executive summary: TX telemetry corrected (off30=W, off16=V, off18=°C, no SWR); TX audio EQ + gain staging added; auth status updated |
+| 4 | System context: TX telemetry flow + audio gain flow added to data flows |
+| 8 | AD-010 telemetry note corrected; AD-011 completely rewritten (from "SWR off16" to verified field offsets); AD-012 added (TX gain staging) |
+| 9 | 9.5 split into RX (9.5.1) and TX (9.5.2) signal chains; TX gain staging table with healthy levels; known gaps updated |
+| 11 | Component model: TXModulator, TXAudioEQ, TxCaptureWorklet descriptions updated with gain staging; removed duplicate entries; frontend collaboration expanded |
+| 12 | TX verification procedure expanded with level-probe diagnostics and audio quality check |
+| 13 | I10 resolved (direct float watts, no fit); I11 added + resolved (gain staging distortion fix) |
+| 14 | Added this V3.4 changelog |
+| README | Diagrams section added; system at a glance updated; capability summary expanded |
+| New | `diagrams/system-architecture.svg`, `diagrams/tx-gain-staging.svg`, `diagrams/telemetry-flow.svg` |
+| CLAUDE.md | TX power/drive and telemetry sections match corrected SDD facts |
 
 ## Key Changes in SunMRRC V1.0 (SDD V3.3)
 

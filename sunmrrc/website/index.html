@@ -154,11 +154,12 @@
                 <div class="card-icon"><i class="fas fa-chart-line"></i></div>
                 <h3 class="card-title">TX Telemetry (0x1F00)</h3>
                 <p class="card-text">
-                    Device sends telemetry in all modes (RX/TX/TUNE). off14 u16 = pwr_raw,
-                    off16 u16/100 = SWR (1.32–1.37 verified), off18 f32 = temp °C.
-                    Power via cubic fit: <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">(pwr_raw-9)³ × 1.91e-5</code> watts.
+                    Device sends 0x1F00 (34B) continuously in RX and TX.
+                    off30 f32 = forward watts (PEP, direct float — no fit needed),
+                    off16 u16/10 = supply volts, off18 f32 = PA temp °C.
+                    Device has NO reverse-power field — use external tuner for SWR.
                 </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented (corrected 2026-06-25)</span>
             </article>
 
             <article class="card">
@@ -220,12 +221,14 @@
 <span class="dim">│</span>  <span class="hl">iPhone / Desktop Browser</span>                                <span class="dim">│</span>
 <span class="dim">│</span>  index.html · controls.js · mobile.js · tx_button.js    <span class="dim">│</span>
 <span class="dim">│</span>  Web Audio API · Opus WASM · AudioWorklet · Canvas       <span class="dim">│</span>
+<span class="dim">│</span>  TX EQ (DEFAULT/MEDIUM/STRONG/RAGCHEW) · PTT Safety     <span class="dim">│</span>
 <span class="dim">└────────────┬────────────────────┬───────────────────────┘</span>
 <span class="dim">             │</span>  HTTPS/WSS       <span class="dim">│</span>
 <span class="dim">     ┌───────┴────────────────────┴───────┐</span>
 <span class="dim">     │</span>  <span class="hl">FastAPI / Uvicorn</span> (sunmrrc/server.py)  <span class="dim">│</span>
 <span class="dim">     │</span>  /WSCTRX  ·  /WSaudioRX  ·  /WSaudioTX       <span class="dim">│</span>
 <span class="dim">     │</span>  /WSspectrum  ·  /WSATR1000  ·  /api/*        <span class="dim">│</span>
+<span class="dim">     │</span>  Auth middleware · TLS · TX Pacer thread       <span class="dim">│</span>
 <span class="dim">     └───────┬────────────────────┬───────┘</span>
 <span class="dim">             │</span>  imports          <span class="dim">│</span>  UDP
 <span class="dim">     ┌───────┴────────┐    ┌──────┴──────────┐</span>
@@ -233,13 +236,23 @@
 <span class="dim">     │</span>  sunsdr_direct   <span class="dim">│    │</span>  Ctrl :50001     <span class="dim">│</span>
 <span class="dim">     │</span>  dsp.py          <span class="dim">│    │</span>  IQ   :50002     <span class="dim">│</span>
 <span class="dim">     │</span>  opus_rx.py      <span class="dim">│    │</span>  192.168.16.200  <span class="dim">│</span>
-<span class="dim">     │</span>  wdsp_wrapper    <span class="dim">│    └─────────────────┘</span>
-<span class="dim">     └────────────────┘</span>
+<span class="dim">     │</span>  wdsp_wrapper    <span class="dim">│    │</span>  DRIVE(0x0017)   <span class="dim">│</span>
+<span class="dim">     └────────────────┘    │</span>  Telemetry 0x1F00<span class="dim">│</span>
+<span class="dim">                            └─────────────────┘</span>
         </div>
 
-        <div style="margin-top: 2rem; text-align: center;">
-            <a href="https://github.com/cheenle/sunsdr/blob/main/SDD/09-architecture-overview.md" class="btn btn-secondary" target="_blank">
-                <i class="fas fa-sitemap"></i> Full Architecture Docs
+        <div style="margin-top: 2rem; text-align: center; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <a href="sdd/index.html" class="btn btn-secondary">
+                <i class="fas fa-book"></i> SDD Design Docs (V3.4)
+            </a>
+            <a href="sdd/SunMRRC-Architecture-SDD-V3.4.pptx" class="btn btn-secondary">
+                <i class="fas fa-file-powerpoint"></i> Download PPTX (13 Slides)
+            </a>
+            <a href="sdd/diagrams/system-architecture.svg" class="btn btn-secondary" target="_blank">
+                <i class="fas fa-project-diagram"></i> SVG Architecture Diagram
+            </a>
+            <a href="https://github.com/cheenle/sunsdr/blob/main/SDD/08-architecture-decisions.md" class="btn btn-secondary" target="_blank">
+                <i class="fas fa-check-circle"></i> Architecture Decisions (12 ADs)
             </a>
         </div>
     </div>
@@ -279,7 +292,7 @@ WEB_PORT=8080 ./restart.sh  <span class="dim"># custom port</span>
     <div class="container" style="text-align: center;">
         <h2 class="section-title" style="margin-bottom: 1rem;">Ready to Go?</h2>
         <p class="section-subtitle" style="margin-bottom: 3rem;">
-            V1.0 production release. SDD V3.3 baseline, 11 architecture decisions, full protocol documentation.
+            V1.0 production release. SDD V3.4 baseline, 12 architecture decisions, 3 SVG system diagrams, full protocol documentation.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
             <a href="https://radio.vlsc.net:8889" class="btn btn-primary btn-large" target="_blank">
@@ -301,7 +314,7 @@ WEB_PORT=8080 ./restart.sh  <span class="dim"># custom port</span>
                 <p>
                     SunSDR2 DX Mobile Radio Control<br>
                     Your SunSDR2 DX, Anywhere<br>
-                    V1.0 · SDD V3.3 · GPL-3.0
+                    V1.0 · SDD V3.4 · GPL-3.0
                 </p>
             </div>
             <div class="footer-section">

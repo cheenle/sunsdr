@@ -40,9 +40,11 @@ var OpusEncoder = (function () {
 
         // OPUS_SET_COMPLEXITY_REQUEST = 4010
         // 编码复杂度 (0-10, 默认 10)
-        // 移动端推荐 5-7，桌面端推荐 8-10
+        // TX 编码跑在主线程；移动 Safari 上 complexity=5 仍偶发拉长
+        // 编码/发送间隔，服务端会收到 100ms 级空窗。3 更偏实时性，
+        // 对窄带语音音质影响很小，但能显著降低主线程编码尖峰。
         var complexity_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(complexity_ptr, 8, 'i32');
+        setValue(complexity_ptr, 3, 'i32');
         _opus_encoder_ctl(this.handle, 4010, complexity_ptr);
 
         // OPUS_SET_BITRATE_REQUEST = 4002
@@ -54,32 +56,31 @@ var OpusEncoder = (function () {
 
         // OPUS_SET_VBR_REQUEST = 4004
         // 可变比特率 (默认开启)
-        // 根据内容复杂度调整比特率，节省带宽
+        // TX 发射优先稳定的编码成本和包大小；关闭 VBR，避免语音复杂度
+        // 突变时编码耗时抖动，带宽仍固定在 28 kbps 级别。
         var vbr_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(vbr_ptr, 1, 'i32');  // 1 = 开启 VBR
+        setValue(vbr_ptr, 0, 'i32');  // 0 = 关闭 VBR
         _opus_encoder_ctl(this.handle, 4004, vbr_ptr);
 
         // OPUS_SET_INBAND_FEC_REQUEST = 4012
-        // 前向纠错 (默认关闭)
-        // 在当前帧中嵌入前一帧的低码率副本，丢包时可恢复
-        // 弱网环境关键，但会增加约 20% 码率
+        // 前向纠错。TX 走 WebSocket/TCP：不会乱序丢 UDP 包，FEC 只会增加
+        // 码率和编码负担，不能修复 TCP 队头阻塞。因此关闭。
         var fec_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(fec_ptr, 1, 'i32');  // 1 = 开启 FEC
+        setValue(fec_ptr, 0, 'i32');  // 0 = 关闭 FEC
         _opus_encoder_ctl(this.handle, 4012, fec_ptr);
 
         // OPUS_SET_PACKET_LOSS_PERC_REQUEST = 4014
         // 预期丢包率 (默认 0%)
-        // 配合 FEC 使用，设置越高 FEC 冗余越多
-        // 短波/移动网络推荐 10-20%
+        // 配合 FEC 使用；FEC 关闭时保持 0。
         var loss_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(loss_ptr, 15, 'i32');  // 15% 丢包率预期
+        setValue(loss_ptr, 0, 'i32');
         _opus_encoder_ctl(this.handle, 4014, loss_ptr);
 
         // OPUS_SET_DTX_REQUEST = 4016
-        // 静音检测传输 (默认关闭)
-        // 静音时只发送舒适噪声帧，节省 50-80% 带宽
+        // DTX 会让静音段停止出包，下一句话起音更容易重新 prime TX jitter
+        // buffer；发射听感优先于再省几 kbps，因此关闭。
         var dtx_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(dtx_ptr, 1, 'i32');  // 1 = 开启 DTX
+        setValue(dtx_ptr, 0, 'i32');  // 0 = 关闭 DTX
         _opus_encoder_ctl(this.handle, 4016, dtx_ptr);
 
         // OPUS_SET_SIGNAL_REQUEST = 4024
@@ -96,7 +97,7 @@ var OpusEncoder = (function () {
         setValue(hp_ptr, 0, 'i32');  // 0 = 禁用高通滤波器
         _opus_encoder_ctl(this.handle, 4030, hp_ptr);
 
-        console.log('🎵 Opus 编码器优化: complexity=8, bitrate=28kbps, VBR=ON, FEC=ON(15%), DTX=ON, HPF=OFF');
+        console.log('🎵 Opus 编码器优化: complexity=3, bitrate=28kbps, VBR=OFF, FEC=OFF, DTX=OFF, HPF=OFF');
     }
     OpusEncoder.prototype.encode = function (pcm) {
         var output = [];

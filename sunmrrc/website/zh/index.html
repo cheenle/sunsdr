@@ -150,11 +150,12 @@
                 <div class="card-icon"><i class="fas fa-chart-line"></i></div>
                 <h3 class="card-title">TX 遥测 (0x1F00)</h3>
                 <p class="card-text">
-                    设备在所有模式（RX/TX/TUNE）下发送遥测。off14 u16 = 功率原始值、
-                    off16 u16/100 = 驻波比（已验证 1.32–1.37）、off18 f32 = 温度 °C。
-                    功率三次方拟合：<code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">(pwr_raw-9)³ × 1.91e-5</code> W。
+                    设备在 RX 和 TX 下持续发送 0x1F00（34字节）。
+                    off30 f32 = 正向功率瓦特（PEP，直接浮点数——无需拟合）、
+                    off16 u16/10 = 电源电压、off18 f32 = PA 温度 °C。
+                    设备无反向功率字段——需用外部驻波表测量驻波比。
                 </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现</span>
+                <span class="card-status ok"><i class="fas fa-check-circle"></i> 已实现 (2026-06-25 修正)</span>
             </article>
 
             <article class="card">
@@ -265,7 +266,7 @@ WEB_PORT=8080 ./restart.sh  <span class="dim"># 自定义端口</span>
     <div class="container" style="text-align: center;">
         <h2 class="section-title" style="margin-bottom: 1rem;">准备好开始了吗？</h2>
         <p class="section-subtitle" style="margin-bottom: 3rem;">
-            V1.0 正式版。SDD V3.3 设计基线，11 项架构决策，完整协议文档。
+            V1.0 正式版。SDD V3.4 设计基线，12 项架构决策，3 张 SVG 系统图，完整协议文档。
         </p>
         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
             <a href="https://radio.vlsc.net:8889" class="btn btn-primary btn-large" target="_blank">
@@ -286,7 +287,7 @@ WEB_PORT=8080 ./restart.sh  <span class="dim"># 自定义端口</span>
                 <p>
                     SunSDR2 DX 移动远程电台控制<br>
                     你的 SunSDR2 DX，随时随地<br>
-                    V1.0 · SDD V3.3 · GPL-3.0
+                    V1.0 · SDD V3.4 · GPL-3.0
                 </p>
             </div>
             <div class="footer-section">

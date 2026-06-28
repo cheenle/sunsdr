@@ -75,8 +75,9 @@ if [ "$FOREGROUND" = "1" ]; then
 else
     echo "→ 后台启动 sunmrrc → http://localhost:$WEB_PORT"
     echo "   WEB_PASSWORD=${WEB_PASSWORD:-(default: sunmrrc)}"
-    nohup python3 server.py > "$LOG_FILE" 2>&1 &
+    nohup python3 -u server.py > "$LOG_FILE" 2>&1 < /dev/null &
     NEW_PID=$!
+    disown "$NEW_PID" 2>/dev/null || true
     sleep 2
     if kill -0 "$NEW_PID" 2>/dev/null; then
         echo "✓ 已启动 (pid $NEW_PID),日志: $LOG_FILE"

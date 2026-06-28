@@ -18,8 +18,8 @@
 
 - Serve a mobile-first web UI from `static/`.
 - Maintain WebSocket control channel `/WSCTRX`.
-- Maintain RX audio channel `/WSaudioRX` using Int16 PCM frames.
-- Maintain TX audio socket `/WSaudioTX` for browser microphone uplink (PCM frames modulated to SunSDR TX IQ).
+- Maintain RX audio channel `/WSaudioRX` using tagged dual-codec frames (Opus default, Int16 PCM fallback; 1-byte per-frame codec tag).
+- Maintain TX audio socket `/WSaudioTX` for browser microphone uplink (tagged Opus/PCM frames modulated to SunSDR TX IQ).
 - Maintain waterfall channel `/WSspectrum` with compact FFT frames.
 - Control TX output power via the device DRIVE command (`0x0017`) with runtime-configurable per-band power (`/api/band_power`).
 - Persist and serve memory channels via `/api/mem_channels`.
@@ -35,18 +35,18 @@
 
 - Native iOS/Android application.
 - Cloud-hosted multi-tenant service.
-- Full authentication/authorization backend.
+- Multi-tenant / per-user authentication backend (current auth is a single shared password with session tokens).
 - ATR-1000 backend endpoint and proxy in this repository.
-- CW, FT8, recordings, and logbook pages unless added later.
+- CW, FT8, and logbook pages unless added later (recordings page is implemented).
 - General Hamlib rig abstraction; this codebase is SunSDR2 DX direct-control oriented.
 
 ## 3.4 Success Criteria
 
 | ID | Criterion | Verification |
 |----|-----------|--------------|
-| SC1 | HTTPS entry starts when certs exist | Server log shows `sunmrrc https://0.0.0.0:<port>` |
-| SC2 | iPhone can request microphone permissions | Page loaded from `https://radio.vlsc.net:8080` secure context |
-| SC3 | RX audio arrives at browser | `/WSaudioRX` receives Int16 PCM frames and UI bitrate updates |
+| SC1 | HTTPS entry starts when certs exist | Server log shows `sunmrrc https://[::]:<port>` |
+| SC2 | iPhone can request microphone permissions | Page loaded from `https://radio.vlsc.net:8889` secure context |
+| SC3 | RX audio arrives at browser | `/WSaudioRX` receives tagged dual-codec frames (Opus/PCM) and UI bitrate updates |
 | SC4 | Radio frequency control works | `setFreq:*` returns `getFreq:*` and radio state changes |
 | SC5 | DSP mode changes are local and explicit | `setMode:*` updates demodulator mode and returns `getMode:*` |
 | SC6 | PTT release cannot silently stick indefinitely | Release ACK retry, backup `s:`, watchdog, and backend forced RX path exist |

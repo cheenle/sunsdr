@@ -26,7 +26,8 @@ The current codebase is intentionally narrower than the older MRRC documentation
 | Control WebSocket | Implemented | `/WSCTRX` handles `PING`, frequency, mode, PTT, tune, gain, filter, WDSP commands |
 | RX audio WebSocket | Implemented | `/WSaudioRX` broadcasts tagged dual-codec frames (0x00=PCM, 0x01=Opus 16 kHz mono); default Opus |
 | TX voice modulation | Implemented | `/WSaudioTX` mic frames → Hilbert SSB → 24-bit IQ → `0xFFFD` TX stream; on-air verified (Tune ~12 W, voice 30–40 W PEP) |
-| TX power / drive control | Implemented | Device DRIVE command (`0x0017`) with per-band power; confirmed on-air |
+| TX power / drive control | Implemented | Device DRIVE command (`0x0017`) with per-band power; TX_IQ_PEAK=1.0 (full scale), TX_DRIVE_GAIN=3.0, client preamp=1.5 with tanh soft limiter |
+| TX audio EQ | Implemented | Client-side Web Audio EQ (DEFAULT/MEDIUM/STRONG/RAGCHEW presets), compressor (3:1), anti-alias lowpass; gain-staged for clean SSB envelope |
 | Per-band power UI | Implemented | Menu → Band Power panel + `/api/band_power` (persisted to `band_power.json`) |
 | Spectrum WebSocket | Implemented | `/WSspectrum` broadcasts compact uint8 FFT rows; browser accumulates frames (~38 Hz → ~3.8 Hz) and renders with adaptive noise-floor contrast |
 | SunSDR2 DX UDP control | Implemented | Boot/connect sequence and parameter commands through shared direct protocol module |
@@ -40,10 +41,10 @@ The current codebase is intentionally narrower than the older MRRC documentation
 
 | Capability | Boundary |
 |------------|----------|
-| TX power telemetry | Device sends `0x1F00` in all modes (verified: 273 TX-state packets in captures). off16 u16/100 = SWR, off14 u16 = pwr_raw (cubic fit → watts), off18 f32 = temp °C |
-| ATR-1000 | Frontend hooks and status placeholders exist; `/WSATR1000` endpoint accepts connections but does not interface with real tuner hardware |
-| Recordings | `recordings.html` page exists; CW/FT8 menu links were removed (target pages absent) |
-| Authentication | Cookie/callsign helpers exist; no server-side auth boundary is implemented in `server.py` |
+| TX power telemetry | Device sends `0x1F00` in all modes. Verified field offsets (2026-06-25): off30 f32 = forward power watts (PEP), off16 u16/10 = supply voltage, off18 f32 = PA temp °C. Device has NO reverse-power field → cannot compute SWR. |
+| ATR-1000 | Frontend hooks and status placeholders exist; `/WSATR1000` endpoint accepts connections but does not interface with real tuner hardware. Only available SWR source. |
+| Recordings | `recordings.html` page exists; server-side RX MP3 capture via ffmpeg pipe; CW/FT8 menu links were removed (target pages absent) |
+| Authentication | Password-based session auth implemented (login page, `_auth_tokens`, `sunmrrc_auth` cookie, 30-day validity); all routes and WS endpoints require token |
 
 ## 1.5 Architecture Layers
 
@@ -63,4 +64,4 @@ Device Layer
 
 ## 1.6 Current Project Status
 
-As of 2026-06-23, the RX chain is healthy and the iOS secure-context blocker is resolved via HTTPS/WSS startup (expected mobile entry `https://radio.vlsc.net:8080`). The TX voice path is implemented end-to-end and on-air verified: browser mic → Hilbert SSB → 24-bit IQ, with output power set by the device DRIVE command (`0x0017`) per band (Tune ~12 W, voice 30–40 W PEP read from the ATR-1000). Remaining open work is control-network configurability (fixed LAN IPs) and the ATR-1000 backend endpoint.
+As of 2026-06-26, the RX chain is healthy and the iOS secure-context blocker is resolved via HTTPS/WSS startup (expected mobile entry `https://radio.vlsc.net:8889`). The TX voice path is fully implemented: browser mic → Web Audio EQ/compressor → Opus → WebSocket → server Hilbert SSB → 24-bit IQ → 0xFFFD TX stream. TX power is set by device DRIVE (0x0017) per band via `/api/band_power`, with client-side gain staging (preamp ×1.5, EQ presets) feeding a soft-tanh-limited modulator. Device telemetry provides forward watts, supply voltage, and PA temperature (no SWR — see AD-011). Remaining open work: control-network configurability (fixed LAN IPs) and ATR-1000 backend endpoint.

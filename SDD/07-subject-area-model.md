@@ -82,5 +82,5 @@ OperationalConfig
 | Entity | Reason Deferred |
 |--------|-----------------|
 | ATRMeterData | Frontend exists, backend endpoint absent |
-| AuthUser | No server-side user database or auth routes in current backend |
+| AuthUser | Shared-password session-token auth is implemented (`_auth_tokens`, `sunmrrc_auth` cookie, all routes/WS gated); only per-user identity / user database is deferred |
 | LogbookEntry | Menu item only; no model in current backend |

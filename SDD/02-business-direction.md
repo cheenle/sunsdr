@@ -23,7 +23,7 @@ Deliver a pragmatic, browser-native remote radio control surface for HAM operati
 | ID | Objective | Target | Current Status |
 |----|-----------|--------|----------------|
 | O1 | iOS secure-context operation | HTTPS/WSS entry works | Implemented by TLS auto-detect |
-| O2 | RX audio availability | Browser receives continuous Int16 PCM | Implemented |
+| O2 | RX audio availability | Browser receives continuous tagged dual-codec audio (Opus default, Int16 PCM fallback) | Implemented |
 | O3 | Control-plane liveness | `PING`/`PONG`, state query and command response | Implemented |
 | O4 | PTT release safety | Multiple release safeguards | Implemented in frontend and backend backup command |
 | O5 | Spectrum visibility | Compact waterfall stream | Implemented |

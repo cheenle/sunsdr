@@ -105,6 +105,13 @@ audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
 
+# Remote bandwidth control: spectrum is usually the downlink hog. RX Opus at
+# 64 kbps is modest, but 512-bin waterfall rows at ~38 fps cost ~155 kbps before
+# WebSocket/IP overhead. Keep the local default high and let remote clients drop
+# it over /WSCTRX with setSpectrumFps:<fps>.
+spectrum_fps = 38.0
+_last_spectrum_send_ts = 0.0
+
 # ── Continuous RX-audio → 48 kHz resampler (cubic, cross-chunk) ─────
 # Resamples the demodulator's RX audio rate (≈39062.5 Hz for WFM, 15625 Hz for
 # voice — fractional and IQ-rate-dependent) up to 48 kHz for Opus + AudioContext.
@@ -210,6 +217,47 @@ recording_rate = 0  # RX audio rate (Hz) captured when recording starts; the
                     # DSP_AUDIO_RATE, so the MP3 must be encoded at this rate or
                     # it plays back at the wrong speed/pitch.
 RECORDINGS_DIR = STATIC_DIR / "recordings"
+TX_UPLINK_CAPTURE_DIR = Path(__file__).parent / "captures"
+TX_WS_JITTER_PRIME_FRAMES = 6       # 120 ms of 20 ms mic frames before drain
+TX_WS_JITTER_REPRIME_FRAMES = 3     # 60 ms after a browser/worker stall
+TX_WS_JITTER_MAX_FRAMES = 80        # bound latency if a mobile browser bursts
+
+
+def _write_wav(path: Path, pcm: bytes, rate: int):
+    """Write mono Int16 PCM to a WAV file."""
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(int(rate))
+        wf.writeframes(pcm)
+
+
+def _save_tx_uplink_capture(raw_pcm: bytes, timed_pcm: bytes,
+                            csv_rows: list[str], rate: int) -> tuple[Path, Path, Path]:
+    """Save decoded TX mic audio just before the modulator.
+
+    raw WAV concatenates decoded frames exactly as received. timed WAV inserts
+    silence for late WebSocket arrivals, making uplink jitter audible.
+    """
+    TX_UPLINK_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    raw_path = TX_UPLINK_CAPTURE_DIR / f"tx_uplink_pre_mod_{ts}_raw.wav"
+    timed_path = TX_UPLINK_CAPTURE_DIR / f"tx_uplink_pre_mod_{ts}_timed.wav"
+    csv_path = TX_UPLINK_CAPTURE_DIR / f"tx_uplink_pre_mod_{ts}.csv"
+    latest_raw = TX_UPLINK_CAPTURE_DIR / "tx_uplink_pre_mod_latest_raw.wav"
+    latest_timed = TX_UPLINK_CAPTURE_DIR / "tx_uplink_pre_mod_latest_timed.wav"
+    latest_csv = TX_UPLINK_CAPTURE_DIR / "tx_uplink_pre_mod_latest.csv"
+
+    _write_wav(raw_path, raw_pcm, rate)
+    _write_wav(timed_path, timed_pcm, rate)
+    _write_wav(latest_raw, raw_pcm, rate)
+    _write_wav(latest_timed, timed_pcm, rate)
+    csv_text = "".join(csv_rows)
+    csv_path.write_text(csv_text, encoding="utf-8")
+    latest_csv.write_text(csv_text, encoding="utf-8")
+    logger.info("TX uplink capture saved: raw=%s timed=%s csv=%s",
+                raw_path, timed_path, csv_path)
+    return raw_path, timed_path, csv_path
 
 MIME = {".css":"text/css", ".js":"application/javascript", ".html":"text/html",
         ".json":"application/json", ".png":"image/png", ".wav":"audio/wav",
@@ -398,6 +446,7 @@ app = FastAPI(title="SunMRRC", lifespan=lifespan)
 # Protects every HTTP route except /login and /api/auth/*.
 # WebSocket endpoints do their own token check in on-accept.
 _PUBLIC_PATHS = {"/login", "/api/auth/login", "/api/auth/logout"}
+_AUTH_ASSET_EXTS = (".js", ".wasm", ".json")
 
 @app.middleware("http")
 async def _auth_middleware(request: Request, call_next):
@@ -410,7 +459,8 @@ async def _auth_middleware(request: Request, call_next):
         return await call_next(request)
     if not _verify_auth(request):
         # API routes get a 401 JSON response
-        if path.startswith("/api/") or path.startswith("/WS"):
+        if (path.startswith("/api/") or path.startswith("/WS")
+                or path.endswith(_AUTH_ASSET_EXTS)):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         # Page routes redirect to login, preserving the original URL
         qs = request.url.query
@@ -761,7 +811,7 @@ async def _process_iq_stream():
         """
         global tx_keepalive_due
         # Adaptive pacing state
-        _Q_TARGET = 50.0                     # aim to hover around 50 queued packets
+        _Q_TARGET = 70.0                     # aim to hover around ~360 ms queued
         _ADAPTIVE_ALPHA = 0.08               # EMA over ~12 packets (~60 ms)
         _ADAPTIVE_MAX = 0.15                 # never deviate more than ±15% from nominal
         _q_ema = _Q_TARGET                   # start at target to avoid transient
@@ -1083,7 +1133,7 @@ async def _broadcast_audio(pcm: bytes):
 
     # Build the list of tagged WS frames to send. Each frame is a 1-byte codec
     # tag + payload so the client decodes correctly without a control-channel
-    # race. Opus emits one frame per complete 320-sample (20 ms) packet; the
+    # race. Opus emits one frame per complete 960-sample (20 ms) packet; the
     # encoder buffers partial tails internally to keep frame boundaries clean.
     frames: list[bytes] = []
     if opus_enabled and opus_encoder is not None:
@@ -1113,7 +1163,13 @@ async def _broadcast_spectrum(spec):
     a single byte (0 = -120 dB, 255 = 0 dB) — 512 bytes/frame, ~19 KB/s @ 38 Hz.
     The browser maps bytes back to a colour ramp for the waterfall row.
     """
+    global _last_spectrum_send_ts
     if not spectrum_clients: return
+    now = time.monotonic()
+    min_interval = 1.0 / max(1.0, float(spectrum_fps))
+    if now - _last_spectrum_send_ts < min_interval:
+        return
+    _last_spectrum_send_ts = now
     arr = np.asarray(spec, dtype=np.float32)
     if arr.size == 0: return
     q = np.clip((arr + 120.0) * (255.0 / 120.0), 0, 255).astype(np.uint8)
@@ -1209,13 +1265,18 @@ async def ws_ctrl(ws: WebSocket):
                     else:
                         await ws.send_text(f"setOpus:{'on' if opus_enabled else 'off'}")
                 elif cmd == "setOpusBitrate":
-                    # RX Opus bitrate in kbps (e.g. 48/64/96/128). Lets the user
+                    # RX Opus bitrate in kbps (e.g. 32/64/96/128). Lets the user
                     # trade bandwidth vs quality per use-case: WFM music sounds
                     # great at 64k while using 1/12 the bandwidth of 768k PCM, so
                     # it streams smoothly on a remote link where PCM stutters.
+                    # Older frontend builds accidentally sent bps (32000) instead
+                    # of kbps (32); normalize that instead of clamping to 128k.
                     if opus_encoder is not None:
                         try:
-                            kbps = max(16, min(128, int(float(val))))
+                            raw_kbps = int(float(val))
+                            if raw_kbps > 1000:
+                                raw_kbps = round(raw_kbps / 1000)
+                            kbps = max(16, min(128, raw_kbps))
                             opus_encoder.set_bitrate(kbps * 1000)
                             opus_encoder.reset()
                             logger.info("RX Opus bitrate: %d kbps", kbps)
@@ -1226,6 +1287,17 @@ async def ws_ctrl(ws: WebSocket):
                     if opus_encoder is not None:
                         await ws.send_text(
                             f"setOpusBitrate:{opus_encoder.bitrate // 1000}")
+                elif cmd == "setSpectrumFps":
+                    global spectrum_fps
+                    try:
+                        fps = max(1.0, min(38.0, float(val)))
+                        spectrum_fps = fps
+                        logger.info("Spectrum FPS cap: %.1f", fps)
+                        await _send_ctrl(f"setSpectrumFps:{fps:g}")
+                    except ValueError:
+                        pass
+                elif cmd == "getSpectrumFps":
+                    await ws.send_text(f"setSpectrumFps:{spectrum_fps:g}")
                 elif cmd == "setPTT":
                     tx = val.lower() == "true"
                     await radio.set_ptt(tx)
@@ -1441,6 +1513,138 @@ async def ws_audio_tx(ws: WebSocket):
     except Exception:
         _rx_probe = None
     _rx_last = time.monotonic()
+    _cap_active = False
+    _cap_raw = bytearray()
+    _cap_timed = bytearray()
+    _cap_rows = ["mono_ts,interval_ms,tag,wire_bytes,pcm_samples,frame_ms,gap_ms,gap_samples,ptt\n"]
+    _cap_last_ts = None
+    _cap_rate = tx_rate
+    _cap_max_bytes = 16000 * 2 * 180  # 3 minutes at 16 kHz mono Int16
+    _tx_pcm_queue: list[tuple[bytes, int, int]] = []
+    _tx_queue_lock = asyncio.Lock()
+    _tx_pacer_stop = asyncio.Event()
+    _tx_pacer_task: asyncio.Task | None = None
+    _tx_primed = False
+    _tx_first_prime = True
+    _tx_last_pace_ts = time.monotonic()
+
+    def _finish_tx_capture(reason: str):
+        nonlocal _cap_active, _cap_raw, _cap_timed, _cap_rows, _cap_last_ts, _cap_rate
+        if not _cap_active or not _cap_raw:
+            _cap_active = False
+            _cap_raw = bytearray()
+            _cap_timed = bytearray()
+            _cap_rows = ["mono_ts,interval_ms,tag,wire_bytes,pcm_samples,frame_ms,gap_ms,gap_samples,ptt\n"]
+            _cap_last_ts = None
+            return
+        try:
+            _cap_rows.append(f"# finish,{reason},raw_bytes,{len(_cap_raw)},timed_bytes,{len(_cap_timed)}\n")
+            _save_tx_uplink_capture(bytes(_cap_raw), bytes(_cap_timed), _cap_rows, _cap_rate)
+        except Exception as e:
+            logger.warning("TX uplink capture save failed: %s", e)
+        _cap_active = False
+        _cap_raw = bytearray()
+        _cap_timed = bytearray()
+        _cap_rows = ["mono_ts,interval_ms,tag,wire_bytes,pcm_samples,frame_ms,gap_ms,gap_samples,ptt\n"]
+        _cap_last_ts = None
+
+    def _capture_tx_pcm(pcm: bytes, tag: int, wire_bytes: int,
+                        now_ts: float, interval_ms: float):
+        nonlocal _cap_active, _cap_raw, _cap_timed, _cap_rows, _cap_last_ts, _cap_rate
+        ptt = 1 if getattr(radio, '_ptt_active', False) else 0
+        if not ptt:
+            _finish_tx_capture("ptt-off")
+            return
+        if not _cap_active:
+            _cap_active = True
+            _cap_rate = tx_rate
+            _cap_last_ts = None
+            logger.info("TX uplink pre-mod capture started")
+        samples = len(pcm) // 2
+        frame_ms = samples * 1000.0 / max(1, _cap_rate)
+        gap_ms = 0.0
+        gap_samples = 0
+        if _cap_last_ts is not None:
+            observed_ms = (now_ts - _cap_last_ts) * 1000.0
+            late_ms = observed_ms - frame_ms
+            if late_ms > 30.0:
+                gap_ms = late_ms
+                gap_samples = int(round(gap_ms * _cap_rate / 1000.0))
+                _cap_timed.extend(b"\x00" * (gap_samples * 2))
+        _cap_raw.extend(pcm)
+        _cap_timed.extend(pcm)
+        _cap_rows.append(
+            f"{now_ts:.6f},{interval_ms:.3f},{tag},{wire_bytes},"
+            f"{samples},{frame_ms:.3f},{gap_ms:.3f},{gap_samples},{ptt}\n")
+        _cap_last_ts = now_ts
+        if len(_cap_raw) >= _cap_max_bytes:
+            _finish_tx_capture("max-duration")
+
+    async def _feed_tx_pcm(pcm: bytes, tag: int, wire_bytes: int,
+                           _pace_now: float, _pace_interval_ms: float):
+        nonlocal _lvl_log_last
+        _capture_tx_pcm(pcm, tag, wire_bytes, _pace_now, _pace_interval_ms)
+        if dsp_proc and dsp_proc.modulator and getattr(radio, '_ptt_active', False):
+            try:
+                await loop.run_in_executor(
+                    None, dsp_proc.modulator.feed_audio, pcm, tx_rate)
+            except Exception:
+                pass
+            # ── End-to-end TX chain level probe (1 Hz) ──
+            try:
+                _now_lvl = time.monotonic()
+                if _now_lvl - _lvl_log_last >= 1.0:
+                    _lvl_log_last = _now_lvl
+                    _s = dsp_proc.modulator.snapshot_levels()
+                    def _rms(sq, n): return (sq/n)**0.5 if n else 0.0
+                    logger.info(
+                        f"TX chain in : rms={_rms(_s['in_sq'],_s['in_n']):.4f} "
+                        f"peak={_s['in_pk']:.4f} n={_s['in_n']}")
+                    logger.info(
+                        f"TX chain an : rms={_rms(_s['an_sq'],_s['an_n']):.4f} "
+                        f"peak={_s['an_pk']:.4f} n={_s['an_n']}")
+                    logger.info(
+                        f"TX chain drv: rms={_rms(_s['drv_sq'],_s['drv_n']):.4f} "
+                        f"peak={_s['drv_pk']:.4f} n={_s['drv_n']}")
+                    logger.info(
+                        f"TX chain lim: rms={_rms(_s['lim_sq'],_s['lim_n']):.4f} "
+                        f"peak={_s['lim_pk']:.4f} n={_s['lim_n']}")
+            except Exception:
+                pass
+
+    async def _tx_uplink_pacer():
+        nonlocal _tx_primed, _tx_first_prime, _tx_last_pace_ts
+        while not _tx_pacer_stop.is_set():
+            item = None
+            async with _tx_queue_lock:
+                if not getattr(radio, '_ptt_active', False):
+                    _tx_pcm_queue.clear()
+                    _tx_primed = False
+                    _tx_first_prime = True
+                else:
+                    want = (TX_WS_JITTER_PRIME_FRAMES if _tx_first_prime
+                            else TX_WS_JITTER_REPRIME_FRAMES)
+                    if not _tx_primed and len(_tx_pcm_queue) >= want:
+                        _tx_primed = True
+                        _tx_first_prime = False
+                    if _tx_primed and _tx_pcm_queue:
+                        item = _tx_pcm_queue.pop(0)
+                    elif _tx_primed:
+                        _tx_primed = False
+            if item is None:
+                _tx_last_pace_ts = time.monotonic()
+                _tx_frame_s = 0.020
+                await asyncio.sleep(_tx_frame_s)
+                continue
+            pcm, tag, wire_bytes = item
+            _pace_now = time.monotonic()
+            _pace_interval_ms = (_pace_now - _tx_last_pace_ts) * 1000.0
+            _tx_last_pace_ts = _pace_now
+            await _feed_tx_pcm(pcm, tag, wire_bytes, _pace_now, _pace_interval_ms)
+            samples = len(pcm) // 2
+            _tx_frame_s = samples / max(1, tx_rate)
+            await asyncio.sleep(_tx_frame_s)
+
     try:
         while True:
             msg = await ws.receive()
@@ -1449,17 +1653,19 @@ async def ws_audio_tx(ws: WebSocket):
             _rx_now = time.monotonic()
             data = msg.get("bytes")
             if data is not None:
+                _interval_ms = (_rx_now - _rx_last) * 1000.0
                 if _rx_probe:
                     ptt = 1 if getattr(radio, '_ptt_active', False) else 0
                     try:
                         _rx_probe.write(
-                            f"{_rx_now:.6f},{(_rx_now - _rx_last)*1000:.3f},"
+                            f"{_rx_now:.6f},{_interval_ms:.3f},"
                             f"{len(data)},{ptt}\n")
                     except Exception:
                         pass
-                    _rx_last = _rx_now
+                _rx_last = _rx_now
                 # Decode codec-tagged mic frame → PCM → modulator.
                 # Tag byte: 0x00 = Int16 PCM, 0x01 = Opus (like RX path).
+                tag = -1
                 if len(data) >= 2:
                     tag = data[0]
                     frame = data[1:]
@@ -1476,37 +1682,13 @@ async def ws_audio_tx(ws: WebSocket):
                         pcm = data
                 else:
                     pcm = data
-                if dsp_proc and dsp_proc.modulator and getattr(radio, '_ptt_active', False):
-                    try:
-                        await loop.run_in_executor(
-                            None, dsp_proc.modulator.feed_audio, pcm, tx_rate)
-                    except Exception:
-                        pass
-                    # ── End-to-end TX chain level probe (1 Hz) ──
-                    # Reads the per-stage accumulators from the modulator and
-                    # prints RMS/peak at input / analytic / post-drive / post-
-                    # limiter. Lets us map mic level → final IQ amplitude
-                    # without re-instrumenting.
-                    try:
-                        _now_lvl = time.monotonic()
-                        if _now_lvl - _lvl_log_last >= 1.0:
-                            _lvl_log_last = _now_lvl
-                            _s = dsp_proc.modulator.snapshot_levels()
-                            def _rms(sq, n): return (sq/n)**0.5 if n else 0.0
-                            logger.info(
-                                f"TX chain in : rms={_rms(_s['in_sq'],_s['in_n']):.4f} "
-                                f"peak={_s['in_pk']:.4f} n={_s['in_n']}")
-                            logger.info(
-                                f"TX chain an : rms={_rms(_s['an_sq'],_s['an_n']):.4f} "
-                                f"peak={_s['an_pk']:.4f} n={_s['an_n']}")
-                            logger.info(
-                                f"TX chain drv: rms={_rms(_s['drv_sq'],_s['drv_n']):.4f} "
-                                f"peak={_s['drv_pk']:.4f} n={_s['drv_n']}")
-                            logger.info(
-                                f"TX chain lim: rms={_rms(_s['lim_sq'],_s['lim_n']):.4f} "
-                                f"peak={_s['lim_pk']:.4f} n={_s['lim_n']}")
-                    except Exception:
-                        pass
+                async with _tx_queue_lock:
+                    _tx_pcm_queue.append((pcm, tag, len(data)))
+                    while len(_tx_pcm_queue) > TX_WS_JITTER_MAX_FRAMES:
+                        _tx_pcm_queue.pop(0)
+                if _tx_pacer_task is None or _tx_pacer_task.done():
+                    _tx_pacer_stop.clear()
+                    _tx_pacer_task = asyncio.create_task(_tx_uplink_pacer())
                 continue
             text = msg.get("text")
             if text:
@@ -1518,11 +1700,24 @@ async def ws_audio_tx(ws: WebSocket):
                     except Exception:
                         pass
                 elif text.startswith("s:"):
+                    async with _tx_queue_lock:
+                        _tx_pcm_queue.clear()
+                        _tx_primed = False
+                        _tx_first_prime = True
+                    _finish_tx_capture("stop-text")
                     if dsp_proc and dsp_proc.modulator:
                         dsp_proc.modulator.reset_mic()
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
+        _tx_pacer_stop.set()
+        if _tx_pacer_task is not None:
+            _tx_pacer_task.cancel()
+            try:
+                await _tx_pacer_task
+            except (asyncio.CancelledError, RuntimeError):
+                pass
+        _finish_tx_capture("disconnect")
         audio_tx_clients.discard(ws)
 
 

@@ -33,8 +33,8 @@ SunSDR2 DX
 |-----------|----------|----------|-----------|-------------|
 | Static UI | HTTPS/HTTP | `/{p:path}` | Browser -> Server | Serves `index.html`, CSS, JS, manifest, images, wasm |
 | Control WebSocket | WSS/WS | `/WSCTRX` | Browser <-> Server | Commands and state updates |
-| RX Audio WebSocket | WSS/WS | `/WSaudioRX` | Server -> Browser | Int16 PCM audio frames |
-| TX Audio WebSocket | WSS/WS | `/WSaudioTX` | Browser -> Server | Int16 PCM mic frames modulated to SunSDR TX IQ (`0xFFFD`) |
+| RX Audio WebSocket | WSS/WS | `/WSaudioRX` | Server -> Browser | Tagged dual-codec audio frames (1-byte tag: 0x00=Int16 PCM, 0x01=Opus 16 kHz mono; default Opus) |
+| TX Audio WebSocket | WSS/WS | `/WSaudioTX` | Browser -> Server | Tagged Opus/PCM mic frames modulated to SunSDR TX IQ (`0xFFFD`) |
 | Spectrum WebSocket | WSS/WS | `/WSspectrum` | Server -> Browser | Quantized spectrum rows |
 | Band Power API | HTTPS/HTTP | `/api/band_power` | Browser <-> Server | Get/set per-band TX drive %, persisted to `band_power.json` |
 | Memory Channel API | HTTPS/HTTP | `/api/mem_channels` | Browser <-> Server | Get/set memory channels, persisted to `mem_channels.json` |
@@ -49,8 +49,10 @@ SunSDR2 DX
 | RX signal flow | SunSDR IQ UDP -> decode 24-bit IQ -> DSP feed -> demodulated PCM -> resample to 16 kHz -> `/WSaudioRX` -> Web Audio playback |
 | Spectrum flow | IQ -> FFT -> dB clip -> uint8 quantize (512 bytes, ~38 Hz) -> `/WSspectrum` -> client accumulates `WF_DECIMATE` frames (~3.8 Hz) -> per-row adaptive noise floor (`WF_PCTL`) + blue-sea bias (`WF_BIAS`) + gain (`WF_GAIN`) -> waterfall canvas |
 | Control flow | UI action -> `/WSCTRX` command string -> `SunSDR2DXClient` or demodulator setter -> response/broadcast |
-| TX voice flow | Browser mic -> `/WSaudioTX` Int16 PCM -> `TXModulator` resample to 15625 Hz -> Hilbert SSB -> 24-bit IQ -> `0xFFFD` packets paced to device `:50002` |
-| TX power flow | `setDrive:*` or QSY -> `band_power_for(freq)` -> DRIVE command (`0x0017`, byte in trailing word) -> device per-band power; re-sent before each PTT assert |
+| TX voice flow | Browser mic -> `/WSaudioTX` tagged Opus/PCM -> server codec decode -> `TXModulator` resample to 15625 Hz -> Hilbert SSB -> 24-bit IQ -> `0xFFFD` packets paced to device `:50002` |
+| TX power flow | `setDrive:*` or QSY → `band_power_for(freq)` → DRIVE command (`0x0017`, byte in trailing word) → device per-band power; re-sent before each PTT assert |
+| TX telemetry flow | Device `0x1F00` (34B) continuous in RX and TX → off30 f32 forward watts, off16 u16/10 supply volts, off18 f32 PA temp °C → `getTXTelem:W,V,T,WattInt` over `/WSCTRX` → frontend VOLT field (replaces former SWR). No device reverse-power → no SWR. |
+| TX audio gain flow | Client preamp(×1.5) → EQ(6-12dB peaks) → AudioWorklet 48k→16k → Opus/PCM → WSaudioTX → server TXModulator → Hilbert SSB → drive gain(×3.0×drive%) → tanh(1.0) soft limiter → 24-bit IQ. tanh engagement ~4% at healthy levels. |
 | Liveness/latency flow | Frontend sends no-colon `PING` -> `ws_ctrl()` answers `PONG` before command parsing -> frontend round-trip timer updates the status-bar latency (ms) |
 | S-meter flow | FFT percentile -> `getSignalLevel:*` over `/WSCTRX` -> client asymmetric exponential smoothing (attack 0.5 / release 0.15) -> S-meter needle |
 | PTT safety flow | UI PTT press/release -> `setPTT:*` -> radio PTT -> `getPTT:*` ack -> frontend retry/watchdog when release ack is missing |

@@ -18,6 +18,19 @@ function wsUrlWithAuth(path) {
     return path + (token ? sep + 'token=' + encodeURIComponent(token) : '');
 }
 
+function handleAuthExpired(source) {
+    if (window.__authExpiredRedirecting) return;
+    window.__authExpiredRedirecting = true;
+    console.warn('认证已过期，重新登录:', source || '');
+    try {
+        if (wsAudioRX && wsAudioRX.readyState === WebSocket.OPEN) wsAudioRX.close();
+        if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) wsAudioTX.close();
+        if (wsControlTRX && wsControlTRX.readyState === WebSocket.OPEN) wsControlTRX.close();
+    } catch (e) {}
+    var next = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.replace('/login?next=' + next);
+}
+
 //Mobile detection///////////////////////////////////////////////////////////////////////////
 /* eslint-disable */
 const IS_MOBILE = (function (a) {
@@ -415,7 +428,7 @@ function AudioRX_start(){
     (async () => {
         if (useAudioWorklet) {
             try {
-                await AudioRX_context.audioWorklet.addModule('rx_worklet_processor.js?v=5.7.2');
+                await AudioRX_context.audioWorklet.addModule(wsUrlWithAuth('/rx_worklet_processor.js?v=5.7.3'));
                 const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
                 AudioRX_source_node = rxNode;
                 // 抖动缓冲按时长配置（worklet 内部按 48kHz 换算样本数）。
@@ -448,7 +461,9 @@ function AudioRX_start(){
         
         if (!useAudioWorklet) {
             // ScriptProcessor 模式（iOS Safari 兼容）
-            // 使用 2048 帧缓冲区（约 42ms @ 48kHz），匹配 Opus 40ms 帧长
+            // 使用 2048 帧缓冲区（约 42ms @ 48kHz）。Opus 在手机端多了
+            // wasm 解码 + 主线程调度，20ms 小帧比 PCM 更容易出现短暂突发
+            // 间隔，所以这里也做时间型 jitter gate。
             // iOS Safari 要求缓冲区大小必须是 2 的幂次方
             const BUFF_SIZE = 2048;
             AudioRX_source_node = AudioRX_context.createScriptProcessor(BUFF_SIZE, 1, 1);
@@ -457,6 +472,28 @@ function AudioRX_start(){
             // 关键修复：暴露到 window 对象，确保 TX 释放时能正确清除
             window.__rxAccumulatedBuffer = [];
             window.__rxTotalSamples = 0;
+            const SCRIPT_PCM_PREBUFFER_MS = 60;
+            const SCRIPT_PCM_RECOVERY_MS = 30;
+            const SCRIPT_OPUS_PREBUFFER_MS = 260;
+            const SCRIPT_OPUS_RECOVERY_MS = 120;
+            const SCRIPT_MAX_BUFFER_MS = 1000;
+            function scriptRxMsToSamples(ms) {
+                return Math.round((ms / 1000) * AudioRX_context.sampleRate);
+            }
+            function scriptRxPrebufferSamples(codec) {
+                return scriptRxMsToSamples(codec === 'opus' ? SCRIPT_OPUS_PREBUFFER_MS : SCRIPT_PCM_PREBUFFER_MS);
+            }
+            function scriptRxRecoverySamples(codec) {
+                return scriptRxMsToSamples(codec === 'opus' ? SCRIPT_OPUS_RECOVERY_MS : SCRIPT_PCM_RECOVERY_MS);
+            }
+            window.__rxScriptPriming = true;
+            window.__rxScriptGateSamples = scriptRxPrebufferSamples(window.__rxLastCodec);
+            window.__resetRxScriptJitter = function(codec) {
+                window.__rxAccumulatedBuffer = [];
+                window.__rxTotalSamples = 0;
+                window.__rxScriptPriming = true;
+                window.__rxScriptGateSamples = scriptRxPrebufferSamples(codec || window.__rxLastCodec);
+            };
             var underrunCount = 0;
             
             AudioRX_source_node.onaudioprocess = function(event) {
@@ -467,6 +504,15 @@ function AudioRX_start(){
                 // 从累积缓冲区填充输出（使用 window 暴露的变量）
                 var accBuf = window.__rxAccumulatedBuffer;
                 var totSamples = window.__rxTotalSamples;
+
+                if (window.__rxScriptPriming) {
+                    var gateSamples = window.__rxScriptGateSamples || scriptRxPrebufferSamples(window.__rxLastCodec);
+                    if (totSamples < gateSamples) {
+                        out.fill(0);
+                        return;
+                    }
+                    window.__rxScriptPriming = false;
+                }
                 
                 while (samplesWritten < samplesNeeded && accBuf.length > 0) {
                     var cur = accBuf[0];
@@ -489,10 +535,10 @@ function AudioRX_start(){
                 
                 // 如果数据不足，用静音填充剩余部分
                 if (samplesWritten < samplesNeeded) {
-                    for (var k = samplesWritten; k < samplesNeeded; k++) {
-                        out[k] = 0;
-                    }
+                    out.fill(0, samplesWritten);
                     underrunCount++;
+                    window.__rxScriptPriming = true;
+                    window.__rxScriptGateSamples = scriptRxRecoverySamples(window.__rxLastCodec);
                     // 每 50 次欠载打印一次日志
                     if (underrunCount % 50 === 0) {
                         console.log('⚠️ 缓冲区欠载，累计:', underrunCount, ', 当前缓冲:', accBuf.length);
@@ -509,14 +555,17 @@ function AudioRX_start(){
                 // 后端给每帧加 1 字节编解码标签（PCM/Opus），按标签解码
                 var float32Data = decodeRxAudioFrame(msg.data);
                 if (float32Data) {
+                    if (window.__rxScriptPriming && window.__rxTotalSamples === 0) {
+                        window.__rxScriptGateSamples = scriptRxPrebufferSamples(window.__rxLastCodec);
+                    }
                     // 使用 window 暴露的变量
                     window.__rxAccumulatedBuffer.push(float32Data);
                     window.__rxTotalSamples += float32Data.length;
                     
                     // 缓冲区管理：保持在目标范围内
-                    // 最大保留约 200ms 音频（9600 样本 @ 48kHz）
-                    // 提供足够的缓冲应对网络抖动，同时保持低延迟
-                    var maxSamples = 9600;
+                    // Opus 手机端保留更深的时间上限，吸收 wasm/main-thread
+                    // 调度抖动；超出上限丢最旧数据，避免延迟无限增长。
+                    var maxSamples = scriptRxMsToSamples(SCRIPT_MAX_BUFFER_MS);
                     while (window.__rxTotalSamples > maxSamples && window.__rxAccumulatedBuffer.length > 1) {
                         var removed = window.__rxAccumulatedBuffer.shift();
                         window.__rxTotalSamples -= removed.length;
@@ -601,9 +650,13 @@ function wsAudioRXopen(){
 	// RX 音频固定为 Int16 PCM（后端 _broadcast_audio 直发），无需协商。
 }
 
-function wsAudioRXclose(){
+function wsAudioRXclose(ev){
 	console.log('🔌 WebSocket RX连接已关闭');
 	setWSStatus('status-rx', 'error');
+	if (ev && ev.code === 4001) {
+		handleAuthExpired('RX WebSocket auth expired');
+		return;
+	}
 	// 自动重连：如果电源仍开启，尝试重连
 	if (typeof poweron !== 'undefined' && poweron) {
 		console.log('🔄 电源开启中，3秒后尝试重连RX WebSocket...');
@@ -873,6 +926,9 @@ function wsControlTRXcrtol( msg ){
 		if (typeof mobileState !== 'undefined') {
 			mobileState.opusEnabled = (param === 'on');
 		}
+		if (typeof window.__resetRxScriptJitter === 'function') {
+			window.__resetRxScriptJitter(window.__rxLastCodec);
+		}
 		console.log('🎚️ RX 编解码:', param);
 	}
 	else if(action == "setOpusBitrate"){
@@ -882,6 +938,16 @@ function wsControlTRXcrtol( msg ){
 			if (!isNaN(kbps)) mobileState.opusBitrate = kbps * 1000;
 		}
 		console.log('🎚️ RX Opus 码率:', param, 'kbps');
+	}
+	else if(action == "setSpectrumFps"){
+		var fps = parseFloat(param);
+		if (!isNaN(fps)) {
+			if (typeof mobileState !== 'undefined') mobileState.spectrumFps = fps;
+			// Keep waterfall visual speed roughly stable when the server reduces
+			// network FPS for remote links.
+			WF_DECIMATE = fps <= 12 ? 3 : 10;
+		}
+		console.log('🎚️ Spectrum FPS:', param);
 	}
 	else if(action == "pttError"){
 		console.error('🚨 PTT 错误:', param);
@@ -1026,9 +1092,13 @@ function wsControlTRXopen(){
 	}, 5000); // 每5秒检查一次PTT状态
 }
 
-function wsControlTRXclose(){
+function wsControlTRXclose(ev){
 	console.log('🔌 WebSocket控制连接已关闭');
 	setWSStatus('status-ctrl', 'error');
+	if (ev && ev.code === 4001) {
+		handleAuthExpired('Control WebSocket auth expired');
+		return;
+	}
 	// 清理PTT状态查询定时器
 	if (window.pttQueryInterval) {
 		clearInterval(window.pttQueryInterval);
@@ -1629,7 +1699,7 @@ var OpusEncoderProcessor = function( wsh )
     // 帧时长: 20ms（WebRTC 推荐，更快的处理周期）
     // 采样率: 16kHz（优化移动端性能）
     // 应用类型: 2048 = OPUS_APPLICATION_VOIP（优化语音质量）
-    // 编码复杂度: 5（平衡 CPU 和音质）
+    // 编码复杂度: 3（优先手机实时性，避免主线程编码空窗）
     // DTX: 开启（静音时不编码，释放 CPU）
     this.opusFrameDur = 20; // msec - WebRTC 推荐值
     this.opusRate = 16000;  // Hz - 16kHz 优化移动端性能
@@ -1638,8 +1708,10 @@ var OpusEncoderProcessor = function( wsh )
     // 682 > 640，足够一个完整帧，多余数据会在下一帧处理
     this.i16arr = new Int16Array( Math.floor(this.bufferSize / this.downSample) );
     this.f32arr = new Float32Array( Math.floor(this.bufferSize / this.downSample) );
-    this.opusEncoder = new OpusEncoder( this.opusRate, 1, 2048, this.opusFrameDur );
-    console.log('🎵 TX Opus 编码器初始化: complexity=8, bitrate=28kbps, downSample=' + this.downSample + ', buffer=' + this.f32arr.length + ', frame=' + (this.opusRate * this.opusFrameDur / 1000));
+    this.txOpusWorker = null;
+    this.txOpusWorkerReady = false;
+    this.initTxOpusWorker();
+    console.log('🎵 TX Opus Worker 初始化: complexity=3, bitrate=28kbps CBR, worker-owned WebSocket, downSample=' + this.downSample + ', buffer=' + this.f32arr.length + ', frame=' + (this.opusRate * this.opusFrameDur / 1000));
 }
 
 
@@ -1723,25 +1795,15 @@ OpusEncoderProcessor.prototype.onAudioProcess = function( e )
 			// 取出一个完整帧
 			var frame = this.frameAccumulator.slice(0, opusFrameSize);
 			this.frameAccumulator = this.frameAccumulator.slice(opusFrameSize);
-			
-			// 编码并发送
-		    var res = this.opusEncoder.encode_float(frame);
 
-			// V4.4.22: 检查 WebSocket 状态，避免向已关闭的连接发送数据
-			if (this.wsh.readyState !== WebSocket.OPEN) {
-				return;
-			}
-
-		    for( var idx = 0; idx < res.length; ++idx )
-			{
-				// 码率统计：TX（编码后）
-				if (!window.__txBytes) { window.__txBytes = 0; }
-				if (res[idx] && res[idx].byteLength) { window.__txBytes += res[idx].byteLength; }
-				var tagged = new Uint8Array(1 + res[idx].byteLength);
-				tagged[0] = AUDIO_TAG_OPUS;
-				tagged.set(new Uint8Array(res[idx]), 1);
-				this.wsh.send( tagged );
-			}
+            var int16OpusFrame = new Int16Array(opusFrameSize);
+            for (var oi = 0; oi < opusFrameSize; oi++) {
+                var ov = frame[oi] * 0x7FFF;
+                if (ov > 32767) ov = 32767;
+                else if (ov < -32768) ov = -32768;
+                int16OpusFrame[oi] = ov;
+            }
+            this.sendOpusWorkerFrame(int16OpusFrame);
 		}
 	}
 		else
@@ -1791,11 +1853,88 @@ OpusEncoderProcessor.prototype.onAudioProcess = function( e )
 
 }
 
+OpusEncoderProcessor.prototype.initTxOpusWorker = function()
+{
+    if (this.txOpusWorker) {
+        return;
+    }
+    var that = this;
+    try {
+        this.txOpusWorker = new Worker(wsUrlWithAuth('/tx_opus_worker.js?v=5.8.0'));
+        this.txOpusWorker.onmessage = function(ev) {
+            var d = ev.data || {};
+            if (d.type === 'open') {
+                that.txOpusWorkerReady = true;
+            } else if (d.type === 'sent') {
+                window.__txBytes = (window.__txBytes || 0) + (d.bytes || 0);
+                window.__txOpusDropped = d.dropped || 0;
+            } else if (d.type === 'closed') {
+                that.txOpusWorkerReady = false;
+	            } else if (d.type === 'authExpired') {
+	                handleAuthExpired('TX Opus Worker auth expired');
+	            } else if (d.type === 'error') {
+	                console.warn('TX Opus Worker:', d.message || d.type);
+	            }
+        };
+        this.txOpusWorker.onerror = function(e) {
+            that.txOpusWorkerReady = false;
+            console.warn('TX Opus Worker error:', e.message || e);
+        };
+    } catch (e) {
+        this.txOpusWorker = null;
+        this.txOpusWorkerReady = false;
+        console.warn('TX Opus Worker unavailable:', e);
+    }
+};
+
+OpusEncoderProcessor.prototype.startOpusWorker = function()
+{
+    this.initTxOpusWorker();
+    if (this.txOpusWorker) {
+        this.txOpusWorker.postMessage({ type: 'start' });
+    }
+};
+
+OpusEncoderProcessor.prototype.stopOpusWorker = function()
+{
+    if (this.txOpusWorker) {
+        try {
+            this.txOpusWorker.postMessage({ type: 'stop' });
+        } catch (e) {
+            console.warn('TX Opus Worker stop failed:', e);
+        }
+    }
+};
+
+OpusEncoderProcessor.prototype.closeOpusWorker = function()
+{
+    if (this.txOpusWorker) {
+        try {
+            this.txOpusWorker.postMessage({ type: 'close' });
+            this.txOpusWorker.terminate();
+        } catch (e) {}
+    }
+    this.txOpusWorker = null;
+    this.txOpusWorkerReady = false;
+};
+
+OpusEncoderProcessor.prototype.sendOpusWorkerFrame = function(int16Frame)
+{
+    this.initTxOpusWorker();
+    if (!this.txOpusWorker) {
+        return false;
+    }
+    var copy = new Int16Array(int16Frame);
+    this.txOpusWorker.postMessage({ type: 'frame', frame: copy.buffer }, [copy.buffer]);
+    return true;
+};
+
 // ── AudioWorklet mode: forward pre-formatted Int16 frames from the
 // tx-capture worklet (runs on the audio thread) to the /WSaudioTX socket.
 // The worklet already did downsampling (48k→16k), 20 ms accumulation, and
-// Int16 conversion, so the main thread just sends — keeping the main-thread
-// footprint tiny so the audio thread is never blocked.
+// Int16 conversion. PCM still sends immediately; Opus is handed to a Worker
+// that owns both encoding and its /WSaudioTX socket, avoiding main-thread
+// Safari stalls.
 OpusEncoderProcessor.prototype.onWorkletFrame = function( int16Frame )
 {
     if (!int16Frame || !int16Frame.byteLength) {
@@ -1811,23 +1950,11 @@ OpusEncoderProcessor.prototype.onWorkletFrame = function( int16Frame )
 
     if( encode )
     {
-        // Opus path: encode Int16 PCM → Opus → tag 0x01
-        var f32 = new Float32Array(int16Frame.length);
-        for (var j = 0; j < int16Frame.length; j++) {
-            f32[j] = int16Frame[j] / 32768.0;
-        }
-        var res = this.opusEncoder.encode_float(f32);
-        for (var idx = 0; idx < res.length; ++idx) {
-            window.__txBytes += (res[idx].byteLength || res[idx].length || 0);
-            var opusBytes = new Uint8Array(res[idx]);
-            var tagged = new Uint8Array(1 + opusBytes.length);
-            tagged[0] = AUDIO_TAG_OPUS;
-            tagged.set(opusBytes, 1);
-            this.wsh.send( tagged );
-        }
+        this.sendOpusWorkerFrame(int16Frame);
     }
     else
     {
+        this.stopOpusWorker();
         // PCM path: tag 0x00
         window.__txBytes += int16Frame.byteLength;
         var tagged = new Uint8Array(1 + int16Frame.byteLength);
@@ -1934,7 +2061,7 @@ MediaHandler.prototype.callback = async function( stream )
         this.txWorkletNode = null;
         if (useTXWorklet) {
             try {
-                await this.context.audioWorklet.addModule('tx_capture_worklet.js');
+                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=5.7.3'));
                 this.txWorkletNode = new AudioWorkletNode(this.context, 'tx-capture', {
                     numberOfInputs: 1,
                     numberOfOutputs: 0,
@@ -2014,14 +2141,14 @@ MediaHandler.prototype.callback = async function( stream )
                            || (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
 
             if (isIPhone) {
-                setTX_EQ_Preset('STRONG');
-                console.log('📱 检测到 iPhone，自动应用 STRONG TX EQ 预设');
+                setTX_EQ_Preset('COMFORT');
+                console.log('📱 检测到 iPhone，自动应用 COMFORT TX EQ 预设');
             } else if (isMobile) {
-                setTX_EQ_Preset('MEDIUM');
-                console.log('📱 检测到移动设备，自动应用 MEDIUM TX EQ 预设');
+                setTX_EQ_Preset('COMFORT');
+                console.log('📱 检测到移动设备，自动应用 COMFORT TX EQ 预设');
             } else {
-                setTX_EQ_Preset('DEFAULT');
-                console.log('🖥️ 检测到桌面设备，使用 DEFAULT TX EQ 预设');
+                setTX_EQ_Preset('COMFORT');
+                console.log('🖥️ 检测到桌面设备，使用 COMFORT TX EQ 预设');
             }
         }
     } catch (e) {
@@ -2078,7 +2205,8 @@ function AudioTX_start()
 	}
 	
 	isRecording = false;
-	encode = true;
+	var encodeElement = document.getElementById("encode");
+	encode = (encodeElement && encodeElement.checked) ? 1 : 0;
 	setWSStatus('status-tx', 'connecting');
 	wsAudioTX = new WebSocket( wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split( '/' )[2] + '/WSaudioTX') );
 	wsAudioTX.onopen = appendwsAudioTXOpen;
@@ -2088,9 +2216,13 @@ function AudioTX_start()
 	mh = new MediaHandler( ap );
 }
 
-function appendwsAudioTXclose(){
+function appendwsAudioTXclose(ev){
 	console.log('🔌 WebSocket TX连接已关闭');
 	setWSStatus('status-tx', 'error');
+	if (ev && ev.code === 4001) {
+		handleAuthExpired('TX WebSocket auth expired');
+		return;
+	}
 	// 自动重连：如果电源仍开启，尝试重连
 	if (typeof poweron !== 'undefined' && poweron) {
 		console.log('🔄 电源开启中，3秒后尝试重连TX WebSocket...');
@@ -2111,7 +2243,7 @@ function appendwsAudioTXclose(){
 					wsAudioTX.onclose = appendwsAudioTXclose;
 					// 重新绑定编码器
 					if (typeof ap !== 'undefined' && ap) {
-						ap.ws = wsAudioTX;
+						ap.wsh = wsAudioTX;
 					}
 				}
 			}
@@ -2144,6 +2276,7 @@ function AudioTX_stop()
 {
 isRecording = false;
 encode = false;
+if (ap && typeof ap.closeOpusWorker === 'function') ap.closeOpusWorker();
 wsAudioTX.close();
 ap = "";
 mh = "";
@@ -2186,6 +2319,7 @@ function startRecord()
     }
     
     sendSettings();
+    if (encode && ap && typeof ap.startOpusWorker === 'function') ap.startOpusWorker();
     isRecording = true;
     console.log( 'started recording' );
 }
@@ -2195,6 +2329,7 @@ function stopRecord()
 	if (TXinstantMeter) TXinstantMeter.value = 0;
 	
     isRecording  = false;
+    if (ap && typeof ap.stopOpusWorker === 'function') ap.stopOpusWorker();
     var encodeBtn = document.getElementById("encode");
 	if (encodeBtn) encodeBtn.disabled = false;
     console.log( 'ended recording' ); 

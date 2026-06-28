@@ -65,6 +65,8 @@ SunSDR2 DX
 
 ## 9.5 Signal Processing Architecture
 
+### 9.5.1 RX Signal Chain
+
 ```text
 UDP IQ packet
   -> validate magic/subtype
@@ -79,6 +81,50 @@ UDP IQ packet
   -> Opus encode (or PCM passthrough) with 1-byte codec tag
   -> WSaudioRX broadcast
 ```
+
+### 9.5.2 TX Signal Chain
+
+```text
+Browser Mic (48 kHz)
+  -> TxCaptureProcessor AudioWorklet (3:1 box-average downsample → 16 kHz)
+  -> 20 ms Int16 PCM frames (320 samples, 640 bytes)
+```
+
+```text
+Browser EQ Pipeline (Web Audio, all phase-continuous):
+  micSource → preamp(×1.5, +3.5dB) → antiAlias(4.5kHz, ×2) →
+  eqLow(350Hz peaking) → eqMid(1500Hz peaking) → eqHigh(2700Hz highshelf) →
+  midCut → presence → compressor(3:1, thr=-24dB, knee=12) →
+  makeup(×1.6) → noiseGate → gain_node → AudioWorklet sink
+  Presets: DEFAULT(+6/+8/-6dB), MEDIUM(+9/+10/-12dB), STRONG(+12/+12/-18dB), RAGCHEW
+```
+
+```text
+Server TX Pipeline:
+  WSaudioTX Opus/PCM tagged frame
+    -> TxOpusDecoder (if Opus) or Int16→float
+    -> TXModulator.feed_audio()
+    -> continuous fractional resampler (16k → 15625 Hz)
+    -> overlap-save Hilbert SSB (USB/LSB, 80-sample hops, 256-sample margin)
+    -> linear upsample (15625 → 39063 Hz, ×2.5)
+    -> TX_DRIVE_GAIN (×3.0) × drive (0..1)
+    -> tanh soft limiter @ TX_IQ_PEAK (1.0)
+    -> 24-bit IQ packing (200 samples → 1200 bytes)
+    -> jitter buffer (hysteresis: prime 24 pkts, reprime 12 pkts)
+    -> TX pacer thread (5.12 ms/pkt, adaptive ±15%)
+    -> 0xFFFD UDP to device :50002
+```
+
+**TX gain staging** (verified 2026-06-25 against server.log level probes):
+| Stage | Peak | RMS | Notes |
+|-------|------|-----|-------|
+| Client mic input | ~0.15 | ~0.03 | After preamp ×1.5 + EQ, before AudioWorklet Int16 clip |
+| Server input (post-decode) | ~0.50 | ~0.05 | Client gain staging keeps headroom below 1.0 |
+| After Hilbert SSB | ~0.65 | ~0.07 | Hilbert adds ~30% peak from analytic-phase construction |
+| After drive gain (×3.0) | ~1.95 | ~0.21 | Drive lifts into tanh knee |
+| After tanh(1.0) | ~0.96 | ~0.19 | tanh engages lightly (~4% peak reduction) — clean SSB |
+
+**Key design point**: The client preamp was reduced from 3.0→1.5 on 2026-06-25. At ×3.0, the server input saturated (peak≈1.0), Hilbert pushed to 1.32, and drive ×3.0 forced peaks to 3.95 — the tanh limiter had to squash 75% of peak amplitude, producing heavy saturation distortion. At ×1.5, the tanh barely engages (~4% reduction), preserving the clean SSB envelope while device drive (0x0017) controls actual RF power.
 
 The browser renders each waterfall row by accumulating ~10 frames (38 Hz -> ~3.8 Hz), subtracting a per-row adaptive noise floor (30th percentile), then biasing the noise to a blue baseline and stretching signal contrast before mapping through a black/blue/cyan/yellow/red colour ramp. The S-meter applies asymmetric exponential smoothing client-side (attack alpha 0.5 / release alpha 0.15) so the needle rises fast and falls slowly.
 
@@ -121,6 +167,6 @@ server.py
 | Gap | Impact |
 |-----|--------|
 | Fixed local IQ bind/send IPs in `server.py` | Deployment tied to current LAN topology |
-| `/WSATR1000` stub | ATR UI status remains placeholder; accepts connections but doesn't interface with real tuner hardware |
+| `/WSATR1000` stub | ATR UI status remains placeholder; accepts connections but doesn't interface with real tuner hardware. Only available SWR source. |
 | CW/FT8 pages absent | Menu links removed from the navigation; pages not present in this snapshot |
-| TX power formula uncalibrated | Cubic fit `(pwr_raw-9)³ × 1.91e-5` approximate; needs calibration against known wattmeter |
+| Device telemetry: no SWR | `0x1F00` has no reverse-power field (off30=forward W, off16=supply V, off18=PA temp); external tuner required for SWR |

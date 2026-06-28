@@ -17,9 +17,9 @@
 | TXAudioWebSocket | Backend core | `server.py` | `/WSaudioTX` tagged mic-frame ingress → codec decode → `TXModulator.feed_audio()` |
 | RxOpusEncoder | Shared DSP | `../web_control/opus_rx.py` | Server-side Opus encode for RX broadcast; direct ctypes libopus |
 | TxOpusDecoder | Shared DSP | `../web_control/opus_rx.py` | Server-side Opus decode for TX mic uplink |
-| TXModulator | Shared DSP | `../web_control/dsp.py` | Mic PCM → fractional resample → Hilbert SSB → 24-bit IQ → `0xFFFD` TX packets |
-| TXPacer | Backend core | `server.py` | Drains queued TX IQ at 5.12 ms/pkt; sends `0xFFFD` to device:50002 |
-| BandPowerAPI | Backend core | `server.py` | `/api/band_power` GET/POST; persists to `band_power.json`; applies per-band DRIVE |
+| TXModulator | Shared DSP | `../web_control/dsp.py` | Mic PCM → fractional resampler → overlap-save Hilbert SSB → drive gain (×3.0) → tanh soft limiter @ TX_IQ_PEAK (1.0) → 24-bit IQ packing → jitter-buffered 0xFFFD packet queue. See AD-012 for gain staging. |
+| TXPacer | Backend core | `server.py` | Drains queued TX IQ at 5.12 ms/pkt (adaptive ±15% pacing); sends `0xFFFD` to device:50002 |
+| BandPowerAPI | Backend core | `server.py` | `/api/band_power` GET/POST; persists to `band_power.json`; applies per-band DRIVE via sunsdr_direct |
 | SpectrumWebSocket | Backend core | `server.py` | `/WSspectrum` binary fan-out |
 | TLSLocator | Backend support | `server.py` | Cert/key discovery and HTTP fallback |
 | MobileHTML | Frontend core | `static/index.html` | UI structure and script composition |
@@ -29,16 +29,13 @@
 | PTTManager | Frontend safety | `static/modules/ptt_manager.js` | PTT state, release ack retry, status sync |
 | TXButton | Frontend safety | `static/tx_button.js` | Touch PTT flow, lock handling, watchdog, warm-up frames |
 | TuneCQ | Frontend UX | `static/modules/tune_cq.js` | Tune/CQ button state and commands |
-| TXAudioEQ | Frontend audio | `static/modules/tx_audio_eq.js` | TX EQ presets and Web Audio nodes |
+| TXAudioEQ | Frontend audio | `static/modules/tx_audio_eq.js` | TX EQ presets (DEFAULT/MEDIUM/STRONG/RAGCHEW), preamp ×1.5, compressor 3:1, anti-alias lowpass 4.5 kHz. Gain-staged for clean SSB envelope (see AD-012). |
 | SettingsManager | Frontend support | `static/modules/settings_manager.js` | Cookie preferences and saved frequency helpers |
-| OpusCodec | Frontend audio | `static/modules/opus_codec.js`, `opus_wasm.js` | Browser-side Opus support for TX pipeline |
+| OpusCodec | Frontend audio | `static/modules/opus_codec.js`, `opus_wasm.js` | Browser-side WASM Opus encoder/decoder for TX pipeline (28 kbps, VBR, FEC, DTX) |
 | RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | Queue-based AudioWorklet playback processor |
-| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | Dedicated-thread mic capture AudioWorklet (ScriptProcessor fallback) feeding `/WSaudioTX` |
-| TXModulator | Shared DSP | `../web_control/dsp.py` | Consume `/WSaudioTX` PCM, resample, Hilbert SSB modulate to 24-bit IQ, queue `0xFFFD` TX packets |
-| BandPowerAPI | Backend core | `server.py` | `/api/band_power` GET/POST; persist per-band drive % to `band_power.json`; apply to device |
+| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | Dedicated-thread mic capture AudioWorklet: 48k→16k box-average downsample, 20ms Int16 frame output, ScriptProcessor fallback |
 | ServiceWorker | Frontend support | `static/sw.js` | Static asset cache with JS/HTML bypass |
-| RestartScript | Operations | `restart.sh` | Safe restart, port cleanup, log redirection |
-| StartScript | Operations | `start.sh` | Simple foreground launcher with default port |
+| RestartScript | Operations | `restart.sh` | Safe restart, cwd-matched process kill, port cleanup, foreground (`-f`) or background launch, log redirection |
 
 ## 11.2 Backend Component Collaboration
 
@@ -70,9 +67,18 @@ index.html
   -> mobile.js binds mobile-specific UI and DSP panel
   -> tx_button.js owns touch PTT behavior
 
-controls.js
-  -> WSaudioRX receives Int16 frames
-  -> decodeInt16Audio()
+controls.js + tx_audio_eq.js + tx_capture_worklet.js
+  -> MediaHandler.callback() builds the Web Audio TX EQ chain:
+     micSource → preamp(×1.5) → antiAlias(×2) → eqLow → eqMid → eqHigh →
+     midCut → presence → compressor(3:1) → makeup(×1.6) → noiseGate → gain_node →
+     AudioWorklet (tx-capture) or ScriptProcessor
+  -> AudioWorklet downsamples 48k→16k, accumulates 20ms Int16 frames
+  -> OpusEncoderProcessor.onWorkletFrame() tags+encodes (Opus 0x01 or PCM 0x00)
+  -> wsAudioTX.send() binary frames
+
+controls.js RX
+  -> WSaudioRX receives tagged dual-codec frames
+  -> tag byte 0x00=PCM → decodeInt16Audio(), 0x01=Opus → WASM OpusDecoder
   -> AudioContext/Worklet or ScriptProcessor playback
   -> WSspectrum receives uint8 rows
   -> Waterfall_start/stop accumulates WF_DECIMATE frames -> adaptive noise floor (WF_PCTL) -> WF_BIAS/WF_GAIN contrast -> canvas row
@@ -93,13 +99,14 @@ controls.js
 | TX voice modulation | `server.py`, `../web_control/dsp.py` (`TXModulator`), `static/controls.js`, `static/tx_capture_worklet.js` |
 | TX power / per-band drive | `server.py` (`/api/band_power`), `../web_control/sunsdr_direct.py` (`0x0017`), `static/mobile.js` (Band Power panel), `band_power.json` |
 | WDSP controls | `server.py`, `../web_control/dsp.py`, `../web_control/wdsp_wrapper.py`, `static/mobile.js` |
-| Browser TX EQ | `static/modules/tx_audio_eq.js`, `static/controls.js` |
-| Restart/ops | `restart.sh`, `start.sh`, `server.log` |
+| Browser TX EQ | `static/modules/tx_audio_eq.js`, `static/controls.js`, `static/tx_capture_worklet.js` |
+| TX gain staging | AD-012, `../web_control/dsp.py` (`TXModulator`, `TX_DRIVE_GAIN`, `TX_IQ_PEAK`), `static/modules/tx_audio_eq.js` (`AudioTX_preamp`) |
+| Restart/ops | `restart.sh`, `server.log` |
 
 ## 11.5 Component Gaps
 
 | Missing/Incomplete Component | Expected Responsibility |
 |------------------------------|-------------------------|
 | ATRWebSocketHandler | Implement `/WSATR1000` for power/SWR and tuner control |
-| CWPage/FT8Page/RecordingsPage | Provide targets currently linked by menu |
-| AuthBackend | Replace cookie-only callsign prompt with real server-side identity if required |
+| CWPage/FT8Page | Provide targets currently linked by menu (recordings page is implemented) |
+| AuthBackend | Upgrade the shared-password session-token auth to per-user server-side identity if multi-user is required |

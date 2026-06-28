@@ -138,21 +138,56 @@
 
 **Rationale**: SunSDR2 firmware does not support ALC, so per-band drive is the only real power lever. The drive byte uses a square-root taper (`round(255·√(drive%/100))`) and must sit in the packet **trailing word** (verified byte-for-byte against an ExpertSDR3 TCI capture). The device resets drive to a per-band calibration value on every QSY, so it is re-sent on frequency change and before each PTT assert.
 
-**Consequences**: Software IQ gain stays gentle (clean SSB envelope only); power is owned by the device. Per-band power is user-editable via `/api/band_power` (persisted to `band_power.json`) and the Band Power menu panel. On-air verified: Tune ~12 W, voice 30–40 W PEP. Device telemetry (`0x1F00`) is sent in all modes (verified: 273 TX-state packets); off16 u16/100 gives SWR (1.32-1.37 range).
+**Consequences**: Software IQ gain stays gentle (clean SSB envelope only); power is owned by the device. Per-band power is user-editable via `/api/band_power` (persisted to `band_power.json`) and the Band Power menu panel. On-air verified: Tune ~12 W, voice 30–40 W PEP. Device telemetry (`0x1F00`) reports off30 f32 = forward watts, off16 u16/10 = supply volts, off18 f32 = PA temp °C (no reverse-power / SWR field — see AD-011).
 
-## AD-011: Read TX Telemetry SWR from off16 u16/100
+## AD-011: Read TX Telemetry from 0x1F00 Verified Field Offsets
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Design |
+| Status | Implemented (corrected 2026-06-25) |
+| Decision | Read `0x1F00` telemetry from verified field offsets reverse-engineered from a real 40m drive sweep (`device/captures/expert_40m_drive.pcap`, cross-checked against external wattmeter + ExpertSDR3's own power readout): off30 f32 = forward power (W PEP), off16 u16 = supply voltage ×10, off18 f32 = PA temperature °C. The device exposes NO reverse-power field → SWR cannot be computed from device telemetry. |
+
+**Problem**: Prior SDD versions documented off16 u16/100 as SWR and off14 u16 as power_raw with a cubic fit. Both were wrong:
+- **off30 f32 = forward power in WATTS** (PEP envelope). Monotonic with drive: 28%→3W, 71%→54W, 88%→83W, 100%→101W. Matches ExpertSDR3's ~95W self-readout at 100%. Direct float watts — no fit needed.
+- **off16 u16 = supply voltage ×10** (NOT SWR). Reads ~136 (13.6V) at idle, sags as power rises (0W→13.6, 30-50W→13.1, 80-110W→12.9V); correlation with forward power = -0.79 — a textbook PSU sag curve. Volts = off16 / 10.
+- **off18 f32 = PA temperature °C** (~42°C, barely moves with drive).
+- **off22 f32** = average forward power (ratio to off30 ≈ the 3:1 SSB crest factor), not reverse power.
+- **off26 f32** = always 1.0000 (device placeholder).
+- The device sends NO reverse-power field, so it cannot compute SWR at all.
+
+**Rationale**: Field offsets cross-validated against a complete 40m drive sweep (10 power levels, 100 packets each) with simultaneous external wattmeter readings and ExpertSDR3's own power readout. The monotonicity of off30 with drive and the PSU-sag pattern of off16 (correlation -0.79 with forward power) are textbook-confirming.
+
+**Consequences**: Frontend `getTXTelem` carries `watts,volts,temp` (not SWR). The UI VOLT field replaces the former SWR field. The old off14-based cubic fit and off16/100 "SWR" computation are removed. The external ATR-1000 tuner is the only available SWR source; device telemetry provides forward power, supply voltage, and PA temperature only.
+
+## AD-012: Client-to-Server TX Audio Gain Staging with Soft Limiter
 
 | Attribute | Value |
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | Read SWR from `0x1F00` offset 16 as u16 ÷ 100, replacing the prior offset 22 (f32, only valid during TUNE) and offset 26 (f32, constant 1.0000). |
+| Decision | Stage TX audio gain across client and server so the server-side tanh soft limiter at `TX_IQ_PEAK` (1.0) engages lightly (~4% peak reduction) rather than serving as the primary gain-control element. Client preamp ×1.5 (+3.5dB) provides headroom; server `TX_DRIVE_GAIN` ×3.0 lifts the Hilbert-transformed SSB into the tanh knee. Device drive (`0x0017`) remains the sole RF power control. |
 
-**Problem**: The original PROTOCOL.md documented `0x1F00` off26 as f32 SWR, but this field is always exactly 1.0000 across 323+ packets in 6 captures (RX, TX, TUNE modes all identical). Off22 f32 varies but reads 0.0 during normal voice TX — SWR is only populated during TUNE mode there. The real continuous SWR field is off16 u16: values 132-137 across captures → 1.32-1.37 SWR, varying between antenna states.
+**Problem**: On 2026-06-25, voice TX was heavily distorted despite adequate power. Server log level probes (`TX chain in/drv/lim`) revealed the root cause: the client preamp was ×3.0 (+9.5dB), which drove the AudioWorklet Int16 output to full scale (peak=1.0). After Hilbert SSB (+~30% peak from analytic-phase construction) and server drive gain (×3.0), peaks reached 3.95 — the tanh limiter at 1.0 had to squash 75% of peak amplitude, producing heavy saturation distortion on every loud syllable.
 
-**Rationale**: Off16 u16/100 is the only field that varies in SWR-range (1.0-3.0) across all device modes and produces values consistent with the user's external SWR meter (1.1-1.3). Verified against 323+ packets across `sunsdr_sdr_tx.pcap`, `sunsdr_tx_full.pcap`, `telem_full.pcap`, and `tune_only.pcap`.
+Tune mode was unaffected because it bypasses the entire client audio chain and server gain path, using a pre-computed IQ signal with `TX_TUNE_SCALE` = 0.35.
 
-**Consequences**: Device reports SWR continuously (RX/TX/TUNE), unlike off22 which is TUNE-only. External ATR-1000 tuner remains the authoritative SWR source for precision measurement; device telemetry provides a approximate indication.
+**Rationale**: 
+- **Client preamp 3.0→1.5** (-6dB): Gives the server input headroom. Peaks now arrive at ~0.5 (not 1.0). After Hilbert → ~0.65, drive ×3.0 → ~1.95, tanh(1.95) → ~0.96 — only a ~4% peak reduction.
+- **Server `TX_DRIVE_GAIN` = 3.0**: Fixed make-up gain to compensate for phone mic's naturally low level (~0.1-0.3 peak). Not a power control — device drive is the power lever.
+- **Tanh at ceiling 1.0**: Smooth saturation rounds transients without the wideband splatter of a hard IQ-magnitude clip (see CLAUDE.md). Acts as a safety net for residual transients, not the primary limiter.
+- **Device drive (`0x0017`) sets actual RF power**: Square-root taper byte in trailing word, per-band configurable via `/api/band_power`, re-sent on QSY and PTT.
+
+**Level-probe diagnostics** (logged at 1 Hz in `server.log` during TX):
+```
+TX chain in : rms, peak — post-decode PCM (before Hilbert, scaled by 1/gain for comparison)
+TX chain an : rms, peak — after Hilbert analytic signal (same gain normalization)
+TX chain drv: rms, peak — after TX_DRIVE_GAIN × drive (pre-tanh, full scale)
+TX chain lim: rms, peak — after tanh(TX_IQ_PEAK=1.0), final IQ envelope
+```
+Healthy gain staging shows `in` peak ~0.5, `drv` peak ~2.0, `lim` peak ~0.96. If `in` peak = 1.0 and `drv` peak > 3.5, the tanh is oversaturated — voice will sound distorted.
+
+**Consequences**: Client gain staging is now documented as a design decision, not an implementation detail. The level probes provide continuous observability. TX power adjustment is done via device drive %, not by changing TX_DRIVE_GAIN (which would upset the gain staging).
 
 ## 8.11 Decision Summary
 
@@ -168,4 +203,5 @@
 | AD-008 | Optional WDSP | Implemented |
 | AD-009 | Explicit frontend/backend gap tracking | Active |
 | AD-010 | TX power via device DRIVE (0x0017) | Implemented |
-| AD-011 | SWR from 0x1F00 off16 u16/100 | Implemented |
+| AD-011 | TX telemetry from 0x1F00 verified field offsets (forward W, supply V, PA temp °C; no SWR) | Implemented (corrected 2026-06-25) |
+| AD-012 | TX audio gain staging: client preamp ×1.5, server TX_DRIVE_GAIN ×3.0, TX_IQ_PEAK 1.0, tanh soft limiter with light engagement | Implemented |

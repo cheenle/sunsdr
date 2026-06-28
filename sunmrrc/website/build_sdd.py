@@ -23,6 +23,7 @@ FILES = [
     ("12-operational-model.md", "12-operational-model.html", "Operational Model"),
     ("13-feasibility-assessment.md", "13-feasibility-assessment.html", "Feasibility Assessment"),
     ("14-version-history.md", "14-version-history.html", "Version History"),
+    ("15-ptt-safety-architecture.md", "15-ptt-safety-architecture.html", "PTT Safety Architecture"),
 ]
 
 NAV_ITEMS = [
@@ -41,6 +42,7 @@ NAV_ITEMS = [
     ("12-operational-model.html", "12. Operational Model"),
     ("13-feasibility-assessment.html", "13. Feasibility"),
     ("14-version-history.html", "14. Version History"),
+    ("15-ptt-safety-architecture.html", "15. PTT Safety"),
 ]
 
 def build_nav_sidebar(current_file: str) -> str:
@@ -165,7 +167,7 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.3 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

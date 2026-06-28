@@ -17,7 +17,7 @@
 |-------|-------------|
 | Goal | Open the mobile UI and establish control/RX/spectrum channels |
 | Preconditions | Server running, TLS configured for mobile production, browser can reach host |
-| Basic Flow | User opens `https://radio.vlsc.net:8080`; server returns `index.html`; scripts load; user powers on; frontend opens `/WSCTRX`, `/WSaudioRX`, `/WSaudioTX`; `Waterfall_start()` opens `/WSspectrum` (and `Waterfall_stop()` closes it on power off) |
+| Basic Flow | User opens `https://radio.vlsc.net:8889`; server returns `index.html`; scripts load; user powers on; frontend opens `/WSCTRX`, `/WSaudioRX`, `/WSaudioTX`; `Waterfall_start()` opens `/WSspectrum` (and `Waterfall_stop()` closes it on power off) |
 | Postconditions | UI displays connection state, frequency/mode, network bitrate/latency when available |
 | Exceptions | HTTP on iOS prevents reliable mic/audio permissions; stale service-worker cache must not serve old JS/HTML |
 
@@ -61,7 +61,7 @@
 | Basic Flow | User presses PTT or TUNE; frontend sends `setPTT:true` or `tune:true`; server calls radio setter and updates demodulator PTT state; user releases; frontend sends false command and expects ack |
 | Postconditions | Radio returns to RX after release |
 | Safety Flows | Frontend release ACK retry, backup `s:` command over TX socket, lock-leak detection, PTT watchdog, backend `s` handler forces `set_ptt(False)` |
-| Boundary | Voice TX audio modulation is not complete; this is currently keying/control, not full microphone transmission |
+| Boundary | Full microphone TX modulation is implemented (mic → Hilbert SSB → 24-bit IQ → `0xFFFD`); see UC-007. This use case covers PTT keying/tune control specifically. |
 
 ### UC-006: Adjust DSP and Audio Settings
 

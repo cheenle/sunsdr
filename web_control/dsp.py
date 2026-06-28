@@ -95,15 +95,13 @@ TX_RAMP_SAMPLES = 200
 # silence and steps the amplitude to 0 (periodic clicking / stutter).
 #
 # Two-level hysteresis:
-#   - First fill must reach TX_MIC_PRIME_PKTS (~120 ms) before draining starts.
-#     A 120 ms cushion absorbs a single 40–60 ms late burst without hitting 0.
-#   - After an underflow we only re-fill to TX_MIC_REPRIME_PKTS (~60 ms), so a
-#     momentary stall costs a 60 ms re-buffer, not a full 120 ms gap. The old
-#     code force-refilled the FULL prime depth on every underflow, which
-#     amplified a 20 ms network hiccup into a 60 ms silence hole — the dropout
-#     the far end heard as a "stutter".
-TX_MIC_PRIME_PKTS = 24       # ~120 ms high watermark: initial fill before drain
-TX_MIC_REPRIME_PKTS = 12     # ~60 ms: cheaper re-fill after an underflow
+#   - /WSaudioTX now has its own 20 ms frame pacer, so this layer no longer
+#     needs to absorb 100+ ms browser bursts. It only protects the 5.12 ms RF
+#     pacer from executor/SSB-modulator scheduling jitter.
+#   - First fill reaches TX_MIC_PRIME_PKTS (~143 ms), and underflow re-primes
+#     to TX_MIC_REPRIME_PKTS (~72 ms).
+TX_MIC_PRIME_PKTS = 28       # ~143 ms high watermark after server pacing
+TX_MIC_REPRIME_PKTS = 14     # ~72 ms re-prime for RF pacer protection
 # Audio-rate samples carried across feed_audio() calls so each streaming
 # Hilbert transform has history/look-ahead context and no per-chunk edge
 # transient (buzz). Trimmed off both ends after the transform.

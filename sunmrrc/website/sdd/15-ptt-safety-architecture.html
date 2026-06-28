@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTT Safety Architecture — SunMRRC SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon">📡</span>
+            <span>SunMRRC</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+            <li><a href="15-ptt-safety-architecture.html" class="active">15. PTT Safety</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="ptt-safety-architecture-art-0535">15. PTT Safety Architecture (ART 0535)</h1>
+<blockquote>
+<p><strong>Principle</strong>: Release is more safety-critical than keying. A lost <code>setPTT:false</code> can leave a radio transmitting indefinitely. Every layer must have an independent path to force RX.</p>
+</blockquote>
+<h2 id="safety-model-defense-in-depth">15.1 Safety Model — Defense in Depth</h2>
+<pre><code>Layer 1: Touch UX        touch-end / touch-move-out / touch-cancel → TXControl(&#39;stop&#39;)
+Layer 2: State Machine    isProcessing lock (3s leak detection) + pendingStop queue
+Layer 3: Watchdog         30s hardware timer → force release regardless of state
+Layer 4: Command ACK      setPTT:false → wait for getPTT:false echo → retry 3×
+Layer 5: Backup Channel   TX audio WS sends &quot;s:&quot; → independent socket → forced-RX
+Layer 6: PING Health      periodic PING/PONG → stale connection detected → reconnect
+Layer 7: Page Lifecycle   visibilitychange / blur / pagehide → force release
+Layer 8: Server Forced-RX ws_ctrl() s: handler → radio.set_ptt(False) — always served</code></pre>
+<p><strong>No single point of failure can trap the radio in TX.</strong></p>
+<h2 id="layer-1-touch-ux-tx_button.js">15.2 Layer 1 — Touch UX (tx_button.js)</h2>
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 40%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Event</th>
+<th>Action</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>touchstart</code></td>
+<td><code>TXControl('start')</code></td>
+<td>Press begins TX</td>
+</tr>
+<tr>
+<td><code>touchend</code></td>
+<td><code>TXControl('stop')</code></td>
+<td>Normal release</td>
+</tr>
+<tr>
+<td><code>touchmove</code> out of button</td>
+<td><code>TXControl('stop')</code></td>
+<td>Finger slides off → safety release</td>
+</tr>
+<tr>
+<td><code>touchcancel</code></td>
+<td><code>TXControl('stop')</code></td>
+<td>OS interrupts touch → safety release</td>
+</tr>
+<tr>
+<td><code>mouseleave</code> (desktop)</td>
+<td><code>TXControl('stop')</code></td>
+<td>Cursor leaves button → safety release</td>
+</tr>
+</tbody>
+</table>
+<p>Each event handler uses <code>touchId</code> tracking to prevent cross-touch interference. <code>{ passive: false, capture: true }</code> ensures the handlers fire before any other listener on the page and can call <code>preventDefault()</code>.</p>
+<h2 id="layer-2-state-machine-lock-tx_button.js">15.3 Layer 2 — State Machine Lock (tx_button.js)</h2>
+<pre><code>TXState.isProcessing  ──  prevents concurrent start/stop races
+TXState.pendingStop    ──  queue stop request when start is in-flight
+PROCESSING_LOCK_TIMEOUT_MS = 3000  ──  leak detection: force-unlock stuck lock</code></pre>
+<p><strong>Lock lifecycle</strong>: - <code>start</code>: sets <code>isProcessing=true</code>, records <code>processingStartTime</code>, clears <code>pendingStop</code>. On completion, checks <code>pendingStop</code> — if set, immediately calls <code>TXControl('stop')</code>. - <code>stop</code>: if <code>isProcessing</code>, sets <code>pendingStop=true</code> and returns (queued). Otherwise acquires lock, executes release, unlocks. - <strong>Leak detection</strong>: if <code>isProcessing</code> held &gt;3s, force-cleared. Prevents a single uncaught exception from permanently blocking all stop calls.</p>
+<h2 id="layer-3-hardware-watchdog-tx_button.js">15.4 Layer 3 — Hardware Watchdog (tx_button.js)</h2>
+<pre><code>30-second timeout started on every TX start.
+  → clears if TXControl(&#39;stop&#39;) runs normally
+  → fires: force-release PTT, clear audio, reset UI</code></pre>
+<p>The watchdog is the ultimate frontend failsafe. Even if every other layer fails (JS error, dead WebSocket, frozen event loop), within 30 seconds the watchdog timer fires and calls <code>sendTRXptt(false)</code> + full state cleanup.</p>
+<h2 id="layer-4-command-ack-retry-ptt_manager.js">15.5 Layer 4 — Command ACK Retry (ptt_manager.js)</h2>
+<pre><code>setPTT:false sent
+  → start 1s ACK timer
+    → getPTT:false received (device confirmed RX) → timer cancelled ✓
+    → 1s elapsed, no confirmation:
+      → retry 1: re-send setPTT:false + backup s: on TX WS
+      → 1s elapsed, no confirmation:
+        → retry 2: re-send setPTT:false + backup s: on TX WS
+      → 1s elapsed, no confirmation:
+        → retry 3: re-send setPTT:false + backup s: on TX WS
+      → 1s elapsed, no confirmation:
+        → onControlConnectionDead() — force-reconnect control channel</code></pre>
+<p><strong>Design rationale</strong>: <code>setPTT:true</code> (key) has no ACK — a lost key command means no TX, which is safe. <code>setPTT:false</code> (release) is the dangerous one: a lost release means stuck TX. The ACK retry loop ensures confirmation, using the TX audio socket as an independent backup channel on every retry.</p>
+<h2 id="layer-5-backup-channel-s-command">15.6 Layer 5 — Backup Channel (s: command)</h2>
+<pre><code>wsAudioTX.send(&quot;s:&quot;)  →  server ws_audio_tx() handler
+  →  dsp_proc.modulator.reset_mic()
+  →  radio.set_ptt(False)
+  →  dsp_proc.demodulator.set_ptt(False)
+  →  _send_ctrl(&quot;getPTT:false&quot;)  ←  broadcasts to ALL control clients</code></pre>
+<p>The <code>s:</code> command on the TX audio WebSocket is an independent path to force RX. It does not depend on the control WebSocket (<code>/WSCTRX</code>) being alive. The server-side handler in <code>ws_audio_tx()</code> directly calls <code>radio.set_ptt(False)</code> and broadcasts the state change.</p>
+<p><strong>Why this works</strong>: The TX audio socket and control socket are separate TCP connections. WiFi/router glitches that half-close one rarely affect the other simultaneously. This is the critical redundancy that breaks the single-point-of-failure.</p>
+<h2 id="layer-6-pingpong-health-check-controls.js">15.7 Layer 6 — PING/PONG Health Check (controls.js)</h2>
+<pre><code>Every 5s: wsControlTRX.send(&quot;PING&quot;)
+  → start PONG_TIMEOUT_MS timer
+  → PONG received → round-trip latency display ✓
+  → timer expired → onControlConnectionDead()
+    → send s: on TX audio socket (if TX is pressed)
+    → force-close and reconnect control socket</code></pre>
+<p>TCP half-open connections (where the server thinks the socket is alive but the client’s WiFi has dropped) are the most insidious failure mode. PING/PONG detection catches these within one timeout cycle, triggers backup release before reconnect.</p>
+<h2 id="layer-7-page-lifecycle-tx_button.js">15.8 Layer 7 — Page Lifecycle (tx_button.js)</h2>
+<pre><code>document.addEventListener(&#39;visibilitychange&#39;, ...)
+window.addEventListener(&#39;blur&#39;, ...)
+window.addEventListener(&#39;pagehide&#39;, ...)
+  → if TXState.isPressed → TXControl(&#39;stop&#39;)</code></pre>
+<p>When the browser tab is backgrounded, the OS may suspend timers and JavaScript execution. If the user switches away while TX is active, the touch-end event is never delivered. These lifecycle hooks catch that case and force release.</p>
+<h2 id="layer-8-server-side-forced-rx-server.py">15.9 Layer 8 — Server-Side Forced RX (server.py)</h2>
+<pre class="python"><code># ws_ctrl() handler — primary control path
+elif cmd == &quot;setPTT&quot;:
+    tx = val.lower() == &quot;true&quot;
+    await radio.set_ptt(tx)
+    if dsp_proc: dsp_proc.demodulator.set_ptt(tx)
+    await ws.send_text(f&quot;getPTT:{str(tx).lower()}&quot;)
+
+# ws_ctrl() handler — backup forced-RX
+elif cmd == &quot;s&quot;:
+    await radio.set_ptt(False)
+    if dsp_proc: dsp_proc.demodulator.set_ptt(False)
+    await _send_ctrl(&quot;getPTT:false&quot;)</code></pre>
+<p>The server echoes every PTT state change as <code>getPTT:&lt;bool&gt;</code> over the control channel. The client uses this echo as delivery confirmation (Layer 4). The <code>s:</code> command is handled identically to <code>setPTT:false</code> — no difference in server behavior, just an alternative entry point.</p>
+<p>On the device side, <code>radio.set_ptt(True)</code> re-sends the DRIVE byte (<code>0x0017</code>) before keying, and <code>radio.set_ptt(False)</code> sends the PTT command with <code>trailing=0</code> to release.</p>
+<h2 id="tx-pacer-thread-lifecycle">15.10 TX Pacer Thread Lifecycle</h2>
+<pre><code>PTT asserted  →  TX pacer thread starts
+  → TX_SETTLE_PACKETS (17) zero-IQ packets (PA/relay settling)
+  → TX_RAMP_SAMPLES (200) linear ramp 0→1
+  → Real mic IQ or tune IQ at 5.12ms/pkt
+PTT released  →  TX pacer thread stops</code></pre>
+<p>The pacer thread is tied to <code>radio._ptt_active</code>. When PTT releases (from any path), the while-loop exits, the thread joins, and no further IQ packets are sent. This is the hardware-level guarantee that TX stops when PTT is false.</p>
+<h2 id="ptt-status-display">15.11 PTT Status Display</h2>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Color</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PTT: ON</code></td>
+<td>Green</td>
+<td>Device confirmed TX active</td>
+</tr>
+<tr>
+<td><code>PTT: ON</code></td>
+<td>Yellow</td>
+<td>Predicted (command sent, not yet confirmed)</td>
+</tr>
+<tr>
+<td><code>PTT: OFF</code></td>
+<td>Red</td>
+<td>Device confirmed RX</td>
+</tr>
+<tr>
+<td><code>PTT: OFF</code></td>
+<td>Orange</td>
+<td>Predicted release (not yet confirmed)</td>
+</tr>
+<tr>
+<td><code>PTT: ?</code></td>
+<td>Gray blinking</td>
+<td>State unknown (prediction expired)</td>
+</tr>
+</tbody>
+</table>
+<p>The display always prefers device-confirmed state over prediction. A background sync loop (1 Hz) queries <code>getPTT</code> if device state disagrees with user intent.</p>
+<h2 id="failure-mode-coverage">15.12 Failure Mode Coverage</h2>
+<table>
+<colgroup>
+<col style="width: 32%" />
+<col style="width: 25%" />
+<col style="width: 42%" />
+</colgroup>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Layer</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Finger slips off button</td>
+<td>1</td>
+<td><code>touchmove</code> out-of-bounds → stop</td>
+</tr>
+<tr>
+<td>OS steals touch (notification)</td>
+<td>1</td>
+<td><code>touchcancel</code> → stop</td>
+</tr>
+<tr>
+<td>JS exception in start() blocks stop()</td>
+<td>2</td>
+<td><code>pendingStop</code> queue + lock leak detection</td>
+</tr>
+<tr>
+<td>Event loop frozen / timer starvation</td>
+<td>3</td>
+<td>30s hardware watchdog (setTimeout-based)</td>
+</tr>
+<tr>
+<td>setPTT:false lost (WiFi packet loss)</td>
+<td>4</td>
+<td>3× ACK retry with getPTT:false confirmation</td>
+</tr>
+<tr>
+<td>Control WS half-open (TCP stale)</td>
+<td>5,6</td>
+<td>Backup s: on TX WS + PING/PONG detection</td>
+</tr>
+<tr>
+<td>Control WS fully dead</td>
+<td>5</td>
+<td>TX WS s: command → server forced-RX</td>
+</tr>
+<tr>
+<td>User switches app (iOS suspend)</td>
+<td>7</td>
+<td><code>visibilitychange</code> + <code>blur</code> → force release</td>
+</tr>
+<tr>
+<td>All frontend paths fail</td>
+<td>8</td>
+<td>Server <code>s:</code> handler — always available</td>
+</tr>
+</tbody>
+</table>
+<h2 id="component-mapping">15.13 Component Mapping</h2>
+<table>
+<colgroup>
+<col style="width: 47%" />
+<col style="width: 26%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th>Component</th>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TXButton</td>
+<td><code>tx_button.js</code></td>
+<td>Touch UX, state machine, lock, watchdog, lifecycle hooks</td>
+</tr>
+<tr>
+<td>PTTManager</td>
+<td><code>ptt_manager.js</code></td>
+<td>ACK retry, release confirmation, status display, debounce</td>
+</tr>
+<tr>
+<td>ControlWS</td>
+<td><code>server.py</code> ws_ctrl()</td>
+<td>Primary setPTT dispatch, getPTT echo, s: forced-RX</td>
+</tr>
+<tr>
+<td>TXAudioWS</td>
+<td><code>server.py</code> ws_audio_tx()</td>
+<td>Backup s: path — independent TCP connection</td>
+</tr>
+<tr>
+<td>RadioClient</td>
+<td><code>sunsdr_direct.py</code> set_ptt()</td>
+<td>DRIVE re-send (TX assert), PTT command, _ptt_active flag</td>
+</tr>
+<tr>
+<td>TXPacer</td>
+<td><code>server.py</code> _tx_pacer_thread()</td>
+<td>Thread lifecycle tied to _ptt_active → stops on release</td>
+</tr>
+<tr>
+<td>HealthCheck</td>
+<td><code>controls.js</code> checklatency()</td>
+<td>PING/PONG dead-connection detection + reconnect</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+</body>
+</html>
