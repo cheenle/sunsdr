@@ -998,9 +998,12 @@ class TXModulator:
             from scipy.signal import butter, sosfilt
             self._tx_aa_sos = butter(4, 3600, btype='low', fs=input_rate,
                                      output='sos')
-            self._tx_aa_zi = np.zeros((self._tx_aa_sos.shape[0], 2),
-                                      dtype=np.float32)
-        x, self._tx_aa_zi = sosfilt(self._tx_aa_sos, x, zi=self._tx_aa_zi)
+            # sosfilt requires zi dtype to match signal dtype (float64)
+            self._tx_aa_zi = np.zeros((self._tx_aa_sos.shape[0], 2))
+        # Convert to float64 for sosfilt, then back
+        x64 = x.astype(np.float64)
+        x64, self._tx_aa_zi = sosfilt(self._tx_aa_sos, x64, zi=self._tx_aa_zi)
+        x = x64.astype(np.float32)
 
         # ── 1. Continuous fractional resampler input_rate → audio_rate ──
         self._in_buf = np.concatenate([self._in_buf, x])
