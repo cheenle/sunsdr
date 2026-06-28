@@ -2651,6 +2651,14 @@ function showSettingsPanel() {
     html += '<input type="range" id="mobile-af-gain" min="0" max="100" value="' + afPercent + '" oninput="setAFGain(this.value)">';
     html += '</div>';
 
+    // Mic Drive (TX modulation depth)
+    var micDrive = (typeof mobileState !== 'undefined' && mobileState.micDrive) ? mobileState.micDrive : 100;
+    html += '<div class="setting-item">';
+    html += '<label>Mic Drive: <span id="mic-drive-display">' + micDrive + '%</span></label>';
+    html += '<input type="range" id="mobile-mic-drive" min="10" max="150" value="' + micDrive + '" oninput="setMicDrive(this.value)">';
+    html += '<small style="color:var(--text-secondary)">TX 调制深度, 默认100%</small>';
+    html += '</div>';
+
     // Squelch
     html += '<div class="setting-item">';
     html += '<label>Squelch: <span id="sql-value-display">' + sqlValue + '</span></label>';
@@ -2835,6 +2843,24 @@ function setMicGain(value) {
     }
     
     console.log('MIC 增益:', value + '%');
+}
+
+function setMicDrive(value) {
+    var display = document.getElementById('mic-drive-display');
+    if (display) display.textContent = value + '%';
+    if (typeof mobileState !== 'undefined') {
+        mobileState.micDrive = parseInt(value);
+    }
+    var drv = parseInt(value) / 100;  // 100% → 1.0
+    if (typeof sendCommand === 'function') {
+        sendCommand('setTXDriveGain', drv.toFixed(2));
+    }
+    if (typeof saveUserAudioSetting === 'function') {
+        saveUserAudioSetting('mobile_mic_drive', value, 180);
+    } else if (typeof setCookie === 'function') {
+        setCookie('mobile_mic_drive', value, 180);
+    }
+    console.log('TX Mic Drive:', value + '%');
 }
 
 function setSquelch(value) {

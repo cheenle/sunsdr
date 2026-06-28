@@ -1339,6 +1339,15 @@ async def ws_ctrl(ws: WebSocket):
                     pct = max(0, min(100, int(float(val))))
                     await radio.set_drive(pct)
                     await _send_ctrl(f"setDrive:{pct}")
+                elif cmd == "setTXDriveGain":
+                    # Mic → IQ modulation drive (0.1–1.5, default 1.0).
+                    # Scales TX_DRIVE_GAIN linearly — 1.0 = 2.3x, 1.5 = 3.45x.
+                    drv = max(0.1, min(1.5, float(val)))
+                    if dsp_proc: dsp_proc.modulator.set_drive(drv)
+                    await _send_ctrl(f"setTXDriveGain:{drv:.2f}")
+                elif cmd == "getTXDriveGain":
+                    drv = dsp_proc.modulator.drive if dsp_proc else 1.0
+                    await ws.send_text(f"setTXDriveGain:{drv:.2f}")
                 elif cmd == "setAFGain":
                     vol = float(val) / 100.0
                     if dsp_proc: dsp_proc.demodulator.set_volume(vol)
