@@ -428,18 +428,6 @@ function AudioRX_start(){
     (async () => {
         if (useAudioWorklet) {
             try {
-                // Pre-flight HEAD request: if auth is stale the middleware
-                // returns 401 (not JS), and addModule() would throw a generic
-                // "failed to fetch" that we cannot distinguish from a network
-                // blip.  Checking the response status lets us redirect to
-                // /login immediately instead of falling back to
-                // ScriptProcessor and looping forever.
-                var preflightResp = await fetch(wsUrlWithAuth('/rx_worklet_processor.js?v=5.8.1'),
-                                                { method: 'HEAD' });
-                if (!preflightResp.ok) {
-                    handleAuthExpired('AudioWorklet pre-flight ' + preflightResp.status);
-                    return;
-                }
                 await AudioRX_context.audioWorklet.addModule(wsUrlWithAuth('/rx_worklet_processor.js?v=5.8.1'));
                 const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
                 AudioRX_source_node = rxNode;

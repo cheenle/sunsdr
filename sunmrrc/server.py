@@ -452,10 +452,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SunMRRC", lifespan=lifespan)
 
 # ── Auth middleware ─────────────────────────────────────────────────
-# Protects every HTTP route except /login and /api/auth/*.
-# WebSocket endpoints do their own token check in on-accept.
+# Protects every HTTP route except /login, /api/auth/*, and static
+# assets.  WebSocket endpoints do their own token check in on-accept.
+# JS / WASM / CSS / images are intentionally public — they contain zero
+# secrets (the repo is open-source) and blocking them with 401 breaks
+# audioWorklet.addModule() / Worker() fetches on browsers that treat
+# those as anonymous (no-cookie).  The real security boundary is the
+# WebSocket upgrade + /api/* handlers, each of which verifies the token
+# independently.
 _PUBLIC_PATHS = {"/login", "/api/auth/login", "/api/auth/logout"}
-_AUTH_ASSET_EXTS = (".js", ".wasm", ".json")
+_PUBLIC_PATH_PREFIXES = ("/mobile.css",)
+_STATIC_EXT_PUBLIC = (".js", ".wasm", ".json", ".css", ".html", ".svg",
+                      ".png", ".ico", ".wav", ".mp3", ".ttf", ".woff2")
 
 @app.middleware("http")
 async def _auth_middleware(request: Request, call_next):
@@ -463,15 +471,18 @@ async def _auth_middleware(request: Request, call_next):
     # Allow public paths without auth
     if path in _PUBLIC_PATHS:
         return await call_next(request)
-    # Allow static assets needed BY the login page (CSS)
-    if path.startswith("/mobile.css"):
+    # Allow static assets (CSS, JS, WASM, images, fonts, etc.) without
+    # auth — they're needed by the login page itself and by audio
+    # worklet / worker fetches that may not send cookies.
+    if path.startswith(_PUBLIC_PATH_PREFIXES):
+        return await call_next(request)
+    if path.endswith(_STATIC_EXT_PUBLIC) or path.startswith("/modules/"):
         return await call_next(request)
     if not _verify_auth(request):
         # API routes get a 401 JSON response
-        if (path.startswith("/api/") or path.startswith("/WS")
-                or path.endswith(_AUTH_ASSET_EXTS)):
+        if path.startswith("/api/") or path.startswith("/WS"):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        # Page routes redirect to login, preserving the original URL
+        # Page routes (/, /index.html, etc.) redirect to login
         qs = request.url.query
         redirect_url = f"/login?next={path}"
         if qs:
