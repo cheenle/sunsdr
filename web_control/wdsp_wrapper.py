@@ -104,15 +104,16 @@ def _bind_signatures():
     _bind("SetChannelState",  [c_int, c_int, c_int], c_int)
 
     # ── Processing (CORE) ──
-    # fexchange0(channel, double *in, double *out, int *error)
+    # fexchange0 returns void.  restype=None prevents ctypes from reading
+    # a phantom return value from x0 on ARM64 (which could corrupt state).
     _bind("fexchange0",
           [c_int, ctypes.POINTER(c_double), ctypes.POINTER(c_double),
-           ctypes.POINTER(c_int)], c_int)
+           ctypes.POINTER(c_int)], None)
     _bind("fexchange2",
           [c_int,
            ctypes.POINTER(c_double), ctypes.POINTER(c_double),
            ctypes.POINTER(c_double), ctypes.POINTER(c_double),
-           ctypes.POINTER(c_int)], c_int)
+           ctypes.POINTER(c_int)], None)
 
     # ── Mode & panel ──
     _bind("SetRXAMode",       [c_int, c_int], c_int)
@@ -267,24 +268,15 @@ class WDSPProcessor:
         # _in / _out are interleaved I/Q: even = signal, odd = 0.0
         self._in = np.zeros(buffer_size * 2, dtype=np.float64)
         self._out = np.zeros(buffer_size * 2, dtype=np.float64)
-
-        # ── Ring buffers (fixed capacity, no dynamic allocation) ──
-        # At 15625 Hz, 1 s = 15625 samples.  2× margin = ~2.1 s.
-        self._ring_cap = buffer_size * 128  # 32768 samples
-        self._ring = np.zeros(self._ring_cap, dtype=np.float64)
-        self._r_head = 0   # write cursor
-        self._r_tail = 0   # read cursor
-        self._r_count = 0  # samples available to read
-
-        self._out_cap = buffer_size * 128
-        self._out_ring = np.zeros(self._out_cap, dtype=np.float64)
-        self._o_head = 0
-        self._o_tail = 0
-        self._o_count = 0
+        # Streaming buffers — process() accumulates variable-length input
+        # into _input_buffer, drains in buffer_size chunks through
+        # fexchange0, and queues output into _output_buffer.  Output is
+        # returned FIFO so the caller always gets time-aligned samples.
+        self._input_buffer = np.array([], dtype=np.float64)
+        self._output_buffer = np.array([], dtype=np.float64)
 
         # ── Memory safety: all C-boundary buffers must be C-contiguous ──
-        for name, arr in (("_in", self._in), ("_out", self._out),
-                          ("_ring", self._ring), ("_out_ring", self._out_ring)):
+        for name, arr in (("_in", self._in), ("_out", self._out)):
             assert arr.flags["C_CONTIGUOUS"], \
                 f"WDSP {name}: pre-allocated buffer must be C-contiguous"
             assert arr.dtype == np.float64, \
@@ -325,13 +317,6 @@ class WDSPProcessor:
                 _wdsp.SetRXAEMNRPosition(ctypes.c_int(self.channel),
                                          ctypes.c_int(0))
             self._apply_nr2_params(self._nr2_level)
-
-        # Enable WDSP internal spectrum so GetRXAMeter has data
-        if _check_symbol("SetRXASpectrum"):
-            _wdsp.SetRXASpectrum(ctypes.c_int(self.channel),
-                                 ctypes.c_int(1),    # enable
-                                 ctypes.c_int(1024), # FFT size
-                                 ctypes.c_int(0), ctypes.c_int(0))
 
         if nb:
             self.set_nb_enabled(True)
@@ -383,53 +368,29 @@ class WDSPProcessor:
     def process(self, audio_data: np.ndarray) -> np.ndarray:
         """Process audio through the WDSP chain.
 
-        Accumulates variable-length input into a pre-allocated ring
-        buffer, drains in buffer_size blocks through fexchange0, and
-        returns exactly len(audio_data) time-aligned float32 samples.
+        Handles variable-length input by buffering and draining in
+        buffer_size blocks through fexchange0.  Returns float32 output
+        with exactly the same number of samples as the input, properly
+        time-aligned via a FIFO output buffer.
         """
-        n_in = len(audio_data)
+        # Convert to float64
+        if audio_data.dtype == np.int16:
+            f32 = audio_data.astype(np.float64) / 32768.0
+        else:
+            f32 = audio_data.astype(np.float64)
+
+        n_in = len(f32)
         if n_in == 0:
             return audio_data
 
-        # ── Input coercion (guarantee C-contiguous float64) ──
-        if audio_data.dtype == np.int16:
-            f32 = (audio_data.astype(np.float64, copy=False) / 32768.0)
-        elif audio_data.dtype == np.float64:
-            f32 = np.ascontiguousarray(audio_data)
-        else:
-            f32 = np.ascontiguousarray(audio_data, dtype=np.float64)
-
-        assert f32.flags["C_CONTIGUOUS"], \
-            "WDSP input must be C-contiguous after coercion"
-
-        # ── Ring buffer write ──
-        assert self._r_count + n_in <= self._ring_cap, \
-            f"WDSP input ring overflow: {self._r_count}+{n_in}>{self._ring_cap}"
-        end = self._r_head + n_in
-        if end <= self._ring_cap:
-            self._ring[self._r_head:end] = f32
-        else:
-            first = self._ring_cap - self._r_head
-            self._ring[self._r_head:] = f32[:first]
-            self._ring[:end - self._ring_cap] = f32[first:]
-        self._r_head = end % self._ring_cap
-        self._r_count += n_in
-
-        # ── Drain complete blocks through fexchange0 ──
+        # Accumulate input and drain complete blocks
+        self._input_buffer = np.concatenate([self._input_buffer, f32])
         bs = self.buffer_size
-        while self._r_count >= bs:
-            # Read one block from ring
-            if self._r_tail + bs <= self._ring_cap:
-                chunk = self._ring[self._r_tail:self._r_tail + bs]
-            else:
-                first = self._ring_cap - self._r_tail
-                chunk = np.empty(bs, dtype=np.float64)
-                chunk[:first] = self._ring[self._r_tail:]
-                chunk[first:] = self._ring[:bs - first]
-            self._r_tail = (self._r_tail + bs) % self._ring_cap
-            self._r_count -= bs
 
-            # Zero-copy into pre-allocated interleaved buffer
+        while len(self._input_buffer) >= bs:
+            chunk = self._input_buffer[:bs]
+            self._input_buffer = self._input_buffer[bs:]
+
             self._in[0::2] = chunk
             self._in[1::2] = 0.0
 
@@ -440,57 +401,33 @@ class WDSPProcessor:
                 self._out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                 ctypes.byref(err))
 
-            # err == 0: normal  |  err == -2: warmup (output valid)
+            # err == 0: normal
+            # err == -2: warmup (output is valid but not fully converged)
+            # err == other: real error → skip this block
             if err.value not in (0, -2):
-                if err.value < 0:
-                    logger.debug("WDSP fexchange0 warmup err=%d", err.value)
-                else:
-                    logger.warning("WDSP fexchange0 error=%d (skipping block)",
-                                   err.value)
+                logger.debug("WDSP fexchange0 error=%d (skipping block)", err.value)
                 continue
 
             out = self._out[0::2].copy()
+            self._output_buffer = np.concatenate([self._output_buffer, out])
 
-            # Write to output ring
-            assert self._o_count + bs <= self._out_cap, \
-                "WDSP output ring overflow"
-            oend = self._o_head + bs
-            if oend <= self._out_cap:
-                self._out_ring[self._o_head:oend] = out
-            else:
-                first = self._out_cap - self._o_head
-                self._out_ring[self._o_head:] = out[:first]
-                self._out_ring[:oend - self._out_cap] = out[first:]
-            self._o_head = oend % self._out_cap
-            self._o_count += bs
+        # Return exactly n_in time-aligned samples
+        if len(self._output_buffer) >= n_in:
+            result = self._output_buffer[:n_in]
+            self._output_buffer = self._output_buffer[n_in:]
+            return result.astype(np.float32)
 
-        # ── Return n_in time-aligned samples ──
-        if self._o_count >= n_in:
-            result = self._read_output(n_in)
-            return result.astype(np.float32, copy=False)
+        # Not enough output yet — drain what we have, pad with silence
+        if len(self._output_buffer) > 0:
+            result = np.concatenate([
+                self._output_buffer,
+                np.zeros(n_in - len(self._output_buffer), dtype=np.float64),
+            ])
+            self._output_buffer = np.array([], dtype=np.float64)
+            return result.astype(np.float32)
 
-        # Underflow: drain what we have, pad the rest with silence.
-        available = min(self._o_count, n_in)
-        if available > 0:
-            partial = self._read_output(available)
-            result = np.zeros(n_in, dtype=np.float64)
-            result[:available] = partial
-            return result.astype(np.float32, copy=False)
-
+        # No output at all — return silence
         return np.zeros(n_in, dtype=np.float32)
-
-    def _read_output(self, n: int) -> np.ndarray:
-        """Read n samples from the output ring (internal, n ≤ _o_count)."""
-        if self._o_tail + n <= self._out_cap:
-            result = self._out_ring[self._o_tail:self._o_tail + n].copy()
-        else:
-            first = self._out_cap - self._o_tail
-            result = np.empty(n, dtype=np.float64)
-            result[:first] = self._out_ring[self._o_tail:]
-            result[first:] = self._out_ring[:n - first]
-        self._o_tail = (self._o_tail + n) % self._out_cap
-        self._o_count -= n
-        return result
 
     # ── AGC ────────────────────────────────────────────────────
 
