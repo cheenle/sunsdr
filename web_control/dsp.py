@@ -534,6 +534,25 @@ class AudioDemodulator:
         if self._wdsp_iq:
             self._wdsp_iq.set_agc_mode(self._agc_mode)
 
+    def set_agc_attack(self, ms: int):
+        if self._wdsp: self._wdsp.set_agc_attack(ms)
+    def set_agc_decay(self, ms: int):
+        if self._wdsp: self._wdsp.set_agc_decay(ms)
+    def set_agc_hang(self, ms: int):
+        if self._wdsp: self._wdsp.set_agc_hang(ms)
+    def set_agc_slope(self, db: float):
+        if self._wdsp: self._wdsp.set_agc_slope(db)
+    def set_eq_enabled(self, on: bool):
+        if self._wdsp: self._wdsp.set_eq_run(on)
+    def set_fm_squelch_enabled(self, on: bool):
+        if self._wdsp: self._wdsp.set_fm_squelch_run(on)
+    def set_fm_squelch_threshold(self, thresh: float):
+        if self._wdsp: self._wdsp.set_fm_squelch_threshold(thresh)
+    def get_s_meter(self) -> float:
+        if self._wdsp_iq: return self._wdsp_iq.get_s_meter()
+        if self._wdsp: return self._wdsp.get_s_meter()
+        return -127.0
+
     def add_notch(self, freq_hz: float, width_hz: float):
         idx = len(self._notches)
         self._notches.append({"id": idx, "freq": freq_hz, "width": width_hz})

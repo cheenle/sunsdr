@@ -991,6 +991,10 @@ function wsControlTRXcrtol( msg ){
             wsControlTRX.send("getWDSPStatus:");
         }
     }
+    else if(action == "wdspSMeter"){
+        var el = document.getElementById('wdsp-smeter');
+        if (el) el.textContent = parseFloat(param).toFixed(1) + ' dB';
+    }
     else if(action == "setWDSPNR2Level"){
         console.log('🔧 WDSP NR2 Level 广播:', param);
         if(typeof window.updateNR2LevelUI === 'function') {

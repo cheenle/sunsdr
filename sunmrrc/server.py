@@ -1411,6 +1411,31 @@ async def ws_ctrl(ws: WebSocket):
                     mode = int(val) if val else 0
                     if dsp_proc: dsp_proc.demodulator.set_agc_mode(mode)
                     await _send_ctrl(f"setWDSPAGC:{mode}")
+                elif cmd == "setWDSPAGCAttack":
+                    if dsp_proc and val: dsp_proc.demodulator.set_agc_attack(int(val))
+                    await _send_ctrl(f"setWDSPAGCAttack:{val}")
+                elif cmd == "setWDSPAGCDecay":
+                    if dsp_proc and val: dsp_proc.demodulator.set_agc_decay(int(val))
+                    await _send_ctrl(f"setWDSPAGCDecay:{val}")
+                elif cmd == "setWDSPAGCHang":
+                    if dsp_proc and val: dsp_proc.demodulator.set_agc_hang(int(val))
+                    await _send_ctrl(f"setWDSPAGCHang:{val}")
+                elif cmd == "setWDSPAGCSlope":
+                    if dsp_proc and val: dsp_proc.demodulator.set_agc_slope(float(val))
+                    await _send_ctrl(f"setWDSPAGCSlope:{val}")
+                elif cmd == "setWDSPEQ":
+                    if dsp_proc: dsp_proc.demodulator.set_eq_enabled(val.lower() == "true")
+                    await _send_ctrl(f"setWDSPEQ:{val.lower()}")
+                elif cmd == "setWDSPFMSquelch":
+                    if dsp_proc: dsp_proc.demodulator.set_fm_squelch_enabled(val.lower() == "true")
+                    await _send_ctrl(f"setWDSPFMSquelch:{val.lower()}")
+                elif cmd == "setWDSPFMSquelchThresh":
+                    if dsp_proc and val: dsp_proc.demodulator.set_fm_squelch_threshold(float(val))
+                    await _send_ctrl(f"setWDSPFMSquelchThresh:{val}")
+                elif cmd == "getWDSPSMeter":
+                    if dsp_proc:
+                        dbm = dsp_proc.demodulator.get_s_meter()
+                        await ws.send_text(f"wdspSMeter:{dbm:.1f}")
                 elif cmd == "addWDSPNotch":
                     parts = val.split(',')
                     if dsp_proc and len(parts) >= 2:

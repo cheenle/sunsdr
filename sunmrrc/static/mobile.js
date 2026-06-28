@@ -4637,6 +4637,84 @@ function updateDSPAGCUI() {
 }
 
 // 初始化 DSP 控制面板 UI
+function showWDSPSettings() {
+    var nr2Level = wdspState.nr2Level || 1;
+    var html = '<div class="modal-panel" style="max-width:400px;"><h3>⚙ WDSP 设置</h3>';
+
+    // ── NR2 降噪 ──
+    html += '<div class="setting-section"><h4>NR2 降噪强度</h4>';
+    html += '<input type="range" id="wdsp-nr2-slider" min="0" max="100" value="' + (nr2Level * 25) + '" oninput="setNR2FromSlider(this.value)" style="width:100%">';
+    html += '<span id="wdsp-nr2-label" style="color:var(--accent-primary)">' + NR2_LEVEL_NAMES[nr2Level] + '</span>';
+    html += '</div>';
+
+    // ── AGC ──
+    html += '<div class="setting-section"><h4>AGC 模式</h4><div class="mode-grid">';
+    ['OFF','LONG','SLOW','MED','FAST'].forEach(function(m,i){
+        html += '<button class="mode-btn' + (wdspState.agcMode === i ? ' active' : '') + '" onclick="setAGCMode(' + i + ')">' + m + '</button>';
+    });
+    html += '</div></div>';
+
+    // ── AGC 微调 ──
+    html += '<div class="setting-section"><h4>AGC 微调</h4>';
+    html += '<label>Attack: <span id="wdsp-agc-attack-v">2ms</span></label>';
+    html += '<input type="range" min="1" max="20" value="2" oninput="setAGCFine(\'attack\',this.value)" style="width:100%">';
+    html += '<label>Decay: <span id="wdsp-agc-decay-v">100ms</span></label>';
+    html += '<input type="range" min="20" max="1000" value="100" oninput="setAGCFine(\'decay\',this.value)" style="width:100%">';
+    html += '<label>Hang: <span id="wdsp-agc-hang-v">500ms</span></label>';
+    html += '<input type="range" min="0" max="2000" value="500" oninput="setAGCFine(\'hang\',this.value)" style="width:100%">';
+    html += '</div>';
+
+    // ── 滤波器 ──
+    html += '<div class="setting-section"><h4>滤波器</h4>';
+    html += '<button class="dsp-btn" style="width:48%;margin:2px" onclick="toggleWDSPNB()">NB: <span id="wdsp-nb-v">' + (wdspState.nb ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-btn" style="width:48%;margin:2px" onclick="toggleWDSPANF()">ANF: <span id="wdsp-anf-v">' + (wdspState.anf ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-btn" style="width:48%;margin:2px" onclick="toggleWDSPNF()">NF: <span id="wdsp-nf-v">' + (wdspState.nf ? 'ON' : 'OFF') + '</span></button>';
+    html += '</div>';
+
+    // ── S-Meter ──
+    html += '<div class="setting-section"><h4>信号强度 (WDSP S-Meter)</h4>';
+    html += '<span id="wdsp-smeter" style="font-size:20px;color:var(--accent-primary)">-- dB</span>';
+    html += '<button class="dsp-btn" style="margin-left:8px" onclick="refreshSMeter()">刷新</button>';
+    html += '</div>';
+
+    html += '<button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';
+    showModalPanel(html);
+    refreshSMeter();
+}
+
+// ── Slider → NR2 level ──
+function setNR2FromSlider(val) {
+    var pct = parseInt(val);
+    var level = Math.round(pct / 25);  // 0-100 → 0-4
+    level = Math.max(0, Math.min(4, level));
+    var label = document.getElementById('wdsp-nr2-label');
+    if (label) label.textContent = NR2_LEVEL_NAMES[level] + ' (' + pct + '%)';
+    setWDSPNR2Level(level);
+}
+
+// ── AGC fine controls ──
+function setAGCFine(param, val) {
+    var v = parseInt(val);
+    var label = document.getElementById('wdsp-agc-' + param + '-v');
+    if (label) label.textContent = v + 'ms';
+    if (param === 'attack') sendCommand('setWDSPAGCAttack', v.toString());
+    else if (param === 'decay') sendCommand('setWDSPAGCDecay', v.toString());
+    else if (param === 'hang') sendCommand('setWDSPAGCHang', v.toString());
+}
+
+function setAGCMode(mode) {
+    wdspState.agcMode = mode;
+    sendCommand('setWDSPAGC', mode.toString());
+    saveWDSPStateToCookies();
+    updateDSPAGCUI();
+    closeModalPanel();
+    showWDSPSettings();
+}
+
+function refreshSMeter() {
+    sendCommand('getWDSPSMeter', '');
+}
+
 function initDSPControlPanel() {
     console.log('🎛️ 初始化 DSP 控制面板...');
 
@@ -4647,7 +4725,6 @@ function initDSPControlPanel() {
     const mainToggle = document.getElementById('dsp-main-toggle');
     if (mainToggle) {
         mainToggle.checked = wdspState.enabled;
-        // 添加事件监听器（替代HTML中的onchange）
         mainToggle.addEventListener('change', function() {
             toggleWDSPMain(this.checked);
         });
@@ -4656,32 +4733,32 @@ function initDSPControlPanel() {
     // 为DSP按钮添加事件监听器（替代HTML中的onclick）
     const nr2Btn = document.getElementById('dsp-nr2-btn');
     if (nr2Btn) {
-        nr2Btn.addEventListener('click', cycleWDSPNR2Level);
+        nr2Btn.addEventListener('click', function() { showWDSPSettings(); });
     }
 
     const nbBtn = document.getElementById('dsp-nb-btn');
     if (nbBtn) {
-        nbBtn.addEventListener('click', toggleWDSPNB);
+        nbBtn.addEventListener('click', function() { toggleWDSPNB(); showWDSPSettings(); });
     }
 
     const anfBtn = document.getElementById('dsp-anf-btn');
     if (anfBtn) {
-        anfBtn.addEventListener('click', toggleWDSPANF);
+        anfBtn.addEventListener('click', function() { toggleWDSPANF(); showWDSPSettings(); });
     }
 
     const nfBtn = document.getElementById('dsp-nf-btn');
     if (nfBtn) {
-        nfBtn.addEventListener('click', toggleWDSPNF);
+        nfBtn.addEventListener('click', function() { toggleWDSPNF(); showWDSPSettings(); });
     }
 
     const agcBtn = document.getElementById('dsp-agc-btn');
     if (agcBtn) {
-        agcBtn.addEventListener('click', cycleWDSPAGC);
+        agcBtn.addEventListener('click', function() { showWDSPSettings(); });
     }
 
     // 更新按钮状态
     updateDSPButtonsState();
-    updateNR2LevelUI();  // 使用 NR2 强度 UI
+    updateNR2LevelUI();
     updateDSPButtonUI('nb', wdspState.nb);
     updateDSPButtonUI('anf', wdspState.anf);
     updateDSPButtonUI('nf', wdspState.nf);

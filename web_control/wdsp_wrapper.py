@@ -808,6 +808,12 @@ class WDSPIQProcessor:
     def set_agc_mode(self, mode: int):
         _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
 
+    def get_s_meter(self) -> float:
+        if not _check_symbol("GetRXAMeter"):
+            return -127.0
+        return float(_wdsp.GetRXAMeter(
+            ctypes.c_int(self.channel), ctypes.c_int(0)))
+
     def close(self):
         if WDSP_AVAILABLE:
             _wdsp.SetChannelState(ctypes.c_int(self.channel),
