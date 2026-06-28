@@ -4464,15 +4464,15 @@ function handleWDSPStatus(status) {
         if (nbEl) nbEl.checked = wdspState.nb;
         if (anfEl) anfEl.checked = wdspState.anf;
         if (agcEl) agcEl.value = wdspState.agcMode;
-        
+
         // 更新新 DSP 控制面板 UI
         updateDSPPanelUI();
-        
+
         // 更新 DSP 按钮状态
         if (typeof updateDSPButtonsState === 'function') {
             updateDSPButtonsState();
         }
-        
+
         console.log('🔧 WDSP 状态已更新:', data);
     } catch (e) {
         console.error('WDSP 状态解析错误:', e);

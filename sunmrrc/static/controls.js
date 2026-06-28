@@ -1694,28 +1694,35 @@ function blikcritik(elemtID){
 var OpusEncoderProcessor = function( wsh )
 {
     this.wsh = wsh;
-    this.bufferSize = 2048; // 优化：从4096减至2048，降低延迟约42ms
-    // ========== 关键修复：降采样系数 ==========
-    // AudioContext 通常是 48kHz，Opus 编码器使用 16kHz
-    // 降采样系数 = 输入采样率 / 目标采样率 = 48000 / 16000 = 3
-    this.downSample = 3;  // 修复：从2改为3，正确降采样 48kHz → 16kHz
-    // Opus 编码参数优化 - 基于 WebRTC 最佳实践
-    // 帧时长: 20ms（WebRTC 推荐，更快的处理周期）
-    // 采样率: 16kHz（优化移动端性能）
-    // 应用类型: 2048 = OPUS_APPLICATION_VOIP（优化语音质量）
-    // 编码复杂度: 3（优先手机实时性，避免主线程编码空窗）
-    // DTX: 开启（静音时不编码，释放 CPU）
-    this.opusFrameDur = 20; // msec - WebRTC 推荐值
-    this.opusRate = 16000;  // Hz - 16kHz 优化移动端性能
-    // 计算正确的缓冲区大小：bufferSize / downSample = 2048 / 3 ≈ 682 samples
-    // Opus 帧大小 = 16000 * 40 / 1000 = 640 samples
-    // 682 > 640，足够一个完整帧，多余数据会在下一帧处理
+    this.bufferSize = 2048;
+    this.downSample = 3;
+    this.opusFrameDur = 20;
+    this.opusRate = 16000;
     this.i16arr = new Int16Array( Math.floor(this.bufferSize / this.downSample) );
     this.f32arr = new Float32Array( Math.floor(this.bufferSize / this.downSample) );
     this.txOpusWorker = null;
     this.txOpusWorkerReady = false;
+
+    // ── SharedArrayBuffer ring (bypasses main thread for TX) ────
+    // Created once, shared with AudioWorklet (producer) and Opus Worker
+    // (consumer).  After setup the main thread never touches audio samples
+    // — GC pauses / UI jank can't stall the TX stream.
+    this.txSab = null;
+    this.txSabRingSize = 0;
+    try {
+        // 16384 float32 samples @ 16 kHz = 1.024 s buffer.  Word[0]=write_pos,
+        // word[1]=read_pos, word[2+]=float32 data.  Total = (2+16384)*4 = 65544 B.
+        this.txSabRingSize = 16384;
+        var sabBytes = (2 + this.txSabRingSize) * 4;
+        this.txSab = new SharedArrayBuffer(sabBytes);
+        console.log('✅ SAB ring created: ' + sabBytes + ' bytes, ~' + (this.txSabRingSize/16000*1000).toFixed(0) + 'ms buffer');
+    } catch (e) {
+        console.warn('⚠️ SharedArrayBuffer unavailable — falling back to postMessage path:', e.message);
+        this.txSab = null;
+    }
+
     this.initTxOpusWorker();
-    console.log('🎵 TX Opus Worker 初始化: complexity=3, bitrate=28kbps CBR, worker-owned WebSocket, downSample=' + this.downSample + ', buffer=' + this.f32arr.length + ', frame=' + (this.opusRate * this.opusFrameDur / 1000));
+    console.log('🎵 TX Opus Worker: complexity=3, bitrate=28kbps CBR, worker-owned WebSocket, SAB=' + (this.txSab ? 'YES' : 'no'));
 }
 
 
@@ -1864,11 +1871,21 @@ OpusEncoderProcessor.prototype.initTxOpusWorker = function()
     }
     var that = this;
     try {
-        this.txOpusWorker = new Worker(wsUrlWithAuth('/tx_opus_worker.js?v=5.8.1'));
+        this.txOpusWorker = new Worker(wsUrlWithAuth('/tx_opus_worker.js?v=5.9'));
         this.txOpusWorker.onmessage = function(ev) {
             var d = ev.data || {};
             if (d.type === 'open') {
                 that.txOpusWorkerReady = true;
+                // Send SAB to worker once WS is open (if available)
+                if (that.txSab) {
+                    that.txOpusWorker.postMessage({
+                        type: 'sab',
+                        sab: that.txSab,
+                        ringSize: that.txSabRingSize
+                    });
+                }
+            } else if (d.type === 'sab_ready') {
+                console.log('✅ TX Opus Worker: SAB ring ready');
             } else if (d.type === 'sent') {
                 window.__txBytes = (window.__txBytes || 0) + (d.bytes || 0);
                 window.__txOpusDropped = d.dropped || 0;
@@ -1895,6 +1912,18 @@ OpusEncoderProcessor.prototype.startOpusWorker = function()
 {
     this.initTxOpusWorker();
     if (this.txOpusWorker) {
+        // ── Send SAB BEFORE 'start' ──────────────────────────
+        // The old code sent SAB in the WS-open callback, but WS-open is
+        // async — if it takes >100 ms (TLS handshake), the polling loop
+        // starts with _sab==null and never recovers.  By sending SAB
+        // first, the Worker always has it when 'start' fires.
+        if (this.txSab) {
+            this.txOpusWorker.postMessage({
+                type: 'sab',
+                sab: this.txSab,
+                ringSize: this.txSabRingSize
+            });
+        }
         this.txOpusWorker.postMessage({ type: 'start' });
     }
 };
@@ -2065,7 +2094,7 @@ MediaHandler.prototype.callback = async function( stream )
         this.txWorkletNode = null;
         if (useTXWorklet) {
             try {
-                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=5.8.1'));
+                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=5.9'));
                 this.txWorkletNode = new AudioWorkletNode(this.context, 'tx-capture', {
                     numberOfInputs: 1,
                     numberOfOutputs: 0,
@@ -2073,15 +2102,26 @@ MediaHandler.prototype.callback = async function( stream )
                     channelCountMode: 'explicit',
                     channelInterpretation: 'speakers'
                 });
-                // Worklet posts Int16 frames back via MessagePort; forward them
-                // to the /WSaudioTX socket through the OpusEncoderProcessor.
+                // With SAB: worklet writes float32 samples directly to the ring
+                // buffer (zero main-thread path).  Without SAB: worklet posts
+                // Int16 frames via MessagePort (legacy fallback).
                 this.txWorkletNode.port.onmessage = (ev) => {
                     if (this.audioProcessor && typeof this.audioProcessor.onWorkletFrame === 'function') {
                         this.audioProcessor.onWorkletFrame(ev.data);
                     }
                 };
+                // Send SAB to worklet if available
+                if (this.audioProcessor && this.audioProcessor.txSab) {
+                    this.txWorkletNode.port.postMessage({
+                        type: 'sab',
+                        sab: this.audioProcessor.txSab,
+                        ringSize: this.audioProcessor.txSabRingSize
+                    });
+                    console.log('✅ TX AudioWorklet + SAB: zero-main-thread path active');
+                } else {
+                    console.log('✅ TX AudioWorklet: legacy postMessage path');
+                }
                 this.processor = this.txWorkletNode;
-                console.log('✅ TX AudioWorklet 模式已启用 (独立音频线程)');
             } catch (e) {
                 console.warn('⚠️ TX AudioWorklet 失败，回退到 ScriptProcessor:', e);
                 useTXWorklet = false;

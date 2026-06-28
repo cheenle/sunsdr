@@ -219,6 +219,13 @@ def _bind_signatures():
     _bind("SetRXASPCWBandwidth", [c_int, c_double], c_int)
     _bind("SetRXASPCWGain",      [c_int, c_double], c_int)
 
+    # ── Spatial Diversity (dual-ADC coherent combining) ──
+    _bind("SetEXTDIVRun",          [c_int, c_int], c_int)
+    _bind("SetEXTDIVRotate",       [c_int, c_double], c_int)
+    _bind("SetEXTDIVBuffsize",     [c_int, c_int], c_int)
+    _bind("SetEXTDIVNr",           [c_int, c_int], c_int)
+    _bind("SetEXTDIVOutput",       [c_int, c_int], c_int)
+
     # ── Verify core symbols ──
     for core in ("OpenChannel", "fexchange0", "CloseChannel", "SetRXAMode",
                  "SetRXAPanelGain1", "SetRXAAGCMode"):
@@ -239,7 +246,6 @@ class WDSPMode:
 
 class WDSPAGCMode:
     OFF, LONG, SLOW, MED, FAST = range(5)
-
 
 # ── Processor ──────────────────────────────────────────────────────
 
@@ -822,8 +828,132 @@ class WDSPIQProcessor:
         return float(_wdsp.GetRXAMeter(
             ctypes.c_int(self.channel), ctypes.c_int(0)))
 
+    # ── Spatial Diversity (dual-ADC coherent combining) ────────
+
+    def enable_spatial_diversity(self, enabled: bool):
+        """Enable / disable spatial diversity combining via fexchange2.
+
+        When enabled, process_diversity_iq() must be called instead of
+        process_iq(); it accepts TWO IQ streams (ADC1 + ADC2) and uses
+        WDSP's internal diversity matrix (SetEXTDIVRun) for coherent
+        phase-aligned combining before NR2/ANF/AGC processing.
+
+        Requires: SunSDR2 DX configured for dual-ADC streaming (two UDP
+        IQ ports).  Until the hardware dual-stream capability is
+        confirmed, this is forward-looking.
+        """
+        if not _check_symbol("fexchange2"):
+            logger.warning("WDSP fexchange2 not available — diversity requires "
+                          "fexchange2 support in libwdsp.dylib")
+            return
+        self._diversity_enabled = enabled
+        if _check_symbol("SetEXTDIVRun"):
+            _wdsp.SetEXTDIVRun(ctypes.c_int(self.channel),
+                              ctypes.c_int(1 if enabled else 0))
+        if enabled and _check_symbol("SetEXTDIVRotate"):
+            _wdsp.SetEXTDIVRotate(ctypes.c_int(self.channel),
+                                 ctypes.c_double(1.0))
+        if enabled and _check_symbol("SetEXTDIVOutput"):
+            _wdsp.SetEXTDIVOutput(ctypes.c_int(self.channel),
+                                  ctypes.c_int(0))  # 0 = combined output
+
+    def process_diversity_iq(self, iq_a: np.ndarray,
+                             iq_b: np.ndarray) -> np.ndarray:
+        """Process dual-ADC IQ through fexchange2 → diversity-combined audio.
+
+        iq_a, iq_b: complex64/128 arrays from ADC1 and ADC2 respectively.
+                     Must be the same length.
+        Returns: float32 audio, time-aligned to input length.
+
+        fexchange2 runs both streams through the WDSP channel together:
+        diversity matrix → NR2 → ANF → demodulation → AGC.
+        The output is the diversity-combined demodulated audio.
+        """
+        if not self._diversity_enabled:
+            logger.warning("process_diversity_iq called but diversity not enabled")
+            return self.process_iq(iq_a)
+
+        n = min(len(iq_a), len(iq_b))
+        if n == 0:
+            return np.array([], dtype=np.float32)
+
+        # Convert to interleaved float64: [I0, Q0, I1, Q1, ...] for both streams
+        iq_a64 = iq_a[:n].astype(np.complex128)
+        iq_b64 = iq_b[:n].astype(np.complex128)
+        interleaved_a = np.empty(n * 2, dtype=np.float64)
+        interleaved_b = np.empty(n * 2, dtype=np.float64)
+        interleaved_a[0::2] = iq_a64.real
+        interleaved_a[1::2] = iq_a64.imag
+        interleaved_b[0::2] = iq_b64.real
+        interleaved_b[1::2] = iq_b64.imag
+
+        # Accumulate into dual IQ buffer
+        self._iq_buffer_a = np.concatenate(
+            [getattr(self, '_iq_buffer_a', np.array([], dtype=np.float64)),
+             interleaved_a])
+        self._iq_buffer_b = np.concatenate(
+            [getattr(self, '_iq_buffer_b', np.array([], dtype=np.float64)),
+             interleaved_b])
+        bs2 = self.buffer_size * 2
+
+        # Pre-allocate diversity work buffers on first use
+        if not hasattr(self, '_in_b'):
+            self._in_b = np.zeros(self.buffer_size * 2, dtype=np.float64)
+            self._out_b = np.zeros(self.buffer_size * 2, dtype=np.float64)
+            assert self._in_b.flags["C_CONTIGUOUS"] and self._in_b.dtype == np.float64
+            assert self._out_b.flags["C_CONTIGUOUS"] and self._out_b.dtype == np.float64
+
+        while (len(self._iq_buffer_a) >= bs2
+               and len(self._iq_buffer_b) >= bs2):
+            self._in[:] = self._iq_buffer_a[:bs2]
+            self._in_b[:] = self._iq_buffer_b[:bs2]
+            self._iq_buffer_a = self._iq_buffer_a[bs2:]
+            self._iq_buffer_b = self._iq_buffer_b[bs2:]
+
+            err = ctypes.c_int(0)
+            _wdsp.fexchange2(
+                ctypes.c_int(self.channel),
+                self._in.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                self._in_b.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                self._out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                self._out_b.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                ctypes.byref(err))
+
+            if err.value not in (0, -2):
+                logger.warning("WDSP fexchange2 error=%d", err.value)
+                continue
+
+            # Primary output channel carries the diversity-combined audio
+            raw_audio = self._out[0::2].copy()
+            audio_block = raw_audio[::self._decim]
+            if self._ratio is None:
+                self._ratio = len(audio_block) / self.buffer_size
+                logger.info("WDSP Diversity output ratio: %.3f "
+                           "(block=%d→%d, decim=%d)",
+                           self._ratio, self.buffer_size,
+                           len(audio_block), self._decim)
+            self._audio_buffer = np.concatenate(
+                [self._audio_buffer, audio_block])
+
+        # Return time-aligned audio
+        if self._ratio is None:
+            return np.zeros(0, dtype=np.float32)
+        want = max(1, int(n * self._ratio))
+        if len(self._audio_buffer) >= want:
+            result = self._audio_buffer[:want].astype(np.float32, copy=False)
+            self._audio_buffer = self._audio_buffer[want:]
+            return result
+        available = len(self._audio_buffer)
+        result = np.zeros(want, dtype=np.float32)
+        if available > 0:
+            result[:available] = self._audio_buffer[:available].astype(np.float32)
+            self._audio_buffer = np.array([], dtype=np.float64)
+        return result
+
     def close(self):
         if WDSP_AVAILABLE:
             _wdsp.SetChannelState(ctypes.c_int(self.channel),
                                   ctypes.c_int(0), ctypes.c_int(0))
             _wdsp.CloseChannel(ctypes.c_int(self.channel))
+
+

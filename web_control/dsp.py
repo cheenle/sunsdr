@@ -95,13 +95,14 @@ TX_RAMP_SAMPLES = 200
 # silence and steps the amplitude to 0 (periodic clicking / stutter).
 #
 # Two-level hysteresis:
-#   - /WSaudioTX now has its own 20 ms frame pacer, so this layer no longer
-#     needs to absorb 100+ ms browser bursts. It only protects the 5.12 ms RF
-#     pacer from executor/SSB-modulator scheduling jitter.
-#   - First fill reaches TX_MIC_PRIME_PKTS (~143 ms), and underflow re-primes
-#     to TX_MIC_REPRIME_PKTS (~72 ms).
-TX_MIC_PRIME_PKTS = 28       # ~143 ms high watermark after server pacing
-TX_MIC_REPRIME_PKTS = 14     # ~72 ms re-prime for RF pacer protection
+#   - /WSaudioTX pacer now has NO de-prime (see server.py), so THIS layer is
+#     the sole jitter guard.  It must absorb browser GC pauses up to ~300 ms
+#     (observed 287 ms in server logs).  The TX pacer thread targets 80 pkts
+#     and can slow ±25% to help the queue refill after a gap.
+#   - First fill reaches TX_MIC_PRIME_PKTS (~307 ms), underflow re-primes
+#     to TX_MIC_REPRIME_PKTS (~102 ms).
+TX_MIC_PRIME_PKTS = 60       # ~307 ms — survive worst-case browser gap (was 28)
+TX_MIC_REPRIME_PKTS = 20     # ~102 ms — faster recovery, still safe (was 14)
 # Audio-rate samples carried across feed_audio() calls so each streaming
 # Hilbert transform has history/look-ahead context and no per-chunk edge
 # transient (buzz). Trimmed off both ends after the transform.
@@ -123,16 +124,12 @@ TX_HILBERT_MARGIN = 256
 # ceiling is fixed at TX_IQ_PEAK and does NOT scale with drive, so drive moves
 # the level under a constant clip point instead of moving the clip point too
 # (the old bug that guaranteed ~7× overdrive at every drive setting).
-TX_DRIVE_GAIN = 2.3           # fixed make-up gain — sweet spot: peaks ~0.87,
-# DEVICE (0x0017 drive); this only lifts the mic audio into a healthy digital
-# level. LOWERED 5.0→3.0 (2026-06-24): the browser now does the peak-average
-# reduction (tx_audio_eq.js compressor ratio 6:1 + makeup gain), so the IQ
-# arriving here is already low-crest-factor. At ×5 the post-drive peak hit ~2.3
-# (4.6× over the 0.5 ceiling) and the tanh knee did ALL the limiting — heavy
-# compression distortion on loud syllables. At ×3 the tanh is a safety net for
-# residual transients, not the primary limiter, so the far end hears cleaner
-# SSB while the higher RMS (from client compression) lifts average power.
-# Turn the DEVICE drive up for more peak power, not this.
+TX_DRIVE_GAIN = 2.8           # reduced 3.5→2.8 (2026-06-29): 3.5 put tanh ~60% duty
+# cycle on voice peaks, which gain-modulated the SSB envelope and made the far
+# end hear a trembling/quivering voice (same mechanism as the old per-hop AGC).
+# At 2.8, mic peak 0.75 × 2.8 = 2.1 → tanh still catches transients (~25% of
+# peaks) but no longer rides the envelope.  RMS ≈ 0.25 (vs ExpertSDR3's 0.33).
+# Turn DEVICE drive up to compensate — drive scales RF power at the PA, not IQ.
 
 # ── IQ Decoder ─────────────────────────────────────────────────────
 
@@ -989,12 +986,24 @@ class TXModulator:
         if len(x) == 0:
             return 0
 
-        # ── 0. Per-frame DC removal ────────────────────────────
-        # 20Hz highpass was too slow to converge within a 20ms frame.
-        # Direct mean subtraction eliminates DC instantly per frame.
-        # The tiny discontinuity at frame boundaries from abrupt DC
-        # changes is inaudible compared to the clicks from DC drift.
-        x = x - x.mean()
+        # ── 0. Continuous DC blocker (first-order IIR highpass @ 20 Hz) ──
+        # Persistent state across feed_audio() calls — NO per-frame reset.
+        # Per-frame x-=x.mean() centred each 20 ms frame independently, causing
+        # DC jumps at 76% of frame boundaries (up to 2.7% full-scale).  Each
+        # jump produced a broadband click → ~50 audible clicks/sec ("卡顿").
+        #
+        # H(z) = (1 - z⁻¹) / (1 - R·z⁻¹),  R = exp(-2π·fc/fs)
+        # Converges in ~250 ms at TX start (one mild transient), then tracks
+        # DC drift continuously.  Far less audible than per-frame clicks.
+        if not hasattr(self, '_tx_dc_b'):
+            self._tx_dc_R = math.exp(-2.0 * math.pi * 20.0 / input_rate)
+            self._tx_dc_b = np.array([1.0, -1.0], dtype=np.float64)
+            self._tx_dc_a = np.array([1.0, -self._tx_dc_R], dtype=np.float64)
+            self._tx_dc_zi = np.array([0.0], dtype=np.float64)
+        x64 = x.astype(np.float64)
+        x64, self._tx_dc_zi = lfilter(self._tx_dc_b, self._tx_dc_a, x64,
+                                       zi=self._tx_dc_zi)
+        x = x64.astype(np.float32)
 
         # ── 1. Anti-alias LPF: 16 kHz mic carries up to 8 kHz energy,
         #    but after resampling to 15625 Hz the Nyquist is only 7.8 kHz.
@@ -1037,12 +1046,12 @@ class TXModulator:
         self._audio_buf = np.concatenate(
             [self._audio_buf, np.asarray(out, dtype=np.float32)])
 
-        # ── 2/3. Overlap-save SSB → IQ packets ──
+        # ── 2/3. SSB modulation → IQ packets (Python Hilbert, overlap-save) ──
+        queued = 0
         M = TX_HILBERT_MARGIN
         N = TX_AUDIO_PER_PKT
         ceiling = TX_IQ_PEAK                        # FIXED soft-limit knee (drive-independent)
         gain = TX_DRIVE_GAIN * self.drive          # flat make-up gain (no AGC)
-        queued = 0
         while len(self._audio_buf) >= 2 * M + N:
             block = self._audio_buf[:2 * M + N]
             self._audio_buf = self._audio_buf[N:]   # advance one hop, keep overlap
@@ -1166,6 +1175,9 @@ class TXModulator:
         self._audio_buf = np.array([], dtype=np.float32)
         self._in_buf = np.array([], dtype=np.float32)
         self._rs_phase = 0.0
+        # Reset continuous DC blocker state — fresh convergence each PTT cycle
+        if hasattr(self, '_tx_dc_zi'):
+            self._tx_dc_zi.fill(0.0)
         with self._mic_lock:
             self._mic_iq.clear()
             self._mic_primed = False

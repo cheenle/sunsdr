@@ -1,102 +1,128 @@
-// AudioWorklet TX capture: runs on a dedicated audio thread (not the main
-// thread), so iOS Safari cannot stall the microphone stream when the page is
-// in the background or the main thread is busy. The previous ScriptProcessor
-// ran on the main thread and produced bursty, sometimes-stopped frames under
-// iOS 14.5+; this is what caused the "mid-call dropouts" the far end heard.
+// AudioWorklet TX capture → SharedArrayBuffer (zero main-thread path)
+// =====================================================================
+// Writes downsampled 16 kHz float32 samples directly into a SAB ring
+// buffer.  The Opus Worker reads from the same SAB and sends via its own
+// WebSocket — the main thread never touches audio samples.
 //
-// Pipeline (all inside the audio thread):
-//   1. Collect 128-sample process() quanta @ 48 kHz into a ring buffer.
-//   2. When the buffer reaches 1536 samples (32 ms), box-average downsample
-//      3:1 → 512 samples @ 16 kHz.
-//   3. Accumulate into a 320-sample (20 ms) frame accumulator; every time a
-//      full frame is ready, post it back to the main thread as Int16 PCM.
-//
-// The main thread just forwards each Int16Array over the /WSaudioTX socket —
-// it no longer does downsampling, accumulation, or format conversion. This
-// keeps the main-thread footprint tiny so the audio thread is never blocked.
+// Ring buffer layout (same as modules/tx_sab_ring.js):
+//   word[0] = write_pos (Uint32, producer advances atomically)
+//   word[1] = read_pos  (Uint32, consumer advances atomically)
+//   word[2+] = float32 sample data (power-of-2 size)
 
-class TxCaptureProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    // 48 kHz input, 16 kHz target, 3:1 decimation.
-    this._inRate = (typeof sampleRate === 'number') ? sampleRate : 48000;
+class TxCaptureSABProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super(options);
+    this._inRate = sampleRate;                    // typically 48000
     this._outRate = 16000;
-    // Decimation factor; if the audio context runs at 44.1 kHz we fall back
-    // to integer 3 anyway (≈14.7 kHz effective output rate). The server's
-    // fractional resampler handles the small mismatch.
     this._dsRatio = Math.max(1, Math.round(this._inRate / this._outRate));
-    // Accumulate this many input samples before downsampling (keeps the
-    // box-average well-aligned and amortizes the postMessage overhead).
-    this._decimBlock = this._dsRatio * 160;     // 480 samples @ 48k ≈ 10 ms
+    this._decimBlock = this._dsRatio * 160;       // 480 samples @ 48k ≈ 10 ms
     this._inBuf = new Float32Array(0);
-    // 20 ms output frame size @ 16 kHz.
-    this._frameSize = Math.round(this._outRate * 0.020);  // 320
+
+    // SAB state (set via port message)
+    this._sab = null;
+    this._ringMask = 0;
+    this._writePtr = null;
+    this._readPtr = null;
+    this._data = null;
+    this._enabled = false;
+
+    // Frame accumulator for legacy postMessage path (used when SAB unavailable)
     this._frameAcc = new Float32Array(0);
-    // Gain applied before Int16 conversion (matches the ScriptProcessor's
-    // 0x7FFF scale factor so the server sees the same amplitude).
+    this._frameSize = Math.round(this._outRate * 0.020);  // 320 samples @ 16kHz
     this._scale = 0x7FFF;
 
     this.port.onmessage = (ev) => {
-      const d = ev.data || {};
-      if (d.type === 'flush') {
+      var d = ev.data || {};
+      if (d.type === 'sab') {
+        this._sab = d.sab;
+        this._ringMask = (d.ringSize || 16384) - 1;
+        this._writePtr = new Uint32Array(this._sab, 0, 1);
+        this._readPtr  = new Uint32Array(this._sab, 4, 1);
+        this._data     = new Float32Array(this._sab, 8, this._ringMask + 1);
+        this._enabled  = true;
+      } else if (d.type === 'flush') {
         this._inBuf = new Float32Array(0);
         this._frameAcc = new Float32Array(0);
-      } else if (d.type === 'config') {
-        if (typeof d.scale === 'number' && d.scale > 0) {
-          this._scale = d.scale;
-        }
+        if (this._writePtr) Atomics.store(this._writePtr, 0);
+        if (this._readPtr)  Atomics.store(this._readPtr, 0);
       }
     };
   }
 
+  // ── SAB ring write (lock-free SPSC) ──────────────────
+
+  _writeRing(samples, n) {
+    if (!this._enabled || n === 0) return;
+    var wp = Atomics.load(this._writePtr);
+    var rp = Atomics.load(this._readPtr);
+    var mask = this._ringMask;
+    var size = mask + 1;
+    var used = wp - rp;
+    var free = size - used;
+    if (n > free) {
+      // Drop oldest samples (buffer is ~1s deep — this should be rare)
+      var drop = n - free;
+      Atomics.store(this._readPtr, rp + drop);
+    }
+    var idx = wp & mask;
+    var first = Math.min(n, size - idx);
+    var data = this._data;
+    for (var i = 0; i < first; i++) data[idx + i] = samples[i];
+    if (n > first) {
+      for (var i = 0; i < n - first; i++) data[i] = samples[first + i];
+    }
+    Atomics.store(this._writePtr, wp + n);
+  }
+
+  // ── Audio processing ─────────────────────────────────
+
   process(inputs, outputs) {
-    const input = inputs[0];
+    var input = inputs[0];
     if (!input || !input[0] || input[0].length === 0) {
       return true;
     }
-    const ch = input[0];
+    var ch = input[0];
+    var R = this._dsRatio;
 
-    // Append new samples to the input buffer.
-    const merged = new Float32Array(this._inBuf.length + ch.length);
+    // Append to input buffer
+    var merged = new Float32Array(this._inBuf.length + ch.length);
     merged.set(this._inBuf);
     merged.set(ch, this._inBuf.length);
     this._inBuf = merged;
 
-    // Process input in fixed-size decimation blocks.
-    const R = this._dsRatio;
+    // Downsample in fixed-size blocks
     while (this._inBuf.length >= this._decimBlock) {
-      const blockOut = this._decimBlock / R;
-      const decimated = new Float32Array(blockOut);
-      for (let i = 0; i < blockOut; i++) {
-        let sum = 0;
-        const base = i * R;
-        for (let j = 0; j < R; j++) {
+      var blockOut = this._decimBlock / R;
+      var decimated = new Float32Array(blockOut);
+      for (var i = 0; i < blockOut; i++) {
+        var sum = 0;
+        var base = i * R;
+        for (var j = 0; j < R; j++) {
           sum += this._inBuf[base + j];
         }
         decimated[i] = sum / R;
       }
       this._inBuf = this._inBuf.subarray(this._decimBlock);
 
-      // Append decimated samples to the frame accumulator and emit full frames.
-      const accMerged = new Float32Array(this._frameAcc.length + decimated.length);
-      accMerged.set(this._frameAcc);
-      accMerged.set(decimated, this._frameAcc.length);
-      this._frameAcc = accMerged;
-
-      while (this._frameAcc.length >= this._frameSize) {
-        const frame = this._frameAcc.subarray(0, this._frameSize);
-        this._frameAcc = this._frameAcc.subarray(this._frameSize);
-        // Convert to Int16 and post to main thread (transfer ownership if
-        // possible, but Int16Array can't be neutered across the boundary in
-        // all browsers — posting a copy is cheap at ~640 bytes).
-        const i16 = new Int16Array(this._frameSize);
-        for (let k = 0; k < this._frameSize; k++) {
-          let v = frame[k] * this._scale;
-          if (v > 32767) v = 32767;
-          else if (v < -32768) v = -32768;
-          i16[k] = v;
+      if (this._enabled) {
+        // ── SAB path: write directly, zero main-thread involvement ──
+        this._writeRing(decimated, decimated.length);
+      } else {
+        // ── Legacy path: accumulate 20ms frames, post Int16 ──
+        var accMerged = new Float32Array(this._frameAcc.length + decimated.length);
+        accMerged.set(this._frameAcc);
+        accMerged.set(decimated, this._frameAcc.length);
+        this._frameAcc = accMerged;
+        while (this._frameAcc.length >= this._frameSize) {
+          var frame = this._frameAcc.subarray(0, this._frameSize);
+          this._frameAcc = this._frameAcc.subarray(this._frameSize);
+          var i16 = new Int16Array(this._frameSize);
+          for (var k = 0; k < this._frameSize; k++) {
+            var v = frame[k] * this._scale;
+            i16[k] = v > 32767 ? 32767 : (v < -32768 ? -32768 : (v | 0));
+          }
+          this.port.postMessage(i16);
         }
-        this.port.postMessage(i16);
       }
     }
 
@@ -104,4 +130,4 @@ class TxCaptureProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('tx-capture', TxCaptureProcessor);
+registerProcessor('tx-capture', TxCaptureSABProcessor);

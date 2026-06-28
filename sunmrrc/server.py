@@ -227,9 +227,12 @@ recording_rate = 0  # RX audio rate (Hz) captured when recording starts; the
                     # it plays back at the wrong speed/pitch.
 RECORDINGS_DIR = STATIC_DIR / "recordings"
 TX_UPLINK_CAPTURE_DIR = Path(__file__).parent / "captures"
-TX_WS_JITTER_PRIME_FRAMES = 6       # 120 ms of 20 ms mic frames before drain
-TX_WS_JITTER_REPRIME_FRAMES = 3     # 60 ms after a browser/worker stall
-TX_WS_JITTER_MAX_FRAMES = 20        # 400 ms — drop > flush for real-time QSO
+TX_WS_JITTER_PRIME_FRAMES = 10      # 200 ms initial fill before draining starts
+TX_WS_JITTER_MAX_FRAMES = 30        # 600 ms — drop oldest when queue exceeds this
+# No de-prime: once primed, the pacer drains every available frame immediately.
+# An empty queue (browser GC pause) just means "wait for next frame" — no forced
+# silence for re-buffering.  The modulator's own jitter buffer (TX_MIC_PRIME_PKTS
+# / TX_MIC_REPRIME_PKTS in dsp.py) is the sole safety net against micro-stutter.
 
 
 def _write_wav(path: Path, pcm: bytes, rate: int):
@@ -419,9 +422,24 @@ def _save_recording() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global dsp_proc
+    global dsp_proc, iq_sock
+    import socket as _sm
     # Ensure recordings directory exists
     RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # ── Pre-bind IQ socket BEFORE boot sequence ──────────────────
+    # The device starts streaming IQ immediately after boot.  If the
+    # socket isn't bound yet, those early packets are dropped by the
+    # kernel and the device may stop streaming entirely (especially
+    # after a delayed start caused by WDSP channel init).  Pre-binding
+    # guarantees the kernel buffer is ready to receive from the first
+    # packet.  The processing task drains it when dsp_proc is ready.
+    iq_sock = _sm.socket(_sm.AF_INET, _sm.SOCK_DGRAM)
+    iq_sock.setblocking(False)
+    iq_sock.setsockopt(_sm.SOL_SOCKET, _sm.SO_REUSEADDR, 1)
+    iq_sock.bind(("192.168.16.100", 50002))
+    logger.info("IQ: port 50002 (pre-bound)")
+    # ── Boot device ──────────────────────────────────────────────
     ok = await radio.connect()
     logger.info(f"SunSDR2DX: {ok}")
     # Load persisted per-band TX power and push it into sunsdr_direct so
@@ -430,6 +448,42 @@ async def lifespan(app: FastAPI):
         _apply_band_power(_load_band_power())
     except Exception as e:
         logger.warning(f"band_power load failed: {e}")
+
+    # ── Dedicated keep-alive thread: started BEFORE slow WDSP init ──
+    # The device starts streaming IQ immediately after boot and
+    # expects keep-alives within ~1 s or it stops.  asyncio tasks
+    # can't run while the main thread is blocked in synchronous
+    # WDSP OpenChannel calls (~5 s each), so we use a bare OS thread
+    # that sends 0xFFFE keep-alives to port 50002 independently.
+    # IQ packets arriving before dsp_proc is set are buffered by
+    # the kernel and drained once the DSP is ready.
+    _iq_ka_stop = False
+
+    def _iq_keepalive_thread():
+        """Dedicated thread: send 0xFFFE keep-alive every 0.5 s."""
+        ka_sock = _sm.socket(_sm.AF_INET, _sm.SOCK_DGRAM)
+        ka_sock.setsockopt(_sm.SOL_SOCKET, _sm.SO_REUSEADDR, 1)
+        ka_ctr = 0x04B0
+        while not _iq_ka_stop and radio.connected:
+            try:
+                ka_ctr = (ka_ctr + 0x10000) & 0xFFFFFFFF
+                hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, ka_ctr, 0x0001)
+                ka_sock.sendto(hdr + b'\x00' * 1200,
+                              (DEVICE_HOST, 50002))
+            except Exception:
+                pass
+            time.sleep(0.5)
+        ka_sock.close()
+
+    import threading as _th
+    _ka_thread = _th.Thread(target=_iq_keepalive_thread, daemon=True)
+    _ka_thread.start()
+
+    # Also start the asyncio heartbeat + IQ processing tasks
+    asyncio.create_task(_heartbeat_task())
+    asyncio.create_task(_process_iq_stream())
+
+    # ── Slow: WDSP channel init (blocks ~11 s) ───────────────────
     dsp_proc = StreamProcessor(
         spectrum=SpectrumProcessor(fft_size=2048),
         demodulator=AudioDemodulator())
@@ -439,13 +493,17 @@ async def lifespan(app: FastAPI):
         tune_data = _load_tune_wav(tune_path)
         if len(tune_data) > 0 and dsp_proc.modulator:
             dsp_proc.modulator.set_tune_wav(tune_data)
-    asyncio.create_task(_heartbeat_task())
-    asyncio.create_task(_process_iq_stream())
     yield
     # Shutdown
+    _iq_ka_stop = True
     if dsp_proc and dsp_proc.demodulator._wdsp:
         try:
             dsp_proc.demodulator._wdsp.close()
+        except Exception:
+            pass
+    if dsp_proc and dsp_proc.demodulator._wdsp_iq:
+        try:
+            dsp_proc.demodulator._wdsp_iq.close()
         except Exception:
             pass
 
@@ -464,6 +522,24 @@ _PUBLIC_PATHS = {"/login", "/api/auth/login", "/api/auth/logout"}
 _PUBLIC_PATH_PREFIXES = ("/mobile.css",)
 _STATIC_EXT_PUBLIC = (".js", ".wasm", ".json", ".css", ".html", ".svg",
                       ".png", ".ico", ".wav", ".mp3", ".ttf", ".woff2")
+
+@app.middleware("http")
+async def _coop_coep_middleware(request: Request, call_next):
+    """Set COOP/COEP headers required for SharedArrayBuffer.
+
+    Uses credentialless (not require-corp): SharedArrayBuffer still works
+    but cross-origin subresources don't need explicit CORP headers.
+    require-corp can silently break Worker importScripts() for Opus WASM
+    modules on some browsers (Safari)."""
+    response = await call_next(request)
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
+    # Safety net: CORP cross-origin allows legacy browsers that only
+    # understand require-corp (not credentialless) to still load Worker
+    # scripts.  Harmless when credentialless is active.
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    return response
+
 
 @app.middleware("http")
 async def _auth_middleware(request: Request, call_next):
@@ -777,13 +853,11 @@ async def _heartbeat_task():
 
 async def _process_iq_stream():
     global iq_sock, tx_counter, loop_counter, _last_smeter_ts, _last_telem_ts
-    import socket as sm
 
-    iq_sock = sm.socket(sm.AF_INET, sm.SOCK_DGRAM)
-    iq_sock.setblocking(False)
-    iq_sock.setsockopt(sm.SOL_SOCKET, sm.SO_REUSEADDR, 1)
-    iq_sock.bind(("192.168.16.100", 50002))
-    logger.info("IQ: port 50002")
+    # iq_sock is already bound by lifespan() — pre-bound before the
+    # boot sequence so the kernel UDP buffer is ready from the first
+    # packet the device sends.  Just log and proceed.
+    logger.info("IQ: processing loop started on port 50002")
 
     loop = asyncio.get_event_loop()
     pkt_count = 0; iq_count = 0; spec_count = 0; audio_count = 0
@@ -825,15 +899,15 @@ async def _process_iq_stream():
         test session, a ~5 pkt/s deficit). A fixed cadence would drain a 120 ms
         buffer in ~17 s, causing periodic underflow/stutter. So the pacer
         tracks an EMA of queue depth and scales the per-packet interval
-        within ±15%: when the queue is below target it slows down, letting
-        production refill it; when above target it speeds back up to nominal.
+        within ±25%: when the queue is below the 80-packet target it slows down,
+        letting production refill; when above target it speeds back up.
         A deeper 1024-pkt buffer absorbs the short-term jitter (see dsp.py).
         """
         global tx_keepalive_due
         # Adaptive pacing state
-        _Q_TARGET = 70.0                     # aim to hover around ~360 ms queued
-        _ADAPTIVE_ALPHA = 0.08               # EMA over ~12 packets (~60 ms)
-        _ADAPTIVE_MAX = 0.15                 # never deviate more than ±15% from nominal
+        _Q_TARGET = 80.0                     # ~410 ms buffer — survive 300ms browser gaps (was 45)
+        _ADAPTIVE_ALPHA = 0.15               # EMA over ~7 packets (~35 ms) — faster response
+        _ADAPTIVE_MAX = 0.25                 # ±25% — wider range to refill faster after gaps (was 0.15)
         _q_ema = _Q_TARGET                   # start at target to avoid transient
         # Diagnostic probe: every 20th packet (~10 Hz) write a CSV row with
         # actual send interval, queue depth, silence flag, and whether the
@@ -1053,6 +1127,12 @@ async def _process_iq_stream():
                         f"(raw[:16]={raw[:16].hex()})")
 
         if sub == 0xFFFE and len(raw) >= 1200:
+            # dsp_proc may not be ready yet if WDSP channel init is
+            # still running (OpenChannel takes ~5 s per channel).  Drop
+            # early packets rather than crashing — the device will
+            # re-send fresh data on the next 5ms cycle.
+            if dsp_proc is None:
+                continue
             iq_count += 1
             payload = raw[10:]; n = min(200, len(payload)//6)
             iq = np.zeros(n, dtype=np.complex64)
@@ -1669,6 +1749,12 @@ async def ws_audio_tx(ws: WebSocket):
                 pass
 
     async def _tx_uplink_pacer():
+        """Drain WS PCM frames at their native cadence (1 frame / frame_duration).
+
+        Once TX_WS_JITTER_PRIME_FRAMES accumulate (initial fill), draining starts
+        and NEVER de-primes.  An empty queue (browser GC pause) just means "wait
+        for the next frame" — the modulator's own jitter buffer absorbs the gap.
+        """
         nonlocal _tx_primed, _tx_first_prime, _tx_last_pace_ts
         while not _tx_pacer_stop.is_set():
             item = None
@@ -1678,15 +1764,12 @@ async def ws_audio_tx(ws: WebSocket):
                     _tx_primed = False
                     _tx_first_prime = True
                 else:
-                    want = (TX_WS_JITTER_PRIME_FRAMES if _tx_first_prime
-                            else TX_WS_JITTER_REPRIME_FRAMES)
-                    if not _tx_primed and len(_tx_pcm_queue) >= want:
+                    if not _tx_primed and len(_tx_pcm_queue) >= TX_WS_JITTER_PRIME_FRAMES:
                         _tx_primed = True
                         _tx_first_prime = False
                     if _tx_primed and _tx_pcm_queue:
                         item = _tx_pcm_queue.pop(0)
-                    elif _tx_primed:
-                        _tx_primed = False
+                    # Empty queue while primed: just wait, NEVER de-prime
             if item is None:
                 _tx_last_pace_ts = time.monotonic()
                 _tx_frame_s = 0.020
