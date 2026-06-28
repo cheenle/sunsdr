@@ -39,7 +39,7 @@ All routes (HTTP and WebSocket) require a session token. Unauthenticated visitor
 
 ## Architecture
 
-See `SDD/09-architecture-overview.md` and `SDD/11-component-model.md` for detailed diagrams.
+See `SDD/09-architecture-overview.md` and `SDD/11-component-model.md` for detailed diagrams. SDD V3.4 (2026-06-26) baseline.
 
 ### Logical flow
 
@@ -94,6 +94,7 @@ TX output power is set by the **DRIVE command (0x0017)**, NOT by software IQ gai
 - **Per-band power is user-configurable**, persisted to `band_power.json`, edited via `/api/band_power` and the **Band Power** menu panel. `band_power_for(freq_hz)` looks up the % for the current band; `BAND_POWER_DEFAULT` (100) covers out-of-band frequencies.
 - **IQ amplitude must use the FULL scale** (`dsp.py` `TX_IQ_PEAK=1.0`, `TX_DRIVE_GAIN=3.0`): verified 2026-06-25 against a real ExpertSDR3 40m drive sweep (`device/captures/expert_40m_drive.pcap`) — ExpertSDR3's TX IQ peaks reach **1.0 full-scale** (voice RMS ~0.33), and IQ amplitude is **constant with drive** (drive only scales power at the device). The earlier `TX_IQ_PEAK=0.5` clipped half the amplitude through the tanh limiter and was THE root cause of low power (~20W vs ExpertSDR3's 45W at 100% drive on the same audio). The "~0.092 peak" figure in older notes was measured from a quiet/low-level capture segment and is **wrong** — ignore it.
 - **The DRIVE byte is correct as-is** (verified against `tci_drive_scan.pcap`: 100%→trailing 255, byte in trailing word). Don't re-investigate it for power problems — the lever is `TX_IQ_PEAK` + drive %, not the byte format.
+- **Client-side TX EQ gain staging**: `AudioTX_preamp = 1.5` (+3.5dB) in `tx_audio_eq.js`. The preamp was 3.0 but was reduced 2026-06-25 because the old value drove the AudioWorklet Int16 output to full scale (peak=1.0), which after Hilbert (+~30%) + server drive gain (×3.0) forced the tanh limiter to squash 75% of peak amplitude → heavy voice distortion. At ×1.5, the tanh engages only ~4% — clean SSB. Turn device drive ↑ for more power, not client gain. See `SDD/diagrams/tx-gain-staging.svg`.
 
 ### TX power / voltage telemetry (0x1F00)
 
@@ -152,7 +153,7 @@ The IQ processing loop sends both heartbeat (0x0018 to port 50001 every 0.5s) an
 
 ## Architecture decisions
 
-See `SDD/08-architecture-decisions.md` for all 9 ADs with rationale. Key ones:
+See `SDD/08-architecture-decisions.md` for all 12 ADs (AD-001 through AD-012) with rationale. Key ones:
 - FastAPI/Uvicorn over Tornado (AD-001)
 - Direct UDP hardware control over TCI abstraction (AD-002)
 - HTTPS/WSS required for mobile (AD-006)
@@ -160,6 +161,7 @@ See `SDD/08-architecture-decisions.md` for all 9 ADs with rationale. Key ones:
 ## Known gaps (AD-009)
 
 - TX SSB modulation **works** — mic frames are consumed, Hilbert-modulated to IQ, and transmitted (confirmed on-air: Tune ~12W, voice 30–40W PEP via ATR-1000)
+- **TX audio gain staging (AD-012)**: client preamp ×1.5 (`tx_audio_eq.js` `AudioTX_preamp`), server `TX_DRIVE_GAIN=3.0`, `TX_IQ_PEAK=1.0` with tanh soft limiter. The preamp was reduced from 3.0→1.5 on 2026-06-25 because the old value saturated the tanh (75% reduction → heavy distortion). See `SDD/diagrams/tx-gain-staging.svg`.
 - `/WSATR1000` accepts connections but doesn't interface with real tuner hardware
 - `/api/mem_channels` implemented (GET/POST with JSON persistence to `mem_channels.json`)
 - `/api/band_power` implemented (GET/POST with JSON persistence to `band_power.json`; frontend **Band Power** menu panel edits per-band drive %)

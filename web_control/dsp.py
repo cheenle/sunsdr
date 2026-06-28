@@ -21,8 +21,19 @@ logger = logging.getLogger(__name__)
 IQ_SAMPLE_RATE = 78125      # RX IQ rate, verified: 390.7 pkt/s × 200 samples
 IF_OFFSET = 30500.0         # RX DDS - TX VFO (verified from pcap)
 AUDIO_DECIM = 5
-AUDIO_RATE = IQ_SAMPLE_RATE // AUDIO_DECIM   # 15625 Hz
+AUDIO_RATE = IQ_SAMPLE_RATE // AUDIO_DECIM   # 15625 Hz — TX chain rate (DO NOT raise)
 FFT_SIZE = 2048
+
+# ── RX audio rate (DECOUPLED from the TX AUDIO_RATE above) ──────────
+# The TX chain (tune synthesis, mic resampler, TX_AUDIO_PER_PKT) is verified
+# against AUDIO_RATE=15625 and must NOT change. RX, however, was capped at the
+# same 15625 Hz → 7.8 kHz Nyquist, which gutted WFM (needs ~15 kHz audio) and
+# made raising the IQ sample rate useless (decim scaled with it, audio stayed
+# 15625). RX now decimates toward RX_AUDIO_BASE = 5^7/2 = 39062.5 Hz instead:
+# every device IQ rate divides it to an INTEGER decim (39063→1, 78125→2,
+# 156250→4, 312500→8) and its 19.5 kHz Nyquist easily carries 15 kHz WFM audio.
+# The server then resamples this RX rate → 48 kHz for Opus/AudioContext.
+RX_AUDIO_BASE = 39062.5
 
 
 def set_iq_sample_rate(hz: int) -> int:
@@ -186,16 +197,79 @@ class AudioDemodulator:
     def __init__(self, sample_rate: int = IQ_SAMPLE_RATE,
                  audio_rate: int = AUDIO_RATE):
         self.sample_rate = sample_rate
-        self.audio_rate = audio_rate
-        self.decim = AUDIO_DECIM
         self.mode = "USB"
-        self.audio_buffer = deque(maxlen=audio_rate * 2)
+        # Per-mode RX audio rate (see _configure_rate): voice → 15625 Hz (WDSP-
+        # safe), WFM → 39062.5 Hz (wideband, WDSP-bypassed). decim=0 is a sentinel
+        # so the _configure_rate() call at the end of __init__ always runs.
+        self.decim = 0
+        self.audio_rate = float(AUDIO_RATE)
+        self.audio_buffer = deque(maxlen=int(AUDIO_RATE * 2))
         self._lo_phase = 0.0
         self._volume = 0.5
         self._agc_gain: float | None = None
 
+        # ── FM-specific runtime state ───────────────────────────────
+        # FM is constant-envelope: the recovered audio amplitude is set by the
+        # frequency deviation, NOT by signal strength, so a tracking AGC (which
+        # the SSB/AM path uses) only adds breathing/pumping and amplifies the
+        # full-scale noise that the discriminator emits when no carrier is
+        # present. FM therefore uses a FIXED post-discriminator gain plus a
+        # carrier-presence squelch instead of the AGC.
+        # Squelch is DISABLED by default: the channel-envelope metric can't
+        # distinguish a carrier from strong noise, and a mis-tuned gate cuts
+        # real speech — worse than no squelch. The no-carrier-hiss problem it
+        # was meant to solve is already handled by the fixed gain below (FM no
+        # longer rides a tracking AGC that amplified silence to full scale).
+        # The hysteretic gate is kept for when a proper noise-quieting metric
+        # can be tuned against real RF; flip _fm_squelch_enabled to re-arm it.
+        self._fm_squelch_enabled = False   # default off (see note above)
+        self._fm_squelch_open = True       # hysteretic gate state
+        self._fm_sql_thresh = 0.06         # carrier-presence threshold (0..1)
+        self._fm_env_avg = 0.0             # smoothed channel envelope
+        # Per-mode peak frequency deviation (Hz). The discriminator output is the
+        # per-sample phase increment = 2π·f_dev/IQ_rate (radians), so full
+        # deviation maps to a peak of 2π·PEAK_DEV/IQ_rate. To land that at ±1.0
+        # full-scale WITHOUT clipping, the make-up gain MUST be IQ_rate/(2π·dev)
+        # — NOT a hand-picked constant. The old fixed ×2.0 gain drove WFM (whose
+        # discriminator peaks ~1.5 rad) to ~3.0 → clipped >50% of full-deviation
+        # program material (THE harsh/overdriven sound). NFM dev ±5 kHz, WFM
+        # ±75 kHz (broadcast). Computed live in demodulate() from self.sample_rate.
+        self._fm_peak_dev_nfm = 5000.0     # ±5 kHz narrowband voice
+        self._fm_peak_dev_wfm = 75000.0    # ±75 kHz broadcast
+        self._fm_headroom = 0.85           # target peak (leave clip margin)
+
+        self._configure_rate()   # sets decim/audio_rate for the current mode
         self._build_filters()
         self._init_wdsp()
+
+    # ── Per-mode RX rate selection ──────────────────────────────
+
+    def _rx_base_for_mode(self, mode: str) -> float:
+        """Target RX audio base rate for a mode.
+
+        WFM needs wideband audio (~15 kHz) → 39062.5 Hz base. Every other mode
+        (SSB/AM/CW/NFM) is ≤5 kHz audio and runs through WDSP, which is a native
+        library that SEGFAULTs at 39 kHz (verified: exit 139 at 39062, clean at
+        15625). So voice stays at the 15625 Hz base — WDSP-safe and plenty of
+        bandwidth for speech.
+        """
+        return RX_AUDIO_BASE if mode == "WFM" else float(AUDIO_RATE)
+
+    def _configure_rate(self):
+        """Set decim + audio_rate from the current IQ rate and mode.
+
+        Returns True if the audio_rate changed (caller rebuilds filters/WDSP).
+        WFM decimates toward 39062.5 Hz; all other modes toward 15625 Hz. Both
+        bases divide the device IQ rates to integer decims.
+        """
+        base = self._rx_base_for_mode(self.mode)
+        old_rate = getattr(self, "audio_rate", None)
+        self.decim = max(1, round(self.sample_rate / base))
+        self.audio_rate = self.sample_rate / self.decim     # may be fractional
+        if old_rate is None or abs(self.audio_rate - old_rate) > 1e-6:
+            self.audio_buffer = deque(maxlen=int(self.audio_rate * 2))
+            return True
+        return False
 
     # ── Filter design ──────────────────────────────────────────
 
@@ -217,6 +291,61 @@ class AudioDemodulator:
         self._st_usb = np.zeros(len(self._bp_usb) - 1, dtype=np.complex128)
         self._st_lsb = np.zeros(len(self._bp_lsb) - 1, dtype=np.complex128)
         self._st_lpf = np.zeros(len(self._lpf) - 1, dtype=np.float64)
+
+        # ── FM AUDIO low-pass (post-discriminator, doubles as anti-alias for
+        #    the ::decim step). Must sit below the post-decimation Nyquist
+        #    (audio_rate/2). NFM voice ≈ 3.4 kHz; WFM gets full broadcast audio
+        #    bandwidth (15 kHz). With RX_AUDIO_BASE = 39062.5 Hz the post-decim
+        #    Nyquist is ~19.5 kHz, so 15 kHz WFM audio finally fits — the old
+        #    7 kHz cap (forced by the 15625 Hz output) was what kept WFM dull.
+        post_nyq = (self.sample_rate / self.decim) / 2.0   # ~19.5 kHz now
+        self._fm_audio_nfm = design_fir_lowpass(
+            cutoff=3400.0, sample_rate=float(self.sample_rate),
+            attenuation_db=60.0, transition_width_hz=800.0,
+            window_type="hamming").astype(np.float64)
+        wfm_audio_cut = min(15000.0, 0.92 * post_nyq)
+        self._fm_audio_wfm = design_fir_lowpass(
+            cutoff=wfm_audio_cut, sample_rate=float(self.sample_rate),
+            attenuation_db=60.0, transition_width_hz=min(1500.0, wfm_audio_cut * 0.3),
+            window_type="hamming").astype(np.float64)
+        self._st_fm_audio_nfm = np.zeros(len(self._fm_audio_nfm) - 1, dtype=np.float64)
+        self._st_fm_audio_wfm = np.zeros(len(self._fm_audio_wfm) - 1, dtype=np.float64)
+
+        # ── FM channel filters (applied to complex baseband BEFORE the
+        #    discriminator, so out-of-channel noise/adjacent energy doesn't
+        #    fold into instantaneous frequency). NFM ≈ ±8 kHz.
+        self._fm_lpf_nfm = design_fir_lowpass(
+            cutoff=8000.0, sample_rate=float(self.sample_rate),
+            attenuation_db=60.0, transition_width_hz=2000.0,
+            window_type="hamming").astype(np.complex128)
+        # WFM broadcast: Carson bandwidth ≈ 2·(75k dev + 15k audio) = 180 kHz,
+        # i.e. ±90 kHz. Use a FIXED ±100 kHz channel cutoff (not 0.45·fs, which
+        # at 312.5k opened to ±140 kHz and let an adjacent station/noise fold in
+        # → harshness). Clamp to 0.45·fs so it stays below Nyquist if the IQ rate
+        # is too low to fit it (in which case WFM can't work right anyway).
+        wfm_cut = min(100000.0, 0.45 * self.sample_rate)
+        self._fm_lpf_wfm = design_fir_lowpass(
+            cutoff=wfm_cut, sample_rate=float(self.sample_rate),
+            attenuation_db=50.0, transition_width_hz=wfm_cut * 0.2,
+            window_type="hamming").astype(np.complex128)
+        self._st_fm_nfm = np.zeros(len(self._fm_lpf_nfm) - 1, dtype=np.complex128)
+        self._st_fm_wfm = np.zeros(len(self._fm_lpf_wfm) - 1, dtype=np.complex128)
+        # Cross-block discriminator memory: last complex sample of the
+        # previous channel-filtered block. None → seed from first sample.
+        self._fm_prev: complex | None = None
+        # ── De-emphasis (one-pole IIR at AUDIO rate). FM broadcast/voice is
+        #    pre-emphasized at TX; matching de-emphasis removes the high-freq
+        #    "harsh/hissy" tilt. The time constant is REGION/MODE specific and
+        #    getting it wrong audibly tilts the sound:
+        #      • WFM broadcast, China/Europe (ITU-R BS.450) = 50 µs
+        #      • WFM broadcast, US/Japan                    = 75 µs
+        #      • NFM narrowband voice                       ≈ 75 µs
+        #    Using 75 µs on a 50 µs station over-rolls the highs → "muffled".
+        #    WFM therefore uses 50 µs here (China/EU); NFM keeps 75 µs.
+        tau = 50e-6 if self.mode == "WFM" else 75e-6
+        dt = 1.0 / float(self.audio_rate)
+        self._deemph_a = math.exp(-dt / tau)          # pole
+        self._st_deemph = 0.0                          # one-pole state
 
     # ── WDSP (optional) ────────────────────────────────────────
 
@@ -249,8 +378,13 @@ class AudioDemodulator:
             wdsp_wrapper._wdsp = ctypes.CDLL(_lib)
             wdsp_wrapper.WDSP_AVAILABLE = True
             from wdsp_wrapper import WDSPProcessor, WDSPMode, WDSPAGCMode
+            # WDSP is ALWAYS constructed at the voice rate (AUDIO_RATE = 15625).
+            # It only ever processes voice modes (SSB/AM/CW); WFM bypasses it.
+            # The native lib SEGFAULTs at 39 kHz, so we must NOT pass audio_rate
+            # here (which is 39062.5 in WFM). Voice modes run at exactly 15625,
+            # so this matches the audio it actually sees.
             self._wdsp = WDSPProcessor(
-                sample_rate=int(self.audio_rate), buffer_size=self._wdsp_bs,
+                sample_rate=int(AUDIO_RATE), buffer_size=self._wdsp_bs,
                 mode=WDSPMode.USB, enable_nr2=True, enable_nb=False,
                 enable_anf=False, agc_mode=WDSPAGCMode.SLOW)
             # Apply the default NR2 level (50) — was silently ignored before.
@@ -262,26 +396,37 @@ class AudioDemodulator:
     # ── Control ────────────────────────────────────────────────
 
     def set_sample_rate(self, hz: int):
-        """Update IQ sample rate and rebuild all rate-dependent components."""
+        """Update IQ sample rate and rebuild rate-dependent components.
+
+        WDSP is NOT rebuilt here — it is always constructed at the fixed 15625 Hz
+        voice rate (see _init_wdsp) and only ever runs in voice modes, so the IQ
+        rate change can't feed it a rate it would segfault on.
+        """
         if hz == self.sample_rate:
             return
         self.sample_rate = hz
-        self.decim = max(1, round(hz / 15625))
-        self.audio_rate = hz // self.decim
-        self.audio_buffer = deque(maxlen=self.audio_rate * 2)
+        self._configure_rate()      # recompute decim/audio_rate for current mode
         self._build_filters()
         self._st_usb.fill(0); self._st_lsb.fill(0); self._st_lpf.fill(0)
-        if self._wdsp:
-            try:
-                self._wdsp.close()
-            except: pass
-            self._wdsp = None
-        self._init_wdsp()
-        logger.info("AudioDemodulator rate: %d Hz, decim=%d, audio: %d Hz",
+        self._st_fm_nfm.fill(0); self._st_fm_wfm.fill(0)
+        self._fm_prev = None; self._st_deemph = 0.0
+        logger.info("AudioDemodulator rate: %d Hz, decim=%d, audio: %.1f Hz",
                      self.sample_rate, self.decim, self.audio_rate)
 
     def set_mode(self, mode: str):
+        prev_mode = self.mode
         self.mode = mode.upper()
+        # WFM uses the 39062.5 Hz wideband base; voice modes use 15625 Hz. If we
+        # cross that boundary the audio rate changes → rebuild rate-dependent
+        # filters and reset filter state so the new path starts clean.
+        if self._configure_rate():
+            self._build_filters()
+            self._st_usb.fill(0); self._st_lsb.fill(0); self._st_lpf.fill(0)
+            self._st_fm_nfm.fill(0); self._st_fm_wfm.fill(0)
+            self._fm_prev = None; self._st_deemph = 0.0
+            self._agc_gain = None
+            logger.info("Mode %s→%s: RX audio rate now %.1f Hz (decim=%d)",
+                        prev_mode, self.mode, self.audio_rate, self.decim)
         if self._wdsp:
             try:
                 from wdsp_wrapper import WDSPMode
@@ -431,9 +576,41 @@ class AudioDemodulator:
             audio, self._st_lpf = lfilter(self._lpf, [1.0], audio, zi=self._st_lpf)
             audio -= np.mean(audio)
         elif mode in ("NFM", "FM", "WFM"):
-            ang = np.angle(bb)
-            audio = np.diff(np.unwrap(ang), prepend=ang[0]).astype(np.float64)
-            audio, self._st_lpf = lfilter(self._lpf, [1.0], audio, zi=self._st_lpf)
+            # 1) Channel-limit the complex baseband BEFORE the discriminator so
+            #    out-of-channel noise/adjacent signals don't fold into the
+            #    instantaneous frequency (FM detection is wideband-sensitive).
+            if mode == "WFM":
+                ch, self._st_fm_wfm = lfilter(
+                    self._fm_lpf_wfm, [1.0], bb, zi=self._st_fm_wfm)
+                audio_lpf, st_audio = self._fm_audio_wfm, "_st_fm_audio_wfm"
+            else:
+                ch, self._st_fm_nfm = lfilter(
+                    self._fm_lpf_nfm, [1.0], bb, zi=self._st_fm_nfm)
+                audio_lpf, st_audio = self._fm_audio_nfm, "_st_fm_audio_nfm"
+            # 1b) Carrier-presence envelope (mean |ch| over the block), smoothed.
+            #     Drives the squelch gate below — FM emits full-scale hiss with
+            #     no carrier, so we gate on channel energy, not audio level.
+            blk_env = float(np.mean(np.abs(ch))) if len(ch) else 0.0
+            self._fm_env_avg = self._fm_env_avg * 0.8 + blk_env * 0.2
+            # 2) Polar (differentiated-conjugate) discriminator. angle(z[n] *
+            #    conj(z[n-1])) is the per-sample phase increment, intrinsically
+            #    wrapped to (-π, π] — no unwrap, no per-block reset. Carry the
+            #    last sample across blocks so the seam is continuous (this is
+            #    the fix for the ~195 Hz block-edge buzz).
+            if self._fm_prev is None:
+                prev = ch[0]
+            else:
+                prev = self._fm_prev
+            shifted = np.empty_like(ch)
+            shifted[0] = prev
+            shifted[1:] = ch[:-1]
+            audio = np.angle(ch * np.conj(shifted)).astype(np.float64)
+            self._fm_prev = ch[-1]
+            # 3) Per-mode audio low-pass (NFM 3.4 kHz voice / WFM ~7 kHz). Also
+            #    the anti-alias filter for the ::decim step that follows.
+            audio, st = lfilter(audio_lpf, [1.0], audio,
+                                zi=getattr(self, st_audio))
+            setattr(self, st_audio, st)
         elif mode == "LSB":
             filt, self._st_lsb = lfilter(self._bp_lsb, [1.0], bb, zi=self._st_lsb)
             audio = np.real(filt).astype(np.float64)
@@ -444,21 +621,80 @@ class AudioDemodulator:
         # Decimate
         audio = audio[::self.decim]
 
-        # Built-in AGC — only used when WDSP is unavailable or disabled.
-        # When WDSP is active its own AGC (SLOW/MED/FAST) does the work;
-        # we run a very slow low-gain pass just to keep the input healthy.
-        if len(audio) > 0:
+        # De-emphasis for FM (one-pole IIR at audio rate). Applied after
+        # decimation, before AGC, so the AGC sees the corrected spectrum.
+        if mode in ("NFM", "FM", "WFM") and len(audio) > 0:
+            a = self._deemph_a
+            audio, zi = lfilter(
+                [1.0 - a], [1.0, -a], audio, zi=[self._st_deemph])
+            self._st_deemph = float(zi[0])
+
+        # ── Authoritative WDSP gate ─────────────────────────────────
+        # WDSP runs ONLY when the user switch is on AND the library loaded.
+        # FM (NFM/FM/WFM) ALWAYS bypasses WDSP: NR2/ANF are tuned for SSB
+        # voice spectra and produce musical-noise artifacts on FM-detected
+        # audio. This single flag governs both the AGC branch and the
+        # post-processing call so they can never disagree.
+        wdsp_active = (
+            self._wdsp_enabled
+            and self._wdsp is not None
+            and mode not in ("NFM", "FM", "WFM")
+        )
+
+        is_fm = mode in ("NFM", "FM", "WFM")
+
+        if is_fm and len(audio) > 0:
+            # ── FM level control: FIXED gain + carrier squelch (NO AGC) ──
+            # FM is constant-envelope, so recovered audio amplitude already
+            # encodes the modulation faithfully; a tracking AGC would only
+            # pump/breathe. We apply a flat make-up gain and a hysteretic
+            # squelch keyed on channel ENERGY (not audio level) so the
+            # discriminator's full-scale no-carrier hiss is muted.
+            # Squelch is OFF by default: the channel-envelope gate can't tell a
+            # strong carrier from strong noise, and an untuned threshold would
+            # chop real speech — worse than no squelch. The full-scale no-carrier
+            # hiss it was meant to mute is already gone now that FM uses fixed
+            # gain (not the AGC that previously amplified noise to full scale).
+            # Kept here, disabled, until it can be tuned against real RF (a
+            # proper FM squelch keys on post-discriminator HF noise, not channel
+            # energy). Toggle via set_fm_squelch().
+            if self._fm_squelch_enabled:
+                op, cl = self._fm_sql_thresh, self._fm_sql_thresh * 0.6
+                if self._fm_squelch_open:
+                    if self._fm_env_avg < cl:
+                        self._fm_squelch_open = False
+                else:
+                    if self._fm_env_avg > op:
+                        self._fm_squelch_open = True
+                gate = 1.0 if self._fm_squelch_open else 0.0
+            else:
+                gate = 1.0
+            # Physical de-normalization: discriminator output peaks at
+            # 2π·peak_dev/IQ_rate, so multiply by IQ_rate/(2π·peak_dev) to map
+            # full deviation → ±1.0, then scale by headroom + volume. This is
+            # the fix for WFM overdrive: a single hand-tuned gain can't suit both
+            # NFM (~0.4 rad peak) and WFM (~1.5 rad peak) — it MUST track dev/rate.
+            peak_dev = self._fm_peak_dev_wfm if mode == "WFM" else self._fm_peak_dev_nfm
+            norm = self.sample_rate / (2.0 * math.pi * peak_dev)
+            # volume maps 0..1 → 0..1× of the headroom-limited full scale.
+            audio = audio * (norm * self._fm_headroom * (self._volume * 2.0) * gate)
+            np.clip(audio, -1.0, 1.0, out=audio)
+        elif len(audio) > 0:
+            # Built-in AGC — only used when WDSP is unavailable or disabled.
+            # When WDSP is active its own AGC (SLOW/MED/FAST) does the work;
+            # we run a very slow low-gain pass just to keep the input healthy.
             rms = float(np.sqrt(np.mean(audio**2) + 1e-12))
             if self._agc_gain is None:
                 self._agc_gain = 0.25 / rms if rms > 1e-10 else 1.0
-            if self._wdsp_enabled and self._wdsp is not None:
+            if wdsp_active:
                 # WDSP active: its own AGC handles output level.
                 # Gentle pre-gain just to keep input healthy for NR2.
                 target = 0.2
                 self._agc_gain = self._agc_gain * 0.995 + (target / (rms + 1e-10)) * 0.005
                 audio *= min(self._agc_gain, 30.0)
             else:
-                # Original AGC — unchanged from HEAD.
+                # Built-in AGC — used whenever WDSP is bypassed (switch off
+                # or library missing).
                 target = 0.25 * self._volume * 2.0
                 self._agc_gain = self._agc_gain * 0.95 + (target / (rms + 1e-10)) * 0.05
                 audio *= min(self._agc_gain, 50000.0)
@@ -466,8 +702,9 @@ class AudioDemodulator:
 
         audio = audio.astype(np.float32)
 
-        # WDSP post-processing (NR2, NB, ANF, AGC)
-        if self._wdsp_enabled and self._wdsp is not None and len(audio) > 0:
+        # WDSP post-processing (NR2, NB, ANF, AGC) — bypassed entirely when
+        # wdsp_active is False (covers the user switch AND all FM modes).
+        if wdsp_active and len(audio) > 0:
             try:
                 audio = self._wdsp.process(audio)
             except Exception:
@@ -479,7 +716,9 @@ class AudioDemodulator:
 
     def get_audio_chunk(self) -> bytes | None:
         if len(self.audio_buffer) < 512: return None
-        chunk = np.array([self.audio_buffer.popleft() for _ in range(512)])
+        buf = self.audio_buffer
+        chunk = np.fromiter((buf.popleft() for _ in range(512)),
+                            dtype=np.float64, count=512)
         return (np.clip(chunk * 32767, -32768, 32767).astype(np.int16)).tobytes()
 
 

@@ -43,21 +43,29 @@ OPUS_APPLICATION_VOIP = 2048
 OPUS_APPLICATION_AUDIO = 2049
 OPUS_OK = 0
 
-# RX audio is 16 kHz mono. 20 ms Opus frame = 320 samples.
-RX_RATE = 16000
+# RX audio is now 48 kHz mono (raised from 16 kHz so WFM keeps its full ~15 kHz
+# audio band — at 16 kHz the 8 kHz Nyquist gutted broadcast FM). 20 ms frame =
+# 960 samples. TX (phone mic uplink) stays 16 kHz — that path is verified and
+# the client still sends 16 kHz, so RX_RATE and TX_RATE are deliberately split.
+RX_RATE = 48000
 RX_CHANNELS = 1
 TX_RATE = 16000
 TX_CHANNELS = 1
 FRAME_MS = 20
-FRAME_SAMPLES = RX_RATE * FRAME_MS // 1000   # 320
+FRAME_SAMPLES = RX_RATE * FRAME_MS // 1000   # 960 @ 48 kHz
 TX_MAX_FRAME_SAMPLES = 5760  # 120 ms max Opus frame @ 48 kHz (worst case)
 MAX_PACKET_BYTES = 4000   # output buffer ceiling (never reached in practice)
 
 # Bitrate is controlled via the opus_encode max_data_bytes cap (see module
-# docstring). cap_bytes = bitrate_bps / 8 * (FRAME_MS/1000).
-DEFAULT_BITRATE = 24000
+# docstring). cap_bytes = bitrate_bps / 8 * (FRAME_MS/1000). At 48 kHz fullband,
+# Opus needs ≳32 kbps to even reach the high end; 48 kbps is audible-but-not-
+# transparent on music. 64 kbps mono is the sweet spot for remote WFM listening:
+# near-transparent on broadcast music yet only 1/12 the 768 kbps Int16 PCM rate,
+# so a remote link stops underrunning (the PCM stutter). Runtime-adjustable via
+# the setOpusBitrate control command (48/64/96/128 kbps presets on the client).
+DEFAULT_BITRATE = 64000
 MIN_BITRATE = 8000
-MAX_BITRATE = 48000
+MAX_BITRATE = 128000
 
 
 class _OpusEncoder(ctypes.Structure):
@@ -189,7 +197,7 @@ class RxOpusEncoder:
         max_data_bytes). This avoids the variadic opus_encoder_ctl, whose
         arm64 macOS calling convention ctypes can't satisfy (SET ctls return
         BAD_ARG). bytes/frame = bitrate * FRAME_MS / 1000 / 8."""
-        bitrate = max(6000, min(64000, int(bitrate)))
+        bitrate = max(MIN_BITRATE, min(MAX_BITRATE, int(bitrate)))
         self._bitrate = bitrate
         self._cap = max(16, min(MAX_PACKET_BYTES,
                                 bitrate * FRAME_MS // 1000 // 8))

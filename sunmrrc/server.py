@@ -63,7 +63,11 @@ def _next_tx_counter() -> int:
     """
     global tx_counter
     with tx_counter_lock:
-        tx_counter += 0x10000
+        # Wrap at 2^32: the counter is packed as unsigned 32-bit ('<I') in the
+        # 0xFFFD/0xFFFE/keep-alive headers. Without wrapping it overflows after
+        # ~7.5h of runtime and struct.pack raises, killing the IQ stream task
+        # (→ no spectrum, no audio). The device only uses the low bits.
+        tx_counter = (tx_counter + 0x10000) & 0xFFFFFFFF
         return tx_counter
 _last_smeter_ts = 0.0  # throttle S-meter broadcasts
 _last_telem_ts = 0.0   # throttle TX power/SWR telemetry broadcasts
@@ -101,6 +105,84 @@ audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
 
+# ── Continuous RX-audio → 48 kHz resampler (cubic, cross-chunk) ─────
+# Resamples the demodulator's RX audio rate (≈39062.5 Hz for WFM, 15625 Hz for
+# voice — fractional and IQ-rate-dependent) up to 48 kHz for Opus + AudioContext.
+#
+# Uses CUBIC (Catmull-Rom) interpolation, not linear. Linear interp has a sinc²
+# passband: upsampling 39062.5→48000, it loses ~4.4 dB at 15 kHz, which dulls
+# WFM's high end audibly. Catmull-Rom reads 4 neighbouring input samples per
+# output point → much flatter passband (~-1 dB at 15 kHz) and weaker imaging.
+#
+# Cross-chunk continuity: a fractional read cursor (_rs_phase) plus the last 3
+# input samples (_rs_hist) are carried across calls, so reads that straddle a
+# chunk boundary interpolate across the seam instead of restarting (the seam
+# would otherwise tick on FM, where no AGC masks it). Per-call src_rate lets the
+# step change live when the user switches IQ sample rate / voice↔WFM.
+RX_OUT_RATE = 48000
+_rs_phase = 0.0
+_rs_hist = np.zeros(3, dtype=np.float64)  # last 3 prev-chunk samples: pos -3,-2,-1
+_rs_step = None      # src_rate / RX_OUT_RATE, recomputed when src_rate changes
+_rs_src_rate = None  # last source rate seen, to detect runtime rate changes
+
+
+def _resample_audio_continuous(arr: np.ndarray, src_rate: float) -> bytes | None:
+    """Cubic (Catmull-Rom) resample src_rate → 48 kHz, cross-chunk continuous.
+
+    Output sample k reads input position p_k = _rs_phase + k·step (step =
+    src_rate/48000) in THIS chunk's input coordinates (p=0 → arr[0], p=-1 →
+    previous chunk's last sample). Catmull-Rom needs the 4 samples idx0-1 …
+    idx0+2 around each p; ext[] prepends the 3 carried history samples so the
+    low end is reachable, and k is capped so the high end never reads past the
+    chunk. Returns Int16 LE bytes @ 48 kHz, or None if the chunk yields nothing.
+    """
+    global _rs_phase, _rs_hist, _rs_step, _rs_src_rate
+    if _rs_step is None or src_rate != _rs_src_rate:
+        # Rate changed (or first call) → recompute step. Phase/history are NOT
+        # reset here; reset_rx_resampler() does that on PTT / rate change.
+        _rs_step = src_rate / RX_OUT_RATE   # input samples per output sample
+        _rs_src_rate = src_rate
+    n = len(arr)
+    if n < 3:
+        return None
+    af = arr.astype(np.float64)
+    # ext index = input_pos + 3: ext[0:3] = history (pos -3,-2,-1),
+    # ext[3:] = this chunk (pos 0..n-1). Readable input pos ∈ [-3, n-1].
+    ext = np.empty(n + 3, dtype=np.float64)
+    ext[0:3] = _rs_hist
+    ext[3:] = af
+    # Largest k with floor(p_k) ≤ n-3 (so idx0+2 ≤ n-1 stays inside the chunk).
+    k_max = int(np.floor((n - 2 - _rs_phase) / _rs_step - 1e-9))
+    if k_max < 0:
+        # No output this chunk (degenerate; never happens with 512-sample chunks
+        # and step<1). Advance phase + history so the next chunk stays seamless.
+        _rs_phase -= n
+        _rs_hist = af[-3:].copy()
+        return None
+    k = np.arange(k_max + 1, dtype=np.float64)
+    pos = _rs_phase + k * _rs_step                  # input coords
+    idx0 = np.floor(pos).astype(np.int64)
+    t = pos - idx0
+    e = idx0 + 3                                    # ext index of idx0
+    a = ext[e - 1]; b = ext[e]; c = ext[e + 1]; d = ext[e + 2]
+    t2 = t * t; t3 = t2 * t
+    # Catmull-Rom cubic through (b,c) with tangents from a,d.
+    out = 0.5 * (2.0 * b
+                 + (c - a) * t
+                 + (2.0 * a - 5.0 * b + 4.0 * c - d) * t2
+                 + (-a + 3.0 * b - 3.0 * c + d) * t3)
+    # Next read position, re-expressed in the NEXT chunk's coords (shift by n).
+    _rs_phase = (_rs_phase + (k_max + 1) * _rs_step) - n
+    _rs_hist = af[-3:].copy()
+    return np.clip(out, -32768, 32767).astype('<i2').tobytes()
+
+
+def reset_rx_resampler():
+    """Clear cross-chunk resampler state (PTT toggle, sample-rate change)."""
+    global _rs_phase, _rs_hist
+    _rs_phase = 0.0
+    _rs_hist = np.zeros(3, dtype=np.float64)
+
 # RX audio codec. Opus cuts the ~256 kbit/s Int16 PCM stream to ~18-24 kbit/s.
 # Each /WSaudioRX binary frame is prefixed with a 1-byte codec tag (AUDIO_TAG_*)
 # so clients decode the right way without a control-channel race. Default ON;
@@ -121,8 +203,12 @@ except Exception as e:
 
 # Recording state
 recording_active = False
-recording_buffer: list[bytes] = []  # raw Int16 PCM chunks at DSP_AUDIO_RATE
+recording_buffer: list[bytes] = []  # raw Int16 PCM chunks at the RX audio rate
 recording_start_time = 0.0
+recording_rate = 0  # RX audio rate (Hz) captured when recording starts; the
+                    # demodulator output is ~39062.5 Hz (IQ-rate dependent), NOT
+                    # DSP_AUDIO_RATE, so the MP3 must be encoded at this rate or
+                    # it plays back at the wrong speed/pitch.
 RECORDINGS_DIR = STATIC_DIR / "recordings"
 
 MIME = {".css":"text/css", ".js":"application/javascript", ".html":"text/html",
@@ -229,7 +315,7 @@ def _load_tune_wav(path: Path) -> np.ndarray:
 
 def _save_recording() -> str:
     """Encode the recording buffer to MP3 via ffmpeg. Returns the filename."""
-    global recording_buffer, recording_start_time
+    global recording_buffer, recording_start_time, recording_rate
     if not recording_buffer:
         return ""
     # Concatenate all Int16 PCM chunks
@@ -237,7 +323,11 @@ def _save_recording() -> str:
     recording_buffer = []
     if len(raw) < 640:  # need at least ~20ms of audio
         return ""
-    duration = len(raw) / (2 * DSP_AUDIO_RATE)  # 2 bytes per sample
+    # Recording is the demodulator's RAW RX audio (≈39062.5 Hz, captured before
+    # the 48 kHz resample), so encode at the rate it was actually captured at —
+    # using DSP_AUDIO_RATE (the TX chain's 15625 Hz) would slow/detune playback.
+    rec_rate = int(round(recording_rate)) if recording_rate else int(DSP_AUDIO_RATE)
+    duration = len(raw) / (2 * rec_rate)  # 2 bytes per sample
     ts = time.strftime("%Y%m%d_%H%M%S", time.localtime(recording_start_time))
     filename = f"MRRC_{ts}_{duration:.0f}s.mp3"
     filepath = RECORDINGS_DIR / filename
@@ -246,7 +336,7 @@ def _save_recording() -> str:
     try:
         proc = subprocess.run(
             ["ffmpeg", "-y", "-loglevel", "error",
-             "-f", "s16le", "-ar", str(DSP_AUDIO_RATE), "-ac", "1",
+             "-f", "s16le", "-ar", str(rec_rate), "-ac", "1",
              "-i", "pipe:0",
              "-c:a", "libmp3lame", "-b:a", "64k",
              "-f", "mp3", "pipe:1"],
@@ -985,11 +1075,11 @@ async def _broadcast_audio(pcm: bytes):
     if not audio_rx_clients: return
     arr = np.frombuffer(pcm, dtype='<i2').astype(np.float32)
     if len(arr) < 16: return
-    out_len = int(len(arr) * 16000 / DSP_AUDIO_RATE)
-    if out_len < 16: return
-    out = np.interp(np.linspace(0, len(arr)-1, out_len),
-                    np.arange(len(arr)), arr).astype(np.int16)
-    pcm16 = out.tobytes()
+    # Source rate is the demodulator's actual RX audio rate (≈39062.5 Hz, varies
+    # with IQ sample rate), NOT DSP_AUDIO_RATE (the TX chain's 15625 Hz).
+    src_rate = dsp_proc.demodulator.audio_rate if dsp_proc else DSP_AUDIO_RATE
+    pcm16 = _resample_audio_continuous(arr, float(src_rate))
+    if pcm16 is None: return
 
     # Build the list of tagged WS frames to send. Each frame is a 1-byte codec
     # tag + payload so the client decodes correctly without a control-channel
@@ -1051,7 +1141,7 @@ async def ws_spectrum(ws: WebSocket):
 # ── WebSocket: Control (/WSCTRX) ──────────────────────────────────
 @app.websocket("/WSCTRX")
 async def ws_ctrl(ws: WebSocket):
-    global recording_active, recording_buffer, recording_start_time
+    global recording_active, recording_buffer, recording_start_time, recording_rate
     token = ws.query_params.get("token", "")
     if token not in _auth_tokens:
         await ws.accept(); await ws.close(code=4001, reason="auth required"); return
@@ -1118,6 +1208,24 @@ async def ws_ctrl(ws: WebSocket):
                         await ws.send_text("setOpus:unavailable")
                     else:
                         await ws.send_text(f"setOpus:{'on' if opus_enabled else 'off'}")
+                elif cmd == "setOpusBitrate":
+                    # RX Opus bitrate in kbps (e.g. 48/64/96/128). Lets the user
+                    # trade bandwidth vs quality per use-case: WFM music sounds
+                    # great at 64k while using 1/12 the bandwidth of 768k PCM, so
+                    # it streams smoothly on a remote link where PCM stutters.
+                    if opus_encoder is not None:
+                        try:
+                            kbps = max(16, min(128, int(float(val))))
+                            opus_encoder.set_bitrate(kbps * 1000)
+                            opus_encoder.reset()
+                            logger.info("RX Opus bitrate: %d kbps", kbps)
+                            await _send_ctrl(f"setOpusBitrate:{kbps}")
+                        except ValueError:
+                            pass
+                elif cmd == "getOpusBitrate":
+                    if opus_encoder is not None:
+                        await ws.send_text(
+                            f"setOpusBitrate:{opus_encoder.bitrate // 1000}")
                 elif cmd == "setPTT":
                     tx = val.lower() == "true"
                     await radio.set_ptt(tx)
@@ -1236,7 +1344,12 @@ async def ws_ctrl(ws: WebSocket):
                         recording_active = True
                         recording_buffer = []
                         recording_start_time = time.time()
-                        logger.info("Recording started")
+                        # Capture the demodulator's actual RX audio rate now so
+                        # the MP3 is encoded at the rate it was recorded at
+                        # (~39062.5 Hz, IQ-rate dependent) — not the TX 15625 Hz.
+                        recording_rate = (dsp_proc.demodulator.audio_rate
+                                          if dsp_proc else DSP_AUDIO_RATE)
+                        logger.info("Recording started (%.1f Hz)", recording_rate)
                     await _send_ctrl("recordingStatus:started")
                 elif cmd == "stopRecording":
                     if recording_active:

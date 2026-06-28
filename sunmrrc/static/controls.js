@@ -225,7 +225,7 @@ var AudioRX_biquadFilter_node = "";
 var AudioRX_analyser = "";
 var audiobufferready = false;
 var AudioRX_audiobuffer = [];
-var AudioRX_sampleRate=16000;
+var AudioRX_sampleRate=48000;  // V5.8: raised 16k→48k so WFM keeps its full ~15 kHz audio band (16k Nyquist=8k gutted broadcast FM). Must match opus_rx.py RX_RATE + server resample target.
 var audioSyncMonitor = {
 	lastProcessTime: 0,
 	bufferCount: 0,
@@ -335,8 +335,8 @@ function AudioRX_start(){
 			if (typeof OpusDecoder === 'undefined' || typeof _opus_decoder_create === 'undefined') {
 				return null;  // WASM 尚未就绪
 			}
-			rxOpusDecoder = new OpusDecoder(16000, 1);
-			console.log('✅ RX Opus 解码器已就绪 (16kHz mono)');
+			rxOpusDecoder = new OpusDecoder(48000, 1);
+			console.log('✅ RX Opus 解码器已就绪 (48kHz mono)');
 		} catch (e) {
 			console.warn('⚠️ RX Opus 解码器创建失败，回退 PCM:', e);
 			rxOpusDecoder = null;
@@ -415,12 +415,15 @@ function AudioRX_start(){
     (async () => {
         if (useAudioWorklet) {
             try {
-                await AudioRX_context.audioWorklet.addModule('rx_worklet_processor.js');
+                await AudioRX_context.audioWorklet.addModule('rx_worklet_processor.js?v=5.7.2');
                 const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
                 AudioRX_source_node = rxNode;
-                // V5.3.1: 恢复正常缓冲配置防止卡顿
-                // min:2(40ms缓冲), max:30(约60ms缓冲@16kHz)
-                try { rxNode.port.postMessage({ type: 'config', min: 2, max: 30 }); } catch(_){}
+                // 抖动缓冲按时长配置（worklet 内部按 48kHz 换算样本数）。
+                // prebufferMs: 冷启动先攒满再播。recoveryMs: 偶发欠载后只需
+                // 重攒这么多即恢复（滞后恢复），避免「单个 render quantum 撞空
+                // 队列就重攒整 220ms」的卡顿——这正是 Opus 帧 20ms 突发到达比
+                // PCM 更易触发的那种停顿。maxMs: 上限,超出丢最旧帧界定延迟。
+                try { rxNode.port.postMessage({ type: 'config', prebufferMs: 220, recoveryMs: 90, maxMs: 800 }); } catch(_){}
                 window.__pushRxFrame = function(f32) {
                     rxNode.port.postMessage({ type: 'push', payload: f32 });
                 };
@@ -871,6 +874,14 @@ function wsControlTRXcrtol( msg ){
 			mobileState.opusEnabled = (param === 'on');
 		}
 		console.log('🎚️ RX 编解码:', param);
+	}
+	else if(action == "setOpusBitrate"){
+		// 后端 RX Opus 码率同步（kbps）。用于 UI 高亮当前档位。
+		if (typeof mobileState !== 'undefined') {
+			var kbps = parseInt(param, 10);
+			if (!isNaN(kbps)) mobileState.opusBitrate = kbps * 1000;
+		}
+		console.log('🎚️ RX Opus 码率:', param, 'kbps');
 	}
 	else if(action == "pttError"){
 		console.error('🚨 PTT 错误:', param);

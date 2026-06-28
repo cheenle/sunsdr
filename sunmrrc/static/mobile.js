@@ -123,6 +123,7 @@ var mobileState = {
     currentVFO: 'VFO-A',
     currentSampleRate: '78k',  // 频谱/IQ 采样率档位 (39k/78k/156k/312k)
     opusEnabled: true,         // RX 音频编码：true=Opus 压缩，false=Int16 PCM
+    opusBitrate: 64000,        // RX Opus 码率 (bps)：默认 64k，WFM 甜点值
     isTransmitting: false,
     tuneStep: 1,  // 默认步进 1kHz
     tuneStepIndex: 1,  // 当前步进索引 (1kHz在数组中的位置)
@@ -729,12 +730,34 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('touchstart', initAudioOnFirstTouch, { once: true });
     document.addEventListener('mousedown', initAudioOnFirstTouch, { once: true });
     
-    // 页面可见性变化时重新请求 Wake Lock
+    // 页面可见性变化时重新请求 Wake Lock + 恢复音频
     document.addEventListener('visibilitychange', async () => {
         if (document.visibilityState === 'visible' && mobileState.isConnected) {
             await requestWakeLock();
+
+            // iOS Safari: 锁屏/切后台会把 AudioContext 挂起，回前台 DOM 还活着
+            // 但音频链不出声，必须主动 resume。无用户手势时不保证成功，
+            // 失败则标记等待下次交互，并由看门狗兜底。
+            if (typeof AudioRX_context !== 'undefined' && AudioRX_context &&
+                AudioRX_context.state === 'suspended') {
+                try {
+                    await AudioRX_context.resume();
+                    console.log('✅ 回前台：RX AudioContext 已恢复');
+                } catch (e) {
+                    console.warn('⚠️ 回前台恢复 AudioContext 失败，等待用户交互:', e);
+                    window.__audioContextNeedsResume = true;
+                }
+            }
         }
     });
+
+    // 音频看门狗：兜住未触发 visibilitychange 但 AudioContext 仍被挂起的边角情况
+    setInterval(() => {
+        if (mobileState.isConnected && typeof AudioRX_context !== 'undefined' &&
+            AudioRX_context && AudioRX_context.state === 'suspended') {
+            AudioRX_context.resume().catch(() => {});
+        }
+    }, 3000);
     
     // 初始化状态栏 - 重置所有指示器为断开状态
     try {
@@ -2402,18 +2425,29 @@ function selectSampleRate(rate) {
     closeModalPanel();
 }
 
-// 音频编解码（带宽）选择器 — Opus 压缩 vs Int16 PCM
-// Opus 把 RX 音频从 ~256 kbps 压到 ~18-24 kbps（>10倍），明显省流量；
-// Int16 PCM 无压缩、零延迟、零编解码失真，带宽充足时可用。
+// 音频编解码（带宽）选择器 — Opus 各码率档 vs Int16 PCM
+// RX 音频是 48 kHz 单声道。Opus 在 64 kbps 已对语音/广播很好，96 kbps 接近透明，
+// 都远小于 768 kbps 的 Int16 PCM（无压缩，远程链路易卡）。WFM 推荐 64–96k Opus：
+// 听感好、带宽是 PCM 的 1/8~1/12，远程不卡。PCM 仅在本地/带宽极充足时用。
 function showAudioCodecSelector() {
-    const current = mobileState.opusEnabled !== false ? 'opus' : 'pcm';
+    // 当前选择：PCM，或某个 Opus 码率档（mobileState.opusBitrate，默认 64000）
+    const isOpus = mobileState.opusEnabled !== false;
+    const curBr = mobileState.opusBitrate || 64000;
     let html = '<div class="modal-panel"><h3>音频编码 / 带宽</h3><div class="mode-grid">';
     const opts = [
-        { key: 'opus', label: 'Opus 压缩', desc: '约 18-24 kbps，省流量' },
-        { key: 'pcm',  label: 'Int16 PCM', desc: '约 256 kbps，无压缩' },
+        { key: 'opus64',  label: 'Opus 64k',  desc: '推荐 · 音乐好，省流量' },
+        { key: 'opus96',  label: 'Opus 96k',  desc: '接近透明，带宽中等' },
+        { key: 'opus128', label: 'Opus 128k', desc: '最高音质 Opus' },
+        { key: 'pcm',     label: 'Int16 PCM', desc: '约 768 kbps，远程易卡' },
     ];
     opts.forEach(o => {
-        const active = current === o.key ? 'active' : '';
+        let active = '';
+        if (o.key === 'pcm') {
+            active = !isOpus ? 'active' : '';
+        } else {
+            const br = parseInt(o.key.replace('opus', ''), 10) * 1000;
+            active = (isOpus && curBr === br) ? 'active' : '';
+        }
         html += `<button class="mode-select-btn ${active}" onclick="selectOpus('${o.key}')">${o.label}<br><small style="font-size:11px;opacity:0.7;">${o.desc}</small></button>`;
     });
     html += '</div><button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';
@@ -2421,10 +2455,19 @@ function showAudioCodecSelector() {
 }
 
 function selectOpus(key) {
-    const on = (key === 'opus');
-    mobileState.opusEnabled = on;
-    sendWebSocketMessage("setOpus:" + (on ? 'on' : 'off'));
-    console.log('选择音频编码:', on ? 'Opus' : 'Int16 PCM');
+    if (key === 'pcm') {
+        mobileState.opusEnabled = false;
+        sendWebSocketMessage("setOpus:off");
+        console.log('选择音频编码: Int16 PCM');
+    } else {
+        const br = parseInt(key.replace('opus', ''), 10) * 1000;
+        mobileState.opusEnabled = true;
+        mobileState.opusBitrate = br;
+        // 先开 Opus，再设码率（顺序无关，服务端各自独立处理）
+        sendWebSocketMessage("setOpus:on");
+        sendWebSocketMessage("setOpusBitrate:" + br);
+        console.log('选择音频编码: Opus', br / 1000, 'kbps');
+    }
     closeModalPanel();
 }
 
