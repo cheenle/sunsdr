@@ -8,7 +8,7 @@ RX DDS = VFO + 30500 Hz IF offset
 Audio output: 15625 Hz (5× decimation)
 """
 
-import math, logging, struct, threading
+import math, logging, struct, threading, time
 import numpy as np
 from collections import deque
 from dataclasses import dataclass
@@ -618,20 +618,42 @@ class AudioDemodulator:
         mode = self.mode
 
         # ── WDSP I/Q-level path (primary) ──────────────────────────
-        # For SSB/AM/CW, feed the IF-shifted complex baseband through
-        # WDSP's NR2→ANF→SNB→demod→AGC chain at the full IQ rate.
-        # process_iq() auto-calibrates the output ratio on the first
-        # completed fexchange0 block and returns time-aligned audio
-        # proportional to the IQ input length — no bursting / clicking.
         is_fm = mode in ("NFM", "FM", "WFM")
         if not is_fm and self._wdsp_enabled and self._wdsp_iq is not None:
             try:
                 wdsp_audio = self._wdsp_iq.process_iq(bb)
                 if len(wdsp_audio) > 0:
-                    # WDSP's AGC targets a moderate level; apply volume
-                    # + 2× post-gain to match the built-in AGC loudness.
-                    audio = wdsp_audio.astype(np.float64) * self._volume * 2.0
+                    wdsp_rms = float(np.sqrt(np.mean(wdsp_audio**2) + 1e-12))
+                    # WDSP's internal AGC (SLOW) targets a conservative
+                    # RMS — fine for DSP but too quiet for direct int16
+                    # output.  We apply a tracking post-gain that brings
+                    # the RMS up to a target of ~0.2, same as the old
+                    # built-in AGC path.  The EMA is slow (attack ~0.05)
+                    # so it doesn't pump on speech syllabics, and the gain
+                    # cap (80x) prevents runaway on pure noise.
+                    target_rms = 0.20 * self._volume
+                    if not hasattr(self, '_wdsp_post_gain'):
+                        self._wdsp_post_gain = target_rms / max(wdsp_rms, 1e-6)
+                    # Slow EMA: attack=0.05, decay=0.001
+                    alpha = 0.05 if wdsp_rms > 1e-4 else 0.001
+                    ideal = target_rms / max(wdsp_rms, 1e-6)
+                    self._wdsp_post_gain = (self._wdsp_post_gain * (1 - alpha)
+                                            + ideal * alpha)
+                    self._wdsp_post_gain = min(self._wdsp_post_gain, 80.0)
+                    audio = wdsp_audio.astype(np.float64) * self._wdsp_post_gain
                     np.clip(audio, -1.0, 1.0, out=audio)
+                    # Diagnostic ~5s
+                    now = time.monotonic()
+                    if not hasattr(self, '_wdsp_rms_ts'):
+                        self._wdsp_rms_ts = 0.0
+                    if now - self._wdsp_rms_ts > 5.0:
+                        iq_rms = float(np.sqrt(np.mean(np.abs(bb)**2) + 1e-12))
+                        logger.info("WDSP IQ: iq=%.4f → wdsp=%.4f → "
+                                    "gain=%.1fx → out=%.4f",
+                                    iq_rms, wdsp_rms,
+                                    self._wdsp_post_gain,
+                                    float(np.sqrt(np.mean(audio**2)+1e-12)))
+                        self._wdsp_rms_ts = now
                     self.audio_buffer.extend(audio.tolist())
                     return audio.astype(np.float32)
             except Exception:
