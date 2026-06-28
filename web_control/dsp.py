@@ -989,7 +989,24 @@ class TXModulator:
         if len(x) == 0:
             return 0
 
-        # ── 0. Anti-alias LPF: 16 kHz mic carries up to 8 kHz energy,
+        # ── 0. DC-blocking highpass (20 Hz, 1-pole IIR) ──────────
+        # Browser mic → Opus encode → decode chain introduces per-frame
+        # DC offsets up to 2% of full scale.  Without this, the frame
+        # boundaries click/pop in the modulated RF output.
+        if not hasattr(self, '_tx_dc_x1'):
+            self._tx_dc_x1 = 0.0
+            self._tx_dc_y1 = 0.0
+            fc = 20.0
+            self._tx_dc_a = np.exp(-2.0 * math.pi * fc / input_rate)
+        y = np.empty_like(x)
+        y[0] = x[0] - self._tx_dc_x1 + self._tx_dc_a * self._tx_dc_y1
+        for i in range(1, len(x)):
+            y[i] = x[i] - x[i-1] + self._tx_dc_a * y[i-1]
+        self._tx_dc_x1 = x[-1]
+        self._tx_dc_y1 = y[-1]
+        x = y
+
+        # ── 1. Anti-alias LPF: 16 kHz mic carries up to 8 kHz energy,
         #    but after resampling to 15625 Hz the Nyquist is only 7.8 kHz.
         #    A gentle 4th-order Butterworth at 3.6 kHz prevents 7.8+ kHz
         #    content from folding back into the voice band.  (The browser-
