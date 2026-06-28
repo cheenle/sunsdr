@@ -40,10 +40,19 @@ def _make_auth_token() -> str:
     return _secrets.token_hex(AUTH_TOKEN_BYTES)
 
 def _verify_auth(request: Request) -> bool:
-    """Check whether the request carries a valid auth cookie or query-param token."""
+    """Check whether the request carries a valid auth cookie or query-param token.
+
+    The cookie is checked first (fast path for every same-origin request).
+    If the cookie is missing OR stale (server restart clears _auth_tokens),
+    the query-param token is tried as a fallback.  This matters for
+    audioWorklet.addModule() and Worker() constructors, where the frontend
+    passes the token via ?token= because some mobile browsers treat worklet
+    fetches as anonymous (no cookies).
+    """
     token = request.cookies.get(AUTH_COOKIE)
-    if not token:
-        token = request.query_params.get("token")
+    if token and token in _auth_tokens:
+        return True
+    token = request.query_params.get("token")
     return token is not None and token in _auth_tokens
 
 # ── App ───────────────────────────────────────────────────────────
