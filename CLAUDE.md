@@ -45,13 +45,24 @@ See `SDD/09-architecture-overview.md` and `SDD/11-component-model.md` for detail
 
 ```
 Browser (iOS Safari)
-  → HTTPS/WSS
+  → HTTPS/WSS (COOP/COEP credentialless for SharedArrayBuffer)
   → FastAPI SunMRRC (sunmrrc/server.py)
     → SunSDR2DXClient (web_control/sunsdr_direct.py) — UDP control port 50001
     → StreamProcessor (web_control/dsp.py) — IQ → spectrum + audio
-    → UDP IQ socket port 50002
+    → UDP IQ socket port 50002 (pre-bound before boot sequence, dedicated keep-alive thread)
     → SunSDR2 DX hardware @ 192.168.16.200
 ```
+
+**TX audio path (SharedArrayBuffer ring buffer):**
+
+```
+Mic → AudioWorklet (tx_capture_worklet.js) → float32 → SAB ring buffer
+  → Opus Worker (tx_opus_worker.js) polls SAB every 3ms, reads 320-sample frames
+  → Opus-encodes → dedicated WebSocket → /WSaudioTX
+  → server feed_audio() → 300Hz 4th-order Butterworth HPF → Hilbert overlap-save SSB → TX IQ
+```
+
+Zero main-thread involvement after setup. COEP `credentialless` (not `require-corp`) avoids breaking Worker `importScripts()` on Safari.
 
 ### Key modules
 
@@ -59,8 +70,8 @@ Browser (iOS Safari)
 |--------|------|------|
 | Server + WebSockets | `sunmrrc/server.py` | FastAPI app, lifespan, 5 WS endpoints, IQ processing loop, audio/spectrum broadcast |
 | Radio client | `web_control/sunsdr_direct.py` | SunSDR2 DX UDP protocol — boot sequence, heartbeat, freq/PTT/AGC setters |
-| DSP pipeline | `web_control/dsp.py` | `StreamProcessor` → `SpectrumProcessor` (FFT) + `AudioDemodulator` (SSB/AM/FM + WDSP) |
-| WDSP wrapper | `web_control/wdsp_wrapper.py` | Optional `libwdsp.dylib` ctypes wrapper (AGC, NR2, NB, ANF) |
+| DSP pipeline | `web_control/dsp.py` | `StreamProcessor` → `SpectrumProcessor` (FFT) + `AudioDemodulator` (SSB/AM/FM + WDSP RX-only). TX: Python Hilbert overlap-save SSB modulator (no WDSP TX). |
+| WDSP wrapper | `web_control/wdsp_wrapper.py` | Optional `libwdsp.dylib` ctypes wrapper — RX only (AGC, NR2, NB, ANF). WDSP TX C-chain removed. |
 | Frontend | `sunmrrc/static/` | `controls.js` (WebSockets + audio playback + waterfall), `mobile.js` (UI), modules |
 
 ### WebSocket endpoints
@@ -69,7 +80,7 @@ Browser (iOS Safari)
 |----------|-----------|---------|
 | `/WSCTRX` | Bidirectional text | Control commands (`setFreq:`, `setMode:`, `getWDSPStatus:`, etc.) |
 | `/WSaudioRX` | Server → client binary | RX audio, 1-byte codec tag per frame: `0x00`=16 kHz Int16 PCM, `0x01`=Opus (16 kHz mono). Default Opus. |
-| `/WSaudioTX` | Client → server | TX audio placeholder (not yet consumed by backend) |
+| `/WSaudioTX` | Client → server binary | Opus-encoded TX audio from dedicated worker-side WebSocket (SharedArrayBuffer ring buffer path: AudioWorklet → SAB → Opus Worker → WS). 1-byte codec tag: `0x01`=Opus 16 kHz mono. |
 | `/WSspectrum` | Server → client binary | 512-byte uint8 dB rows (0=-120dB, 255=0dB) |
 | `/WSATR1000` | Bidirectional JSON | ATR-1000 tuner proxy (placeholder) |
 
@@ -92,9 +103,9 @@ TX output power is set by the **DRIVE command (0x0017)**, NOT by software IQ gai
 - **Packet layout is the gotcha**: the drive byte goes in the **trailing word**, not the payload. `build_packet(CmdID.DRIVE, data=b"\0\0\0\0", trailing=byte)`. Putting it in the payload sends drive=0 (device transmits at near-zero power — this was the original "low power" bug).
 - **Re-sent on every QSY**: ExpertSDR3 (and now `set_frequency()`) re-sends 0x0017 on each frequency change, because the device resets drive to a per-band calibration value otherwise. `set_ptt(tx=True)` also re-sends it just before keying as a guard.
 - **Per-band power is user-configurable**, persisted to `band_power.json`, edited via `/api/band_power` and the **Band Power** menu panel. `band_power_for(freq_hz)` looks up the % for the current band; `BAND_POWER_DEFAULT` (100) covers out-of-band frequencies.
-- **IQ amplitude must use the FULL scale** (`dsp.py` `TX_IQ_PEAK=1.0`, `TX_DRIVE_GAIN=3.0`): verified 2026-06-25 against a real ExpertSDR3 40m drive sweep (`device/captures/expert_40m_drive.pcap`) — ExpertSDR3's TX IQ peaks reach **1.0 full-scale** (voice RMS ~0.33), and IQ amplitude is **constant with drive** (drive only scales power at the device). The earlier `TX_IQ_PEAK=0.5` clipped half the amplitude through the tanh limiter and was THE root cause of low power (~20W vs ExpertSDR3's 45W at 100% drive on the same audio). The "~0.092 peak" figure in older notes was measured from a quiet/low-level capture segment and is **wrong** — ignore it.
+- **IQ amplitude must use the FULL scale** (`dsp.py` `TX_IQ_PEAK=1.0`, `TX_DRIVE_GAIN=2.8`): verified 2026-06-25 against a real ExpertSDR3 40m drive sweep (`device/captures/expert_40m_drive.pcap`) — ExpertSDR3's TX IQ peaks reach **1.0 full-scale** (voice RMS ~0.33), and IQ amplitude is **constant with drive** (drive only scales power at the device). The earlier `TX_IQ_PEAK=0.5` clipped half the amplitude through the tanh limiter and was THE root cause of low power (~20W vs ExpertSDR3's 45W at 100% drive on the same audio). The "~0.092 peak" figure in older notes was measured from a quiet/low-level capture segment and is **wrong** — ignore it. `TX_DRIVE_GAIN` was tuned from 3.0→3.5→2.8 to balance power vs. tanh limiter engagement.
 - **The DRIVE byte is correct as-is** (verified against `tci_drive_scan.pcap`: 100%→trailing 255, byte in trailing word). Don't re-investigate it for power problems — the lever is `TX_IQ_PEAK` + drive %, not the byte format.
-- **Client-side TX EQ gain staging**: `AudioTX_preamp = 1.5` (+3.5dB) in `tx_audio_eq.js`. The preamp was 3.0 but was reduced 2026-06-25 because the old value drove the AudioWorklet Int16 output to full scale (peak=1.0), which after Hilbert (+~30%) + server drive gain (×3.0) forced the tanh limiter to squash 75% of peak amplitude → heavy voice distortion. At ×1.5, the tanh engages only ~4% — clean SSB. Turn device drive ↑ for more power, not client gain. See `SDD/diagrams/tx-gain-staging.svg`.
+- **Client-side TX EQ gain staging**: `AudioTX_preamp = 1.5` (+3.5dB) in `tx_audio_eq.js`. The preamp was 3.0 but was reduced 2026-06-25 because the old value drove the AudioWorklet Int16 output to full scale (peak=1.0), which after Hilbert (+~30%) + server drive gain (×2.8) forced the tanh limiter to squash 75% of peak amplitude → heavy voice distortion. At ×1.5, the tanh engages only ~4% — clean SSB. Turn device drive ↑ for more power, not client gain. A 300Hz 4th-order Butterworth HPF (after DC blocker, before anti-alias LPF) improves SSB power efficiency from ~69% to ~96% by removing sub-300Hz energy that would otherwise eat amplifier headroom without contributing to intelligibility. See `SDD/diagrams/tx-gain-staging.svg`.
 
 ### TX power / voltage telemetry (0x1F00)
 
@@ -139,17 +150,25 @@ If `server.log` shows `IQ idle: pkt=0`, the SunSDR2 hardware is not sending IQ d
 
 The IQ processing loop sends both heartbeat (0x0018 to port 50001 every 0.5s) and stream keep-alive (0xFFFE to port 50002 every 0.5s). When data flows, log shows `IQ stats: pkt=N iq=N spec=N audio=N`.
 
+**IQ socket is pre-bound before the boot sequence** to avoid losing early packets — the UDP socket is created and bound to port 50002 before `boot_sequence()` sends HW_INIT. A **dedicated keep-alive thread** sends 0xFFFE independently of the asyncio event loop, ensuring the device never times out the stream even if the event loop is blocked.
+
 ## Key conventions
 
 - **Restart script kills by cwd**, not by process name — won't accidentally kill `web_control/server.py` if it's running
 - **TLS by default** for iOS secure context — `DISABLE_SSL=1` to force HTTP for local dev
 - **WDSP is optional** (AD-008) — demods work without it; `get_wdsp_status()` reports `available: true/false`
-- **WDSP enabled by default** — NR2 (level 50), AGC SLOW active on startup. The frontend DSP toggle switches WDSP on/off.
+- **WDSP RX-only** — NR2 (level 50), AGC SLOW active on startup. The frontend DSP toggle switches WDSP RX on/off. WDSP TX C-chain has been completely removed; Python Hilbert overlap-save is the sole SSB modulation path. No more `WDSPTXProcessor`, `setWDSPTXEnabled` commands, TX PROC UI panel, or TX symbol bindings.
 - **NR2 level is now functional** (fixed 2026-06-24) — `SetRXAEMNRgainLine` applies the actual gain value (0.0=max NR2, 1.0=min). Previously `set_nr2_level()` computed the gain but never called the WDSP API.
 - **process() chunked** (fixed 2026-06-24) — `WDSPProcessor.process()` now buffers variable-length input and drains in 256-sample blocks, returning full-length output. Previously it truncated input >256 samples.
 - **Spectrum quantization is server-side** (AD-005) — waterfall canvas gets 512 uint8 values, not raw float dB
 - **PTT release is safety-critical** (AD-007) — frontend has ACK retry + watchdog; backend has forced-RX handler on `s:` command
 - **RX audio is tagged dual-codec** (AD-004) — each `/WSaudioRX` frame carries a 1-byte codec tag (`0x00`=Int16 PCM, `0x01`=Opus 16 kHz mono); default Opus (~18-24 kbps vs ~256 kbps PCM), switchable via `setOpus:` (Audio Codec menu). Server encodes via a direct `ctypes` libopus binding in `web_control/opus_rx.py` (NOT `opuslib` — arm64 macOS can't call the variadic `opus_encoder_ctl` through ctypes, so bitrate is set via the `max_data_bytes` cap on `opus_encode`). Falls back to PCM if libopus is missing. 16 kHz resampled server-side from 15625 Hz native rate
+- **COEP header uses `credentialless`** (not `require-corp`) — `require-corp` breaks Worker `importScripts()` on Safari. `credentialless` enables `SharedArrayBuffer` while allowing workers to load their own sub-resources.
+- **TX audio uses SharedArrayBuffer ring buffer** — `AudioWorklet` (tx_capture_worklet.js) writes float32 samples directly to SAB; Opus Worker (tx_opus_worker.js) polls SAB every 3ms, reads 320-sample frames, Opus-encodes, and sends via its own dedicated WebSocket to `/WSaudioTX`. Zero main-thread involvement after setup. Deleted `modules/tx_sab_ring.js` (dead code — SAB ring logic is embedded directly in worklet/worker).
+- **Continuous DC blocker** — IIR highpass @ 20Hz replaces the old per-frame mean subtraction. Instant convergence, no DC wander across frame boundaries.
+- **300Hz 4th-order Butterworth HPF** — inserted between DC blocker and anti-alias LPF in `feed_audio()`. Removes sub-300Hz energy that carries no voice intelligibility but consumes amplifier headroom; improves SSB power efficiency from ~69% to ~96%.
+- **TX pacer: no de-prime** — once primed with 10 frames, drains every available frame immediately. Constants: `TX_MIC_PRIME_PKTS=60`, `TX_MIC_REPRIME_PKTS=20`.
+- **IQ socket pre-bound before boot** — UDP socket bound to port 50002 before `boot_sequence()` sends HW_INIT, avoiding lost early packets. Dedicated keep-alive thread sends 0xFFFE independently of the asyncio event loop.
 
 ## Architecture decisions
 
@@ -160,8 +179,9 @@ See `SDD/08-architecture-decisions.md` for all 12 ADs (AD-001 through AD-012) wi
 
 ## Known gaps (AD-009)
 
-- TX SSB modulation **works** — mic frames are consumed, Hilbert-modulated to IQ, and transmitted (confirmed on-air: Tune ~12W, voice 30–40W PEP via ATR-1000)
-- **TX audio gain staging (AD-012)**: client preamp ×1.5 (`tx_audio_eq.js` `AudioTX_preamp`), server `TX_DRIVE_GAIN=3.0`, `TX_IQ_PEAK=1.0` with tanh soft limiter. The preamp was reduced from 3.0→1.5 on 2026-06-25 because the old value saturated the tanh (75% reduction → heavy distortion). See `SDD/diagrams/tx-gain-staging.svg`.
+- TX SSB modulation **works** — Python Hilbert overlap-save is the sole SSB modulation path (WDSP TX C-chain removed). Audio path: SharedArrayBuffer ring buffer → Opus Worker → /WSaudioTX → server `feed_audio()` → continuous DC blocker (IIR 20Hz HPF) → 300Hz 4th-order Butterworth HPF → anti-alias LPF → Hilbert SSB modulator → tanh soft limiter → TX IQ. Confirmed on-air: Tune ~12W, voice 30–40W PEP via ATR-1000.
+- **TX audio gain staging (AD-012)**: client preamp ×1.5 (`tx_audio_eq.js` `AudioTX_preamp`), server `TX_DRIVE_GAIN=2.8`, `TX_IQ_PEAK=1.0` with tanh soft limiter. The preamp was reduced from 3.0→1.5 on 2026-06-25 because the old value saturated the tanh (75% reduction → heavy distortion). `TX_DRIVE_GAIN` tuned 3.0→3.5→2.8. 300Hz HPF improves SSB power efficiency from ~69% to ~96%. See `SDD/diagrams/tx-gain-staging.svg`.
+- **TX pacer**: `TX_MIC_PRIME_PKTS=60`, `TX_MIC_REPRIME_PKTS=20`. No de-prime — once primed with 10 frames, drains every available frame immediately.
 - `/WSATR1000` accepts connections but doesn't interface with real tuner hardware
 - `/api/mem_channels` implemented (GET/POST with JSON persistence to `mem_channels.json`)
 - `/api/band_power` implemented (GET/POST with JSON persistence to `band_power.json`; frontend **Band Power** menu panel edits per-band drive %)

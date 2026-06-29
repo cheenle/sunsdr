@@ -40,9 +40,9 @@ The server boots the SunSDR2 DX over UDP (port 50001), starts the IQ stream (por
 | HTTPS/WSS with TLS (required for iOS audio) | ✅ |
 | PTT with safety release (ACK retry, watchdog, forced-RX) | ✅ |
 | Memory channels (6 slots, cookie backup) | ✅ |
-| TX audio modulation | ✅ | Browser mic → Opus/PCM → Hilbert SSB → 24-bit IQ; on-air verified (Tune ~12W, voice 30–40W PEP) |
+| TX audio modulation | ✅ | Browser mic → SAB ring buffer → Opus → 300 Hz HPF → Python Hilbert SSB → 24-bit IQ; verified 37 dB SNR, 96% SSB efficiency, zero dropouts; IQ peak ~0.69, RMS ~0.68 at 100% drive |
 | TX power / per-band drive | ✅ | Device DRIVE (0x0017), `/api/band_power` + Band Power UI |
-| TX telemetry (power/SWR/temp) | ✅ | 0x1F00: off14 pwr_raw, off16 SWR×100, off18 temp °C |
+| TX telemetry (power/voltage/temp) | ✅ | 0x1F00: off30 f32 forward watts (PEP), off16 u16/10 supply voltage, off18 f32 PA temp °C |
 | Sample rate selector | ✅ | 39/78/156/312 kHz via 0x0001 HW_INIT |
 | ATR-1000 antenna tuner integration | ❌ (placeholder) |
 | CW / FT8 / Recordings pages | ❌ (menu stubs) |

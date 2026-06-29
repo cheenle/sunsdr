@@ -77,8 +77,8 @@ SunSDR2 DX
 | Verify RX | Power on UI, confirm `/WSaudioRX` connected and audio/bitrate active |
 | Verify control | Change frequency/mode and confirm UI ack plus radio behavior |
 | Verify PTT safety | Press/release PTT; confirm `getPTT:false` after release |
-| Verify TX voice/power | Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (Tune ~12 W, voice 30–40 W PEP). Device telemetry: `W=` in `server.log` from `0x1F00` off30 f32 forward watts; `V=` from off16 u16/10 supply voltage; `T=` from off18 f32 PA temp °C. Telemetry arrives in RX and TX. No device SWR field — use ATR-1000. |
-| Verify TX audio quality | Check `server.log` for "TX chain" level-probe lines at 1 Hz. Healthy gain staging: `in` peak ~0.5 (not 1.0 — that saturates the tanh), `lim` peak ~0.96 (~4% tanh reduction). Underruns should be 0 or near 0 after initial prime. If underruns are frequent (>1/sec), check WiFi latency and the `/tmp/tx_probe.csv` pacer log. |
+| Verify TX voice/power | Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (voice 30–40 W PEP at 100% drive). Device telemetry: `W=` in `server.log` from `0x1F00` off30 f32 forward watts; `V=` from off16 u16/10 supply voltage; `T=` from off18 f32 PA temp °C. Telemetry arrives in RX and TX. No device SWR field — use ATR-1000. IQ peak ~0.69, RMS ~0.68 at 100% drive (TX_DRIVE_GAIN=2.8). |
+| Verify TX audio quality | Check `server.log` for "TX chain" level-probe lines at 1 Hz. Healthy gain staging: voice produces `in` peak ~0.3–0.5, `lim` peak ~0.69 (<4% tanh duty). The 300 Hz HPF (4th-order Butterworth) reclaims ~15% PA headroom from sub-300 Hz waste band. Underruns should be 0 (SAB ring buffer eliminates main-thread jitter, the dominant dropout cause). Verified 37 dB SNR at far end, 96% SSB efficiency, zero dropouts. |
 | Adjust per-band power | Menu → Band Power; set each band's drive %, save (POST `/api/band_power`), confirm immediate re-apply on the current frequency |
 
 ## 12.7 Logs and Artifacts

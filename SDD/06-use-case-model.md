@@ -77,7 +77,7 @@
 
 | ID | Use Case | Current State |
 |----|----------|---------------|
-| UC-007 | Browser microphone TX audio | Implemented; mic frames modulated to SunSDR TX IQ and transmitted (on-air verified) |
+| UC-007 | Browser microphone TX audio | Verified; mic → SAB ring buffer (zero-main-thread) → Opus (worker-owned WS) → 300 Hz HPF → Python Hilbert SSB (sole path, WDSP C-chain removed) → 24-bit IQ; verified 37 dB SNR, 96% SSB efficiency, zero dropouts; IQ peak ~0.69, RMS ~0.68 at 100% drive; COEP credentialless headers enable SharedArrayBuffer |
 | UC-008 | Memory channel save/recall | Implemented; backend `/api/mem_channels` GET/POST with JSON persistence |
 | UC-013 | Per-band TX power | Implemented; Menu → Band Power panel + `/api/band_power`, applied via device DRIVE (`0x0017`) |
 | UC-009 | ATR-1000 power/SWR | UI placeholders/hooks exist; backend `/WSATR1000` is transport-only placeholder |

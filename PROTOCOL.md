@@ -581,6 +581,12 @@ def reconfigure_filter(low_hz=200, high_hz=3000):
 
 WDSP = Warren Pratt DSP library (`libwdsp.dylib`, ARM64). Provides hardware-quality AGC, spectral noise reduction (NR2), noise blanker (NB), and auto notch filter (ANF).
 
+> **WDSP is RX-only.** The TX chain (SSB modulation, DC blocking, anti-alias filtering,
+> tanh limiting) is entirely software-based with no WDSP dependency. TX C-chain commands
+> (`setWDSPTXEnabled`, `setWDSPDEXP`, `setWDSPCFC`, `setWDSPLeveler`, `setWDSPALC`,
+> `setWDSPTXEQ`, `setWDSPCFCPrecomp`, `setWDSPDEXPThresh`) have been removed. See §9.2
+> WDSP commands table and §17 for TX chain implementation.
+
 ### 8.1 Library loading
 
 Searches in order:
@@ -687,7 +693,7 @@ All WDSP state is mirrored in the demodulator for front-end queries:
 |----------|------|-----------|---------|------|
 | `/WSCTRX` | Text | Bidirectional | `cmd:val` or `cmd` (PING/PONG) | On demand |
 | `/WSaudioRX` | Binary | Server → Client | 1-byte codec tag + payload (`0x00`=Int16 PCM 16 kHz, `0x01`=Opus 16 kHz mono). Default Opus, switch via `setOpus:` | ~2–3 KB/s (Opus) / ~32 KB/s (PCM) |
-| `/WSaudioTX` | Binary | Client → Server | Not consumed (placeholder) | — |
+| `/WSaudioTX` | Binary | Client → Server | 1-byte codec tag + payload (`0x00`=Int16 PCM 16 kHz, `0x01`=Opus 16 kHz mono 28 kbps CBR). Text control frames (`m:` metadata, `s:` stop). | ~2–16 KB/s |
 | `/WSspectrum` | Binary | Server → Client | 512 uint8, 0=-120dB, 255=0dB | ~19 KB/s @ 38 Hz |
 | `/WSATR1000` | Text (JSON) | Bidirectional | `{"action":"sync"}` etc. | 2 Hz (heartbeat) |
 
@@ -706,7 +712,7 @@ Format: `command:value` (colon-separated). Special commands without colon: `PING
 | `getFreq` | `getFreq:7074000` | `radio.rx_freq` |
 | `getMode` | `getMode:USB` | `dsp_proc.demodulator.mode` |
 | `getPTT` | `getPTT:false` | `radio.ptt` |
-| `getWDSPStatus` | `wdspStatus:{...json...}` | `demodulator.get_wdsp_status()` |
+| `getWDSPStatus` | `wdspStatus:{...json...}` | `demodulator.get_wdsp_status()` — **RX only**; no TX chain state is returned (WDSP TX C-chain removed) |
 | `getWDSPNotches` | (same as getWDSPStatus) | Same |
 
 #### Radio commands
@@ -725,7 +731,13 @@ Format: `command:value` (colon-separated). Special commands without colon: `PING
 | `setOpus` | `setOpus:on` | RX codec toggle. `on`/`true` → Opus (~24 kbps); else Int16 PCM (~256 kbps). Server replies `setOpus:on`/`off`/`unavailable`. |
 | `getOpus` | `getOpus` | Query current RX codec → `setOpus:on`/`off`/`unavailable`. |
 
-#### WDSP commands (all DSP-side, broadcast to all clients)
+#### WDSP commands (RX only — all DSP-side, broadcast to all clients)
+
+> **Note:** WDSP TX C-chain commands (`setWDSPTXEnabled`, `setWDSPDEXP`, `setWDSPCFC`,
+> `setWDSPLeveler`, `setWDSPALC`, `setWDSPTXEQ`, `setWDSPCFCPrecomp`, `setWDSPDEXPThresh`)
+> have been **removed**. TX processing is entirely software-based (Hilbert SSB, tanh limiter,
+> drive gain, DC blocker, anti-alias LPF) with no WDSP dependency. See §17 for TX chain detail.
+
 | Command | Example | Method called |
 |---------|---------|---------------|
 | `setWDSPEnabled` | `setWDSPEnabled:true` | `demodulator.set_wdsp_enabled()` |
@@ -749,7 +761,158 @@ Format: `command:value` (colon-separated). Special commands without colon: `PING
 | `s` | Force RX: `radio.set_ptt(False)`, `demodulator.set_ptt(False)`, broadcast `getPTT:false` |
 | `cq` | CQ complete acknowledgement: broadcast `cq:complete` |
 
-### 9.3 Connection lifecycle
+### 9.3 /WSaudioTX — TX Uplink
+
+The TX uplink carries microphone audio from the browser to the server for SSB modulation
+and transmission. Each frame is prefixed with a one-byte codec tag; the server decodes the
+tag and routes the payload accordingly. Text control frames carry session metadata and
+stop/PTT-release signals on the same socket.
+
+#### 9.3.1 Frame format
+
+```
+Byte 0       | Bytes 1..N
+codec tag    | payload
+0x00 or 0x01 | PCM or Opus bytes
+```
+
+| Tag | Codec | Payload | Bitrate |
+|-----|-------|---------|---------|
+| `0x00` | Int16 PCM | 16 kHz mono, 320 samples (20 ms) = 640 bytes | ~32 KB/s |
+| `0x01` | Opus (default) | 20 ms frames, 28 kbps CBR, complexity=3 | ~3.5–4.0 KB/s |
+
+The client sends Opus by default. The **Audio Codec** menu toggle (`encode` checkbox in
+`controls.js`) switches to raw PCM (`0x00`) when unchecked. Opus encoding runs in a
+dedicated Web Worker (`tx_opus_worker.js`) to avoid main-thread jank; frames are
+transferred to the main thread via a SharedArrayBuffer ring buffer (`tx_sab_ring.js`).
+
+#### 9.3.2 Server-side Opus decoder
+
+The server decodes Opus frames through a direct **ctypes libopus binding** in
+`web_control/opus_rx.py` (class `TxOpusDecoder`):
+
+```python
+# Constructor — shared libopus handle from _load_libopus()
+dec = lib.opus_decoder_create(16000, 1, byref(err))   # 16 kHz mono
+# Decode — returns raw Int16 PCM bytes
+pcm = lib.opus_decode(dec, opus_bytes, nbytes, out, max_samples, 0)
+```
+
+This is the same `_load_libopus()` used for the RX Opus encoder. The decoder bindings
+(`opus_decoder_create`, `opus_decode`) use explicit `argtypes` to avoid the arm64 variadic
+ABI limitation that prevents `opus_encoder_ctl` from working through ctypes — so TX decode
+works on both Intel and arm64. If libopus is not available, TX falls back to PCM-only
+(Opus-tagged frames are dropped).
+
+#### 9.3.3 TX pacer and jitter buffer
+
+The server buffers incoming WS frames in a **two-level jitter buffer** before feeding them
+to the TX modulator:
+
+| Level | Parameter | Value | Purpose |
+|-------|-----------|-------|---------|
+| **WS queue** | `TX_WS_JITTER_PRIME_FRAMES` | 10 (200 ms) | Initial fill before draining starts |
+| **WS queue** | `TX_WS_JITTER_MAX_FRAMES` | 30 (600 ms) | Max queue — oldest frame dropped on overflow |
+| **Modulator** | `TX_MIC_PRIME_PKTS` | 60 (~307 ms) | Modulator-level prime — survive worst-case browser GC pause |
+| **Modulator** | `TX_MIC_REPRIME_PKTS` | 20 (~102 ms) | Re-prime threshold after underflow — faster recovery |
+
+**Prime behavior**: The WS queue starts unprimed. The first 10 frames accumulate before the
+`_tx_uplink_pacer` async task begins draining at 20 ms intervals. Once primed, the queue
+**never de-primes** — if frames arrive late, the pacer inserts silence (padding) to keep
+the modulator fed. This avoids mid-transmission clicks from WS jitter.
+
+**Overflow**: If the WS queue exceeds 30 frames (600 ms), the oldest frame is dropped.
+This handles periods where the browser produces frames faster than the pacer consumes them
+(e.g., after a GC pause the browser sends a catch-up burst).
+
+**Adaptive pacer**: The underlying OS-level TX pacer thread (`_tx_pacer_thread`) paces
+`0xFFFD` UDP packets at 5.12 ms intervals (195.3 Hz), with adaptive ±25% interval scaling
+to help the mic queue refill after a browser GC pause.
+
+#### 9.3.4 Text control frames
+
+In addition to binary audio frames, the `/WSaudioTX` socket carries text control frames:
+
+| Frame | Format | Purpose | When sent |
+|-------|--------|---------|-----------|
+| `m:` | `m:rate,encode,opusRate,opusFrameDur` | Metadata / session settings | Session start, encode checkbox change |
+| `s:` | `s:` | Stop / force PTT release | Backup PTT release path |
+
+**`m:` metadata frame** — example: `m:16000,1,16000,20`
+- `rate`: client audio sample rate (Hz)
+- `encode`: 1 = Opus, 0 = PCM (matches tag byte)
+- `opusRate`: Opus encoder sample rate (Hz)
+- `opusFrameDur`: Opus frame duration (ms)
+
+The worker sends its own `m:` frame on WebSocket open to ensure settings are known before
+audio frames arrive.
+
+**`s:` stop frame** — a backup PTT release channel. When received, the server:
+1. Clears the PCM queue and resets prime state
+2. Calls `dsp_proc.modulator.reset_mic()` (flushes mic buffers, finalises DC-block capture)
+3. Calls `_finish_tx_capture("stop-text")` to save capture files
+4. On the `/WSCTRX` socket, `cmd == "s"` also forces `radio.set_ptt(False)`
+
+This provides a redundant path to release PTT even if the control socket is blocked.
+
+#### 9.3.5 TX uplink capture
+
+The server captures decoded TX mic audio **before modulation** (pre-mod) to diagnose
+WebSocket jitter and client-side processing issues. Capture starts when PTT is asserted
+and finalises on release.
+
+**Files saved** to `sunmrrc/captures/`:
+
+| File | Content |
+|------|---------|
+| `tx_uplink_pre_mod_{timestamp}_raw.wav` | Concatenated decoded PCM frames, exactly as received (no gap padding) |
+| `tx_uplink_pre_mod_{timestamp}_timed.wav` | PCM with zero-filled silence inserted where frames arrived late (>30 ms above expected interval) |
+| `tx_uplink_pre_mod_{timestamp}.csv` | Per-frame log: timestamps, intervals, tags, wire bytes, PCM samples, gap markers |
+
+`_latest` symlinks are also created for quick access:
+- `tx_uplink_pre_mod_latest_raw.wav`
+- `tx_uplink_pre_mod_latest_timed.wav`
+- `tx_uplink_pre_mod_latest.csv`
+
+**Capture triggers**: PTT release, `s:` stop frame, WebSocket disconnect, or max duration
+(3 minutes). See `_save_tx_uplink_capture()` and `_capture_tx_pcm()` in `server.py`.
+
+An additional **post-DC-block diagnostic capture** is saved by `dsp.py`'s `reset_mic()` to
+`captures/tx_post_dcblock_{timestamp}.wav` — this captures audio after the DC blocker but
+before modulation, useful for verifying the DC removal filter.
+
+#### 9.3.6 TX flow summary
+
+```
+Browser mic (48 kHz)
+  ↓ downsample 3:1 → 16 kHz
+  ↓ accumulate 320 samples (20 ms frames)
+  ↓
+  ├─ Opus path (default):  tx_opus_worker.js → Opus 28 kbps CBR → tag 0x01 + bytes
+  └─ PCM path (fallback):                                 → tag 0x00 + Int16 bytes
+  ↓
+WebSocket /WSaudioTX → server
+  ↓
+Read 1-byte tag:
+  ├─ 0x01 → TxOpusDecoder.decode() → Int16 PCM
+  └─ 0x00 → raw Int16 PCM
+  ↓
+WS jitter buffer (prime=10, max=30)
+  ↓ _tx_uplink_pacer (20 ms tick)
+  ↓
+dsp_proc.modulator.feed_audio()
+  ├─ DC-block HPF (instant, no convergence)
+  ├─ 300 Hz HPF + 3.6 kHz anti-alias LPF
+  ├─ Fractional resample 16k → 15625 Hz
+  ├─ Hilbert SSB (USB/LSB) or envelope (AM)
+  ├─ TX_DRIVE_GAIN ×2.8 scaling
+  ├─ tanh soft limiter at TX_IQ_PEAK=1.0
+  └─ 24-bit pack → 200 IQ samples → 0xFFFD UDP packet
+  ↓
+Radio device @ 192.168.16.200:50002
+```
+
+### 9.4 Connection lifecycle
 
 ```
 Client connects → accepted → added to client set
@@ -758,6 +921,41 @@ Client disconnects → WebSocketDisconnect or RuntimeError → removed from set
 ```
 
 All 5 endpoints use fan-out pattern: server maintains `set[WebSocket]`, iterates to broadcast, removes dead connections on send failure.
+
+### 9.5 COOP/COEP Middleware Headers
+
+The server sets three HTTP response headers on every request (via FastAPI `@app.middleware("http")`)
+to enable **SharedArrayBuffer** support in the browser. SharedArrayBuffer is required for the
+lock-free ring buffer (`tx_sab_ring.js`) that transfers encoded Opus frames from the TX Opus
+Web Worker to the main thread.
+
+```python
+@app.middleware("http")
+async def _coop_coep_middleware(request: Request, call_next):
+    """Set COOP/COEP headers required for SharedArrayBuffer."""
+    response = await call_next(request)
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    return response
+```
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `Cross-Origin-Opener-Policy` | `same-origin` | Isolates the browsing context — SharedArrayBuffer requires cross-origin isolation. `same-origin` is the minimum sufficient level. |
+| `Cross-Origin-Embedder-Policy` | `credentialless` | Allows cross-origin subresources (CDN scripts, WASM) without explicit `Cross-Origin-Resource-Policy` headers on every external asset. `require-corp` (the stricter alternative) silently breaks Worker `importScripts()` for Opus WASM modules on Safari. |
+| `Cross-Origin-Resource-Policy` | `cross-origin` | Marks all server responses as embeddable by any context — necessary because `credentialless` COEP requires resources to opt in, and this header declares all server assets as available. |
+
+**Why `credentialless` instead of `require-corp`:** `require-corp` requires every
+cross-origin subresource (scripts, WASM, workers) to carry an explicit `Cross-Origin-Resource-Policy`
+or `Cross-Origin-Embedder-Policy` response header. Safari's WebKit does not set these on
+internally-loaded Worker modules (Opus WASM), so `require-corp` breaks the TX Opus Worker.
+`credentialless` relaxes this requirement while still enabling SharedArrayBuffer.
+
+**Scope:** These headers apply to ALL HTTP responses — HTML pages, JavaScript modules, WASM
+blobs, WebSocket upgrade responses, and API endpoints. Without them, `crossOriginIsolated`
+is `false` in the browser, the `SharedArrayBuffer` constructor throws, and the TX Opus path
+falls back to `postMessage` transfer (higher latency, more GC pressure).
 
 ---
 

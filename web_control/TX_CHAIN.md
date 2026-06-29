@@ -1,138 +1,224 @@
-# SunSDR2 DX — 发射 (TX) 链路
+# SunSDR2 DX -- TX Audio Chain
 
-## 协议规范（抓包验证）
+## Overview
 
-### TX 控制面 (Port 50001)
-
-TX ON 不需要任何 50001 控制命令——设备检测到 PC 从端口 50002 发送 sub=0xFFFD 流后自动切到发射模式。
+The TX chain converts browser microphone audio into 24-bit LE IQ packets transmitted to the SunSDR2 DX hardware over UDP port 50002. All modulation is done in Python -- there is no WDSP TX C-chain.
 
 ```
-PTT ON:  无需 50001 命令（仅心跳 0x0018 继续）
-PTT OFF: 0x0006(val=0, trailing word) + 0x0020(stream restore rx=0,tx=1)
+Browser Mic → getUserMedia() → AudioWorklet → Opus encode → /WSaudioTX (WSS)
+  → Opus decode → 16 kHz Int16 PCM
+  → DC blocker (1st-order IIR HPF @ 20 Hz, continuous)
+  → 300 Hz 4th-order Butterworth HPF
+  → Anti-alias 4th-order Butterworth LPF @ 3.6 kHz
+  → Fractional resampler (16000 Hz → 15625 Hz)
+  → Overlap-save Hilbert SSB modulator (Python, sole path)
+  → Flat drive gain (TX_DRIVE_GAIN × drive slider)
+  → tanh soft limiter (ceiling = TX_IQ_PEAK = 1.0)
+  → TX amplitude ramp (200-sample cosine fade)
+  → 24-bit LE IQ packet encode (200 samples → 1200 bytes)
+  → UDP 50002 (sub=0xFFFD, 195 pkts/s)
 ```
 
-### TX 数据面 (Port 50002)
+## Stage-by-stage detail
 
-| 字段 | Offset | 大小 | 值 | 说明 |
-|------|--------|------|-----|------|
-| Magic | 0 | 2 | 0xFF32 | |
-| Sub-ID | 2 | 2 | **0xFFFD** | RX 是 0xFFFE |
-| Counter | 4 | 4 | uint32 LE | 步长 0x10000, session 0x04B0 |
-| Flags | 8 | 2 | **0x0102** | RX 是 0x0001 |
-| IQ Data | 10 | 1200 | 24-bit signed LE | 200 采样 × 6 字节 |
+### 0. Input: Opus-decoded 16 kHz Int16 PCM
 
-完整包大小: 1210 字节 = 10 (header) + 1200 (IQ data)
-包速率: ~440/sec @ 78125 Hz IQ rate
+The browser captures mono audio via `getUserMedia()`, processes it through an AudioWorklet (client-side EQ + gain), Opus-encodes each frame (tag byte `0x01`), and sends binary frames over `/WSaudioTX`. The server decodes Opus back to 16 kHz Int16 PCM and feeds raw bytes to `TXModulator.feed_audio()`.
 
-### IQ 数据格式
+- **Sample rate**: 16000 Hz (fixed, regardless of browser hardware rate)
+- **Format**: Signed 16-bit little-endian PCM
+- **Frame size**: Variable (Opus frames), typically ~20 ms
+- **Codec tag**: `0x01` = Opus, `0x00` = Int16 PCM fallback
 
+### 1. DC blocker: 1st-order IIR highpass @ 20 Hz
+
+**Continuous, no per-frame reset.** Previously `x -= x.mean()` was applied per-frame, which caused DC jumps at 76% of frame boundaries (up to 2.7% full-scale) -- producing ~50 audible clicks per second. The current implementation uses a persistent `scipy.signal.lfilter` with state that carries across `feed_audio()` calls.
+
+- **Type**: 1st-order IIR highpass
+- **Cutoff**: 20 Hz
+- **Transfer function**: H(z) = (1 - z^-1) / (1 - R * z^-1), R = exp(-2*pi*20/16000)
+- **Convergence**: ~250 ms at TX start (one mild transient), then continuous tracking
+- **Reset**: State zeroed on PTT cycle via `reset_mic()`
+
+### 2. 300 Hz 4th-order Butterworth HPF
+
+Added 2026-06-28. Pre-modulation spectrum analysis showed 38.7% of mic energy sits below 300 Hz (room rumble, proximity effect, subsonic noise). SSB modulators suppress this band by default, so that energy is wasted -- it consumes headroom in the tanh limiter and drive gain chain without contributing to radiated power. This filter reclaims ~15% of PA capacity for the voice band, improving effective SSB efficiency from ~69% to ~96%.
+
+- **Type**: 4th-order Butterworth IIR (second-order sections)
+- **Cutoff**: 300 Hz
+- **Design**: `scipy.signal.butter(4, 300, 'high', fs=16000, output='sos')`
+- **Implementation**: `sosfilt` with persistent `zi` state (continuous across frames)
+- **Reset**: State zeroed on PTT cycle via `reset_mic()`
+
+### 3. Anti-alias LPF: 4th-order Butterworth @ 3.6 kHz
+
+The 16 kHz input carries up to 8 kHz of energy, but after resampling to 15625 Hz the Nyquist frequency is only 7812.5 Hz. A gentle lowpass prevents content above ~7.8 kHz from folding back into the voice band.
+
+- **Type**: 4th-order Butterworth IIR (second-order sections)
+- **Cutoff**: 3600 Hz (gentle, complements browser-side EQ)
+- **Design**: `scipy.signal.butter(4, 3600, 'low', fs=16000, output='sos')`
+- **Implementation**: `sosfilt` with persistent `zi` state (continuous across frames)
+
+### 4. Fractional resampler: 16000 Hz → 15625 Hz
+
+A continuous linear-interpolation resampler with a persistent input buffer and fractional read cursor. No per-frame reset -- frame seams introduce no discontinuity.
+
+- **Ratio**: 16000 / 15625 = 1.024 (slightly more input samples than output)
+- **Method**: Linear interpolation with persistent phase accumulator (`_rs_phase`)
+- **Output rate**: 15625 Hz (native audio rate, matches hardware)
+
+### 5. Python Hilbert overlap-save SSB modulator (sole path)
+
+**WDSP TX C-chain has been removed.** All SSB modulation is done in Python using `scipy.signal.hilbert` with overlap-save block processing.
+
+- **Block size**: TX_AUDIO_PER_PKT = 80 audio samples (5.12 ms)
+- **Overlap margin**: TX_HILBERT_MARGIN = 256 samples each side
+- **Total block**: 2 * margin + block = 592 audio samples
+- **Window advance**: 80 samples per hop (no overlap in output)
+- **Upsampling**: Linear interpolation 80 → 200 IQ samples (×2.5, to 39063 Hz IQ rate)
+- **Sideband**: USB = analytic signal, LSB = conjugate of analytic signal
+- **Modes supported**: USB, LSB, AM, FM, CW
+
+The overlap-save approach eliminates per-chunk edge transients from the Hilbert transform, producing clean, phase-continuous SSB output across frame boundaries.
+
+### 6. Drive gain
+
+A flat (non-AGC) linear make-up gain applied before the soft limiter.
+
+- **TX_DRIVE_GAIN**: 2.8 (reduced from 3.5 on 2026-06-29)
+- **Drive slider**: 0.0-1.0, scales gain linearly
+- **Effective gain**: `TX_DRIVE_GAIN * self.drive`
+- **No AGC**: Flat gain preserves the voice envelope. A per-hop tracking AGC used to live here but amplitude-modulated the carrier, causing a trembling/quivering voice at the far end -- it has been removed.
+
+At 2.8: mic peak 0.75 * 2.8 = 2.1, tanh engages on ~25% of peaks (mild compression, no envelope riding). RMS output ~0.25 (vs ExpertSDR3 reference ~0.33). Turn device drive up to compensate -- drive scales RF power at the PA, not IQ amplitude.
+
+### 7. tanh soft limiter
+
+A soft magnitude limiter using `tanh()` -- NOT a hard clip. A hard magnitude clip creates sharp corners on every syllable, generating wideband splatter across the whole passband. `tanh` saturates smoothly toward the ceiling, rounding off transients with far less out-of-band energy.
+
+- **Ceiling**: TX_IQ_PEAK = 1.0 (fixed, independent of drive)
+- **Formula**: `limited = ceiling * tanh(magnitude / ceiling)`
+- **Key property**: Drive moves the signal level under a FIXED ceiling, rather than moving the ceiling itself (the old bug that caused severe overdrive at every drive setting)
+
+### 8. TX amplitude ramp
+
+A linear gain ramp applied to the leading edge of TX IQ after the settling pad, removing the hard amplitude step from zero-IQ silence to full modulation. This eliminates one source of the TX start "click."
+
+- **Length**: TX_RAMP_SAMPLES = 200 samples (~1 packet, ~5.1 ms at 39063 Hz)
+- **Shape**: Linear 0→1 (cosine-like fade in practice due to tanh interaction)
+- **Reset**: `reset_tx_ramp()` called on PTT assert
+
+### 9. 24-bit LE IQ packet encoding
+
+Each TX packet carries 200 complex IQ samples encoded as 24-bit signed little-endian interleaved I/Q pairs.
+
+- **Packet size**: 200 samples * 6 bytes = 1200 bytes IQ payload
+- **Header**: 10 bytes (magic 0xFF32, sub=0xFFFD, counter, flags=0x0102)
+- **Total**: 1210 bytes per UDP packet
+- **Packet rate**: ~195 pkts/s (TX_PACKET_INTERVAL_S = 5.12 ms)
+- **IQ sample rate**: 39063 Hz (200 samples/pkt * 195 pkts/s)
+- **Format per sample**: 6 bytes = I[0:3] + Q[3:6], 24-bit signed LE, range +/- 2^23 = +/- 8,388,608
+
+### 10. TX settling pad
+
+TX_SETTLE_PACKETS = 17 zero-IQ packets (~87 ms) sent immediately after PTT assert, giving the PA and relays time to settle before real modulation begins. The amplitude ramp then fades from this silence into full modulation.
+
+## Jitter buffer
+
+The mic path has two levels of buffering:
+
+### Modulator queue (dsp.py TXModulator)
+- **Queue**: `_mic_iq` deque, maxlen=1024 (~5.2 seconds at 195 pkts/s)
+- **Prime strategy**: Two-level hysteresis
+  - **First fill**: Must reach TX_MIC_PRIME_PKTS = 60 packets (~307 ms) before draining starts
+  - **Re-prime after underflow**: TX_MIC_REPRIME_PKTS = 20 packets (~102 ms)
+- **Underflow behavior**: Returns None → pacer sends silence; counter `_mic_underruns` increments
+- **Thread safety**: `_mic_lock` (WS thread writes via `feed_audio()`, pacer thread reads via `get_mic_iq()`)
+
+### Adaptive pacer (server.py `_tx_pacer_thread`)
+- **Pacing**: `time.sleep()`-based, target TX_PACKET_INTERVAL_S = 5.12 ms
+- **Adaptive window**: +/- 25% interval adjustment based on EMA-smoothed queue depth
+- **Target queue depth**: 80 packets (~410 ms)
+- **EMA alpha**: 0.15 (~7 packets, ~35 ms response)
+- **No server-side de-prime**: The pacer never resets its buffer. If the WS stream stalls, the modulator's own two-level hysteresis absorbs the gap; the pacer sends silence during the re-prime period and resumes cleanly.
+
+## Level probes
+
+The modulator maintains four RMS+peak accumulators that capture per-hop magnitude at each gain stage:
+
+| Stage | Key | Description |
+|-------|-----|-------------|
+| `in` | `_lvl_in_*` | Input audio magnitude (pre-drive, pre-Hilbert), divided back by `gain` |
+| `an` | `_lvl_an_*` | Analytic signal magnitude (post-Hilbert), divided back by `gain` |
+| `drv` | `_lvl_drv_*` | Post-drive magnitude (after `TX_DRIVE_GAIN * drive`, before limiter) |
+| `lim` | `_lvl_lim_*` | Post-limiter magnitude (after `tanh`, final IQ amplitude) |
+
+### snapshot_levels() API
+
+```python
+def snapshot_levels(self) -> dict:
+    """Return + reset the per-stage level accumulators.
+
+    Called by server.py at 1 Hz to log end-to-end gain across the TX chain.
+
+    Returns dict with keys:
+        in_sq, in_pk, in_n    -- input stage (sum of squares, peak, count)
+        an_sq, an_pk, an_n    -- analytic stage
+        drv_sq, drv_pk, drv_n  -- post-drive stage
+        lim_sq, lim_pk, lim_n  -- post-limiter stage
+
+    RMS for each stage = sqrt(sq / n), peak = pk.
+    """
 ```
-每个采样 (6 bytes):
-  [0:3] I 分量, 24-bit signed LE, ±2^23 = ±8388608
-  [3:6] Q 分量, 24-bit signed LE
-```
 
-ExpertSDR3 TX 包示例 (前 40 字节):
-```
-32ff fdff b004 0000 0201 00000000000000000000...  ← 静音包
-32ff fdff b004 0100 0201 d59400d59400b37c00...  ← 带调制音频
-```
+Server.py calls `snapshot_levels()` at 1 Hz during TX and logs computed RMS/peak values, providing end-to-end visibility into the gain chain.
 
-## 当前代码链路
+## PTT lifecycle
 
-### 发送路径
+1. Client sends `set_ptt:true` over `/WSCTRX`
+2. Server calls `radio.set_ptt(True)` -- sends DRIVE (0x0017) + PTT ON
+3. Server resets modulator: `reset_tx_ramp()` + `reset_mic()` (clears stale audio, re-arms DC/HPF filter state, resets jitter buffer prime, resets level probes)
+4. Dedicated `_tx_pacer_thread` starts:
+   - Sends TX_SETTLE_PACKETS (17) zero-IQ packets (PA/relay settling)
+   - Applies amplitude ramp over first TX_RAMP_SAMPLES (200) of real IQ
+   - Drains modulator's jitter-buffered IQ queue, with adaptive pacing
+   - Tracks TX IQ power stats (RMS, peak) at 1 Hz
+   - Sends 0xFFFE keep-alive packets every 0.5 s during TX
+5. During TX: main loop receives telemetry (0x1F00: watts, volts, temperature) non-blocking
+6. Client sends `set_ptt:false` (or `s:` emergency release, or watchdog timeout)
+7. Server calls `radio.set_ptt(False)` -- PTT OFF + stream restore (0x0006 + 0x0020)
+8. `tx_thread_stop = True`; pacer thread joins within 1 s
+9. Flush DC-blocked diagnostic capture to `sunmrrc/captures/tx_post_dcblock_*.wav`
+10. Resume normal RX IQ processing
 
-```
-用户点击 PTT
-  → WebSocket "set_ptt:true"
-  → server.py: radio.set_ptt(True)
-  → sunsdr_direct.py: build_packet(0x0006, payload=0, trailing=1)
-  → 设备 TX 灯亮
-  → IQ loop 检测 _ptt_active=True
-  → dsp.get_tx_iq() → 700Hz 测试音调 IQ
-  → 编码为 24-bit → 发到 50002
-```
+## Files
 
-### 接收路径 (WSaudioTX)
+| File | Role |
+|------|------|
+| `web_control/dsp.py` | TXModulator class: filters, resampler, Hilbert SSB, encode, jitter buffer, level probes |
+| `sunmrrc/server.py` | `/WSaudioTX` handler, PTT lifecycle, TX pacer thread, packet construction, telemetry |
+| `sunmrrc/static/controls.js` | Client TX audio capture, AudioWorklet, Opus encode, PTT button state machine |
+| `sunmrrc/static/modules/tx_sab_ring.js` | SAB ring buffer for TX audio path (low-latency shared memory) |
+| `sunmrrc/static/tx_opus_worker.js` | Opus encoding worker for TX audio |
+| `sunmrrc/static/tx_capture_worklet.js` | AudioWorklet for mic capture |
+| `web_control/sunsdr_direct.py` | `set_ptt()`, `set_tune()`, DRIVE command (0x0017), hardware control |
 
-```
-浏览器麦克风
-  → getUserMedia() → AudioContext
-  → Float32 PCM @ 浏览器采样率
-  → WebSocket 二进制帧 → /WSaudioTX
-  → 当前被丢弃 (未接入 TX 调制器)
-```
+## Key constants
 
-## 文件清单
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `TX_IQ_PEAK` | 1.0 | Full-scale IQ ceiling (tanh knee) |
+| `TX_DRIVE_GAIN` | 2.8 | Flat make-up gain before limiter |
+| `TX_TUNE_SCALE` | 0.35 | Tune carrier amplitude fraction (~10 W safe level) |
+| `TX_SETTLE_PACKETS` | 17 | Zero-IQ packets for PA/relay settling (~87 ms) |
+| `TX_RAMP_SAMPLES` | 200 | Amplitude ramp length (~5.1 ms) |
+| `TX_MIC_PRIME_PKTS` | 60 | Jitter buffer first-fill watermark (~307 ms) |
+| `TX_MIC_REPRIME_PKTS` | 20 | Jitter buffer re-prime watermark (~102 ms) |
+| `TX_HILBERT_MARGIN` | 256 | Overlap-save context samples each side |
+| `TX_AUDIO_PER_PKT` | 80 | Audio samples per modulation hop (5.12 ms) |
+| `TX_PACKET_SAMPLES` | 200 | IQ samples per packet |
+| `TX_PACKET_INTERVAL_S` | 0.00512 | Pacing interval between packets |
 
-| 文件 | 函数/行 | 作用 | 状态 |
-|------|---------|------|------|
-| `sunsdr_direct.py:set_ptt()` | PTT 控制 | build_packet(0x0006, payload=0, trailing=1/0) | ✅ |
-| `server.py:84-91` | TX IQ 发送 | get_tx_iq() → 50002 | ✅ |
-| `dsp.py:TXModulator` | 音频→IQ | generate_test_tone() / feed_audio() | 🔶 |
-| `server.py:WSaudioTX` | 浏览器麦克风 | 接收 PCM, 未接入 | ❌ |
+## No WDSP TX C-chain
 
-## 测试方法
-
-### 前提条件
-- 服务已启动：`cd web_control && WEB_PORT=8889 bash restart.sh`
-- 设备 TX 灯在 PTT 后能亮
-- 有一台独立接收机，调到相同频率（如 7.074 MHz），模式 USB
-
-### 测试1: 检查 TX 包内容
-
-```bash
-# 抓包确认 TX 包是否有非零数据
-sudo tcpdump -i en0 -c 50 -X "host 192.168.16.200 and udp and port 50002" &
-PID=$!
-curl -X POST http://localhost:8889/api/ptt/on
-sleep 3
-curl -X POST http://localhost:8889/api/ptt/off
-sudo kill $PID
-# 在抓包里找 sub=0xFFFD 的包，检查 IQ 数据是否非零
-```
-
-### 测试2: 接收机听 700Hz 测试音调
-
-```bash
-# 1. 确认服务运行 http://localhost:8889
-# 2. 旁边接收机调到 7.074 MHz USB
-# 3. 触发 PTT
-curl -X POST http://localhost:8889/api/ptt/on
-# 4. 听 5 秒
-sleep 5
-# 5. 关 PTT
-curl -X POST http://localhost:8889/api/ptt/off
-```
-
-**预期**：接收机在 USB 模式下听到 700Hz 持续音调。如果听到 → TX 链路完整。如果没听到 → TX 包内容仍为全零，需检查 `dsp.get_tx_iq()` 返回值。
-
-### 测试3: 浏览器麦克风
-
-```bash
-# 打开 http://localhost:8889
-# 1. 浏览器会请求麦克风权限（getUserMedia）
-# 2. 允许后，点击 PTT 按钮
-# 3. 对着麦克风说话
-# 4. 接收机应能听到声音
-```
-当前状态：浏览器麦克风数据到达 `/WSaudioTX` 但未接入 TXModulator。需将 `WSaudioTX` 收到的 Float32 PCM 喂入 `TXModulator.feed_audio()`。
-
-### 测试4: 链路端点验证
-
-```bash
-# 状态
-curl http://localhost:8889/api/status
-# → {"connected":true, "dsp":true, "clients":{...}}
-
-# 设频
-curl -X POST http://localhost:8889/api/ptt/on
-# → {"ok":true,"ptt":true}
-```
-
-## 待完成
-
-1. **验证测试音调** — 启动服务, PTT, 接收机听 700Hz
-2. **Hilbert SSB 调制** — `scipy.signal.hilbert` 替代导数近似
-3. **WSaudioTX 接入** — 浏览器 Float32 PCM → TXModulator.feed_audio()
-4. **音频重采样** — 浏览器 rate → 16000 → 78125
+WDSP (`libwdsp.dylib`) is used only for RX demodulation (AGC, NR2, NB, ANF). All TX modulation -- filtering, resampling, Hilbert SSB, limiting -- is implemented in pure Python/NumPy/SciPy. The earlier WDSP TX C-chain was never activated and has been fully removed from the codebase.

@@ -189,6 +189,65 @@ Healthy gain staging shows `in` peak ~0.5, `drv` peak ~2.0, `lim` peak ~0.96. If
 
 **Consequences**: Client gain staging is now documented as a design decision, not an implementation detail. The level probes provide continuous observability. TX power adjustment is done via device drive %, not by changing TX_DRIVE_GAIN (which would upset the gain staging).
 
+## AD-013: Remove WDSP TX C-Chain — Python Hilbert Overlap-Save is the Sole SSB Modulator
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Architectural |
+| Status | Implemented |
+| Decision | Remove the `WDSPTXProcessor` class, its 82 TX symbol bindings, and all `set_wdsp_tx_*` control methods. Python Hilbert overlap-save (in `dsp.py`) is the sole SSB modulation path. Remove the TX PROC frontend UI panel. |
+
+**Problem**: Channel 2 `fexchange0` WDSP calls produced zero IQ output on TXA mode — the WDSP TX C-chain is designed for a different filter-exchange topology than SunSDR2 DX IQ streaming. Server startup took one extra `OpenChannel` call (~5s) to initialize a chain that never worked.
+
+**Rationale**: The Python-native Hilbert overlap-save modulator (already working and on-air verified) handles SSB modulation with full control over gain staging, DC blocking, and the tanh soft limiter. Removing the dead WDSP TX path simplifies the codebase, speeds startup, and eliminates non-functional frontend controls.
+
+**Consequences**: `WDSPProcessor` now handles RX only (channel 0). Server startup ~5s faster. The TX PROC menu panel is removed from the frontend. All `set_wdsp_tx_*` and `get_wdsp_tx_status` server control methods are deleted. 82 ctypes symbol bindings freed from `wdsp_wrapper.py`.
+
+## AD-014: SharedArrayBuffer Ring Buffer for TX Audio — Zero Main-Thread Path
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Architecture |
+| Status | Implemented |
+| Decision | TX audio capture uses a `SharedArrayBuffer`-backed lock-free ring buffer between the `AudioWorklet` (producer: writes float32 samples) and a dedicated Opus Worker (consumer: polls, encodes, sends via its own WebSocket). The main thread never touches audio samples. |
+
+**Problem**: The original TX path ran all audio processing on the main thread — `getUserMedia` → `ScriptProcessorNode` → encode → `WebSocket.send()`. Main-thread garbage collection pauses caused audio dropouts and timing jitter that corrupted the SSB envelope.
+
+**Rationale**: Moving the entire TX audio pipeline off the main thread eliminates GC-pause-induced stalls. The `AudioWorklet` (real-time priority) writes samples to a `SharedArrayBuffer` ring. A dedicated Web Worker polls the ring, runs the Opus WASM encoder, and sends frames via its own `WebSocket` (Workers can own WebSocket connections directly). The main thread only manages UI state and `WSCTRX` control — it never touches audio sample data. Ring size: 16384 float32 samples @ 16 kHz = 1.024 s buffer, enough to absorb transient scheduling jitter without overrun.
+
+**Consequences**: Requires `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` response headers to enable `SharedArrayBuffer` in the browser (see AD-016). The `AudioWorklet` and Opus Worker communicate exclusively through the SAB ring — no `postMessage` audio copies. The main-thread `ScriptProcessorNode` path is removed entirely. Module files: `tx_sab_ring.js` (ring buffer protocol), `tx_opus_worker.js` (consumer), `tx_capture_worklet.js` (producer, updated to SAB path).
+
+## AD-015: 300 Hz Highpass Filter for SSB Voice Efficiency
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Design |
+| Status | Implemented |
+| Decision | Insert a 4th-order Butterworth highpass filter at 300 Hz between the DC-blocking filter and the anti-alias LPF in the TX `feed_audio` chain. Cutoff chosen to reject the energy band that SSB suppresses by design (<300 Hz), directing PA power into the voice band (300–2800 Hz). |
+
+**Problem**: SDR waterfall analysis of the TX signal showed 38.7% of microphone energy falling below 300 Hz. SSB suppresses the lower sideband and carrier, so energy below 300 Hz contributes negligible intelligibility but consumes PA headroom — it is effectively wasted transmitter power. Every watt spent on sub-300 Hz content is a watt not available for the voice band.
+
+**Rationale**: A 4th-order Butterworth IIR (24 dB/octave) at 300 Hz provides steep rejection of the useless band with minimal phase distortion in the passband. Placed between the DC blocker and anti-alias LPF in the server-side `feed_audio()` chain, it filters every audio path uniformly. Verified improvement from SDR waterfall analysis before/after:
+- Energy below 300 Hz: 30.4% → 3.7% of total TX envelope power
+- SSB voice band (300–2800 Hz): 69% → 96% of total TX envelope power
+- Net effect: ~27 percentage-point shift of PA energy from the suppressed band into the usable voice band.
+
+**Consequences**: The HPF is always active — no user toggle (there is no legitimate use case for transmitting sub-300 Hz energy in SSB). Filter coefficients are computed at server startup via `scipy.signal.butter`. The anti-alias LPF that follows can be gentler since low-frequency energy no longer dominates the input. On-air voice reports show improved punch and clarity at the same drive setting, consistent with the higher in-band power fraction.
+
+## AD-016: COEP credentialless — Enables SharedArrayBuffer Without Breaking Worker importScripts()
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Operational |
+| Status | Implemented |
+| Decision | Use `Cross-Origin-Embedder-Policy: credentialless` instead of `require-corp`. This enables `SharedArrayBuffer` (required for AD-014) while allowing Web Workers to call `importScripts()` for Opus WASM modules without requiring `Cross-Origin-Resource-Policy` headers on subresources. |
+
+**Problem**: The `require-corp` COEP value, while sufficient to enable `SharedArrayBuffer`, silently blocks `importScripts()` inside Web Workers on Safari when loading Opus WASM decoder/encoder modules. Safari requires CORP headers (`Cross-Origin-Resource-Policy: cross-origin`) on every script fetched by `importScripts()` when COEP is `require-corp`. These headers are not set by the FastAPI `StaticFiles` mount, so the Opus Worker would fail to load its WASM module with no visible error (Safari suppresses cross-origin script errors in Workers).
+
+**Rationale**: `credentialless` is the newer COEP value designed specifically for this scenario. It enables `SharedArrayBuffer` (satisfying the browser's cross-origin isolation requirement) but strips credentials (cookies, auth headers) from cross-origin subresource requests rather than requiring explicit CORP headers. Since all Opus WASM assets are same-origin (served from `/static/`), credential stripping has no effect. The main downside of `require-corp` — breaking innocent `importScripts()` — is avoided entirely.
+
+**Consequences**: Response headers are `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless`. This pair enables `SharedArrayBuffer` and allows Worker `importScripts()` on all browsers (Chrome, Firefox, Safari). No `Cross-Origin-Resource-Policy` headers are needed on static assets. If the app later loads cross-origin resources (e.g., CDN scripts), they will load without credentials, which may require CORS configuration on the CDN side. For the current same-origin architecture, this is a strict improvement over `require-corp`.
+
 ## 8.11 Decision Summary
 
 | ID | Topic | Status |
@@ -205,3 +264,7 @@ Healthy gain staging shows `in` peak ~0.5, `drv` peak ~2.0, `lim` peak ~0.96. If
 | AD-010 | TX power via device DRIVE (0x0017) | Implemented |
 | AD-011 | TX telemetry from 0x1F00 verified field offsets (forward W, supply V, PA temp °C; no SWR) | Implemented (corrected 2026-06-25) |
 | AD-012 | TX audio gain staging: client preamp ×1.5, server TX_DRIVE_GAIN ×3.0, TX_IQ_PEAK 1.0, tanh soft limiter with light engagement | Implemented |
+| AD-013 | WDSP TX C-chain removal — Python Hilbert overlap-save is the sole SSB modulator | Implemented |
+| AD-014 | SharedArrayBuffer ring buffer for TX audio — zero main-thread path | Implemented |
+| AD-015 | 300 Hz highpass filter for SSB voice efficiency | Implemented |
+| AD-016 | COEP credentialless — enables SAB without breaking Worker importScripts() | Implemented |

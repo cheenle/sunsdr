@@ -141,6 +141,8 @@ PTT released  →  TX pacer thread stops
 
 The pacer thread is tied to `radio._ptt_active`. When PTT releases (from any path), the while-loop exits, the thread joins, and no further IQ packets are sent. This is the hardware-level guarantee that TX stops when PTT is false.
 
+The TX modulation path is pure Python (Hilbert SSB in `dsp.py` `TXModulator`); the WDSP C-chain was removed and has no bearing on PTT safety. All safety layers operate above the DSP level.
+
 ## 15.11 PTT Status Display
 
 | State | Color | Meaning |

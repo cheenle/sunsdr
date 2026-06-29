@@ -13,6 +13,18 @@
 | SDD V3.4 | 2026-06-26 | Claude | **TX telemetry field correction**: off30 f32 = forward watts (not off14 cubic fit), off16 u16 = supply volts ×10 (NOT SWR), off18 f32 = PA temp °C. Device has NO reverse-power → no SWR. AD-011 completely rewritten. **TX gain staging (AD-012)**: client preamp 3.0→1.5, server TX_DRIVE_GAIN=3.0, TX_IQ_PEAK=1.0 with tanh soft limiter. 9.5.2 TX signal chain architecture + level-probe diagnostics added. SVG architecture diagrams (system, TX gain staging, telemetry flow). **Ch 15 PTT Safety Architecture**: comprehensive 8-layer defense-in-depth model, full component coverage, SVG diagram. |
 | SDD V3.5 | 2026-06-26 | Claude | **Code-sync pass** — reconciled SDD with current source. **Port corrected** to `8889` (server.py default + restart.sh) across all chapters (was `8080`/`8081`). **Bind host** is `[::]` IPv6 dual-stack, not `0.0.0.0`. **`start.sh` removed** — only `restart.sh` exists; ch11 StartScript and ch13 I7 dropped, ch12 startup modes rewritten. **Session auth documented as implemented** (was "no server-side auth"): shared-password `_auth_tokens` + `sunmrrc_auth` cookie + `?token=` WS gating; ch5 NFR-023, ch7, ch11 updated. **Audio transport** reframed as tagged dual-codec (Opus default, Int16 PCM fallback) in the older chapters 2/3/4/5/10 that still said Int16-only. **TX voice** marked High/on-air-verified in ch6 UC-005 and ch13 (was "unresolved"/"not complete"). **Recordings** moved from out-of-scope to implemented (ch3). |
 | **SunMRRC V1.0** | **2026-06-24** | **Claude** | **🎉 Initial production release.** RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.4 baseline. |
+| SDD V3.6 | 2026-06-30 | Claude | TX architecture improvements: WDSP TX C-chain removed (AD-013), SharedArrayBuffer ring buffer for TX audio (AD-014), 300 Hz HPF for SSB efficiency (AD-015), COEP credentialless (AD-016); continuous DC blocker, pre-bound IQ socket, dedicated keep-alive thread, TX pacer de-prime removal |
+
+## Key Changes in SDD V3.6
+
+| Chapter | Change |
+|---------|--------|
+| 4 | TX audio data flow updated: AudioWorklet → SAB ring → Opus Worker → own WebSocket; zero main-thread path |
+| 8 | AD-013 (WDSP TX C-chain removal), AD-014 (SAB ring buffer TX audio), AD-015 (300 Hz HPF SSB efficiency), AD-016 (COEP credentialless) added |
+| 9 | TX signal chain: WDSP TX block removed; 300 Hz Butterworth HPF inserted between DC blocker and anti-alias LPF; dedicated keep-alive thread for IQ socket; pre-bound IQ socket for faster TX start; TX pacer de-prime removed (blocking read eliminated) |
+| 11 | TXModulator simplified: WDSPTXProcessor class deleted (82 symbol bindings freed); WDSPProcessor is RX-only (channel 0); TX PROC UI panel removed; new modules: `tx_sab_ring.js` (ring buffer), `tx_opus_worker.js` (consumer), `tx_capture_worklet.js` (SAB producer) |
+| 12 | Server startup ~5s faster (one less WDSP `OpenChannel`); TX audio path — main thread no longer touches audio samples; COOP/COEP headers set to `credentialless` for Safari importScripts() compat |
+| 14 | Added this V3.6 changelog |
 
 ## Key Changes in SDD V3.5
 
