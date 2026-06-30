@@ -97,12 +97,17 @@ TX_RAMP_SAMPLES = 200
 # Two-level hysteresis:
 #   - /WSaudioTX pacer now has NO de-prime (see server.py), so THIS layer is
 #     the sole jitter guard.  It must absorb browser GC pauses up to ~300 ms
-#     (observed 287 ms in server logs).  The TX pacer thread targets 80 pkts
-#     and can slow ±25% to help the queue refill after a gap.
+#     (observed 287 ms in server logs).  The TX pacer backpressure holds the
+#     steady-state queue at ~80 pkts (~410 ms), comfortably above that pause,
+#     so a single GC stall no longer empties the buffer.
 #   - First fill reaches TX_MIC_PRIME_PKTS (~307 ms), underflow re-primes
-#     to TX_MIC_REPRIME_PKTS (~102 ms).
+#     to TX_MIC_REPRIME_PKTS (~41 ms).  The reprime is deliberately SHALLOW so
+#     the audible silence hole on an underflow is short; the pacer backpressure
+#     (no-sleep below 80 pkts) then refills to the deep steady cushion within a
+#     few tens of ms.  A deep reprime (the old 102 ms) made every underflow a
+#     ~100 ms transmitted-silence hole — the dominant cause of TX choppiness.
 TX_MIC_PRIME_PKTS = 60       # ~307 ms — survive worst-case browser gap (was 28)
-TX_MIC_REPRIME_PKTS = 20     # ~102 ms — faster recovery, still safe (was 14)
+TX_MIC_REPRIME_PKTS = 8      # ~41 ms — short silence hole on underflow; backpressure refills to the ~80-pkt cushion (was 20)
 # Audio-rate samples carried across feed_audio() calls so each streaming
 # Hilbert transform has history/look-ahead context and no per-chunk edge
 # transient (buzz). Trimmed off both ends after the transform.

@@ -71,6 +71,12 @@ STREAM_CTRL_TRAILING = 0x64  # 100
 
 def build_stream_ctrl() -> bytes:
     """Build the 0x0020 STREAM_CTRL packet (rate-independent, always the same)."""
+    # word[1]=0 is load-bearing: ExpertSDR3 sends word[1]=1, but that value
+    # killed TX power on SunSDR2 (verified). Guard it so a future refactor
+    # against an ExpertSDR3 capture can't silently regress TX power to ~0.
+    assert STREAM_CTRL_WORDS[1] == 0, (
+        "STREAM_CTRL word[1] must stay 0 — word[1]=1 kills SunSDR2 TX power "
+        "(see capture notes above)")
     payload = struct.pack("<%dI" % len(STREAM_CTRL_WORDS), *STREAM_CTRL_WORDS)
     return build_packet(CmdID.STREAM_CTRL, payload, trailing=STREAM_CTRL_TRAILING)
 
@@ -197,6 +203,7 @@ class SunSDR2DXClient:
         self.host = host
         self._sock: Optional[socket.socket] = None
         self._connected = False
+        self._rebooting = False
 
         # State
         self.rx_freq: float = 7_074_000.0
@@ -389,6 +396,36 @@ class SunSDR2DXClient:
         await self._send_boot_sequence()
         logger.info("Sample rate switch complete: %s", key)
         return True
+
+    async def reboot(self) -> bool:
+        """Re-run the boot/stream-start sequence to recover a stalled IQ stream.
+
+        Control-port only: this re-sends HW_INIT, frequencies, STREAM_CTRL and
+        the post-stream commands over port 50001. It deliberately does NOT touch
+        the pre-bound IQ socket (port 50002, owned by server.py) — re-provoking
+        the device's stream is enough to bring IQ packets back.
+
+        `connected` stays True throughout: the heartbeat and keep-alive threads
+        both loop on `radio.connected`, so flipping it False would kill the very
+        threads needed to re-provoke the stream. A `_rebooting` guard prevents
+        overlapping recovery attempts.
+
+        Returns True if the reboot ran, False if one was already in progress.
+        """
+        if getattr(self, "_rebooting", False):
+            return False
+        self._rebooting = True
+        try:
+            logger.warning("IQ recovery: re-booting stream (rate=%s)",
+                           self.sample_rate_key)
+            await self._send_boot_sequence()
+            logger.info("IQ recovery: re-boot complete")
+            return True
+        except Exception as e:
+            logger.error("IQ recovery: re-boot failed: %s", e)
+            return False
+        finally:
+            self._rebooting = False
 
     # ── Mode / Filter / AGC ───────────────────────────────────
 

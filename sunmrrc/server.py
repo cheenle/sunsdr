@@ -228,7 +228,10 @@ recording_rate = 0  # RX audio rate (Hz) captured when recording starts; the
 RECORDINGS_DIR = STATIC_DIR / "recordings"
 TX_UPLINK_CAPTURE_DIR = Path(__file__).parent / "captures"
 TX_WS_JITTER_PRIME_FRAMES = 10      # 200 ms initial fill before draining starts
-TX_WS_JITTER_MAX_FRAMES = 30        # 600 ms — drop oldest when queue exceeds this
+TX_WS_JITTER_MAX_FRAMES = 60        # 1200 ms — deep enough to absorb worst-case WiFi burst-gap cycles.
+# No de-prime: once primed, the pacer drains every available frame immediately.
+# An empty queue just means "wait for next frame" — the modulator's own jitter
+# buffer (TX_MIC_PRIME_PKTS / TX_MIC_REPRIME_PKTS in dsp.py) is the safety net.
 # No de-prime: once primed, the pacer drains every available frame immediately.
 # An empty queue (browser GC pause) just means "wait for next frame" — no forced
 # silence for re-buffering.  The modulator's own jitter buffer (TX_MIC_PRIME_PKTS
@@ -863,6 +866,20 @@ async def _process_iq_stream():
     pkt_count = 0; iq_count = 0; spec_count = 0; audio_count = 0
     last_stats = time.monotonic()
     last_keepalive = time.monotonic()
+    # ── IQ stall watchdog → stream re-boot ───────────────────────────
+    # If no 0xFFFE IQ packet arrives for RECOVERY_IDLE_SEC while we're in
+    # RX (and dsp_proc is ready), re-run the boot/stream-start sequence to
+    # re-provoke the device.  radio.reboot() keeps `connected` True (the
+    # heartbeat + keep-alive threads loop on it), touches only the control
+    # port, and self-guards against overlap.  Gated off during PTT so it
+    # can't interrupt a transmission, and rate-limited by a cooldown so a
+    # genuinely dead device doesn't trigger a re-boot storm.  last_iq_ts is
+    # seeded at loop start so the ~11 s WDSP channel-init window (during
+    # which dsp_proc is None anyway) never trips it.
+    RECOVERY_IDLE_SEC = 15.0
+    RECOVERY_COOLDOWN_SEC = 20.0
+    last_iq_ts = time.monotonic()
+    last_recovery_ts = 0.0
     # Verified from device/captures/sunsdr_sdr_tx.pcap: ExpertSDR3 paces TX IQ
     # at 5.12 ms/packet (39063 Hz, RX/2), NOT 2.56 ms. See PROTOCOL.md §17.
     TX_INTERVAL = TX_PACKET_INTERVAL_S  # 0.00512 s per packet (195.3 Hz)
@@ -870,6 +887,28 @@ async def _process_iq_stream():
     tx_thread = None
     tx_thread_stop = False
     tx_keepalive_due = False
+    # TX-period keep-alive counter (separate from 0xFFFD to avoid interleaving
+    # gaps that the device may interpret as missing IQ packets).
+    _tx_ka_ctr = 0x04B0
+
+    # ── TX continuity probe: align our outgoing IQ envelope with the device's
+    # measured forward power (0x1F00) on one timeline. ─────────────────────
+    # The pacer thread (39063 Hz) computes the IQ envelope we SEND; the device
+    # reports the watts it actually RADIATES (~10 Hz). Writing both on one row,
+    # timestamped at telemetry arrival, lets analyze_tx_continuity.py decide
+    # whether a power dip is OUR audio dropping out (IQ envelope also dips →
+    # underrun/jitter) or an RF/device-side issue (IQ steady, watts dip).
+    # The pacer publishes a short-window envelope snapshot into this 1-element
+    # holder; single-element list write/read is atomic under the GIL, so no
+    # lock is needed across the pacer thread / asyncio loop boundary.
+    #   snapshot = (mono_ts, iq_rms, iq_peak, q_depth, underruns)
+    _tx_env_snapshot: list = [(0.0, 0.0, 0.0, 0, 0)]
+    # Aligned continuity CSV (opened when a TX burst starts, closed on PTT off).
+    # One row per device telemetry frame (~10 Hz): the device's measured watts
+    # next to the IQ envelope we were sending at that instant. Truncated per
+    # keying so each analysis sees one clean burst.
+    _TX_CONT_PATH = "/tmp/tx_continuity.csv"
+    _tx_cont_csv = None  # file object while a TX burst is active, else None
 
     def _build_one_tx_packet(silent: bool = False) -> bytes:
         """Build a single 1210-byte TX IQ packet (header + payload).
@@ -894,21 +933,15 @@ async def _process_iq_stream():
         """Dedicated OS thread — time.sleep()-paced TX at TX_PACKET_INTERVAL_S
         (5.12ms, 195 pkt/s, 39063 Hz) to match ExpertSDR3. See PROTOCOL.md §17.
 
-        ADAPTIVE PACING: the browser produces mic frames at a rate slightly
-        below the fixed pacer consumption (measured ≈43 vs ≈49 pkt/s on the
-        test session, a ~5 pkt/s deficit). A fixed cadence would drain a 120 ms
-        buffer in ~17 s, causing periodic underflow/stutter. So the pacer
-        tracks an EMA of queue depth and scales the per-packet interval
-        within ±25%: when the queue is below the 80-packet target it slows down,
-        letting production refill; when above target it speeds back up.
-        A deeper 1024-pkt buffer absorbs the short-term jitter (see dsp.py).
+        FIXED PACING: the device DAC expects IQ at exactly 39063 Hz.  Slowing
+        the pacer below this rate (the old adaptive pacing) starves the device's
+        hardware buffer and causes periodic dropouts the far end hears as
+        stuttering ("卡顿断续").  The modulator's jitter buffer (TX_MIC_PRIME_PKTS
+        / TX_MIC_REPRIME_PKTS = 60/20 pkts) absorbs short-term production jitter;
+        the pacer itself runs at the FIXED device rate.  Queue depth is still
+        logged for diagnostics but no longer controls the interval.
         """
         global tx_keepalive_due
-        # Adaptive pacing state
-        _Q_TARGET = 80.0                     # ~410 ms buffer — survive 300ms browser gaps (was 45)
-        _ADAPTIVE_ALPHA = 0.15               # EMA over ~7 packets (~35 ms) — faster response
-        _ADAPTIVE_MAX = 0.25                 # ±25% — wider range to refill faster after gaps (was 0.15)
-        _q_ema = _Q_TARGET                   # start at target to avoid transient
         # Diagnostic probe: every 20th packet (~10 Hz) write a CSV row with
         # actual send interval, queue depth, silence flag, and whether the
         # pacer fell behind. Keeps overhead low while capturing real per-
@@ -933,6 +966,14 @@ async def _process_iq_stream():
         _pwr_n = 0
         _pwr_n_pkts = 0
         _pwr_log_last = time.monotonic()
+        # Short-window (~100 ms) envelope accumulators for the continuity
+        # snapshot. Separate from the 1 Hz log accumulators so the snapshot
+        # reflects RECENT envelope (aligned with ~10 Hz device telemetry),
+        # not a whole-second average that would blur over voice syllables.
+        _snap_sum_sq = 0.0
+        _snap_peak = 0.0
+        _snap_n = 0
+        _snap_last = time.monotonic()
         next_pkt = time.monotonic()
         # PA/relay settling pad: zero-IQ packets before real modulation.
         settle_left = TX_SETTLE_PACKETS
@@ -966,21 +1007,25 @@ async def _process_iq_stream():
                             _pwr_n += 1
                             if _mag > _pwr_peak:
                                 _pwr_peak = _mag
+                            # Short-window snapshot accumulators (~100 ms)
+                            _snap_sum_sq += _mag * _mag
+                            _snap_n += 1
+                            if _mag > _snap_peak:
+                                _snap_peak = _mag
             except Exception:
                 pass
-            # Adaptive interval: EMA of queue depth, scale within ±15%.
+            # ── Fixed interval: the device DAC expects IQ at exactly 39063 Hz.
+            # Queue depth is logged for diagnostics but no longer controls the
+            # packet interval (see docstring above).
             try:
                 if dsp_proc and dsp_proc.modulator is not None:
                     with dsp_proc.modulator._mic_lock:
                         _q_now = float(len(dsp_proc.modulator._mic_iq))
                 else:
-                    _q_now = _Q_TARGET
+                    _q_now = 0.0
             except Exception:
-                _q_now = _Q_TARGET
-            _q_ema = _ADAPTIVE_ALPHA * _q_now + (1 - _ADAPTIVE_ALPHA) * _q_ema
-            err = (_q_ema - _Q_TARGET) / _Q_TARGET          # -1..+1 range
-            scale = 1.0 - max(-_ADAPTIVE_MAX, min(_ADAPTIVE_MAX, err))
-            adaptive_iv = TX_INTERVAL * scale
+                _q_now = 0.0
+            adaptive_iv = TX_INTERVAL       # FIXED 5.12 ms — never slow below device IQ rate
             next_pkt += adaptive_iv
             now = time.monotonic()
             delay = next_pkt - now
@@ -991,6 +1036,26 @@ async def _process_iq_stream():
                 if delay < -0.005:
                     tx_keepalive_due = True  # signal RX loop: we're behind, send keep-alive soon
                 next_pkt = now + adaptive_iv
+            # ~10 Hz: publish a short-window IQ envelope snapshot so the
+            # telemetry handler (which receives the device's measured forward
+            # power at ~10 Hz) can write one aligned CSV row: what WE sent
+            # (IQ rms/peak) vs what the DEVICE transmitted (watts). A genuine
+            # audio underrun shows as IQ rms dropping to ~0 mid-syllable; an
+            # RF/device-side issue shows IQ rms steady but watts collapsing.
+            if _snap_n > 0 and (now - _snap_last) >= 0.1:
+                _snap_rms = (_snap_sum_sq / _snap_n) ** 0.5
+                try:
+                    _ur_snap = dsp_proc.modulator._mic_underruns if (
+                        dsp_proc and dsp_proc.modulator) else -1
+                except Exception:
+                    _ur_snap = -1
+                # Single-assignment publish: readers see a complete tuple.
+                _tx_env_snapshot[0] = (now, _snap_rms, _snap_peak,
+                                       int(_q_now), _ur_snap)
+                _snap_sum_sq = 0.0
+                _snap_peak = 0.0
+                _snap_n = 0
+                _snap_last = now
             # Probe (every Nth packet): record timing, queue depth, flags
             _probe_cnt += 1
             if _probe_file and (_probe_cnt % _PROBE_EVERY == 0):
@@ -1043,12 +1108,24 @@ async def _process_iq_stream():
             tx_thread_stop = False
             tx_thread = th.Thread(target=_tx_pacer_thread, daemon=True)
             tx_thread.start()
+            # ── Open the per-TX continuity CSV (truncate per keying). ──
+            # Aligns the IQ envelope WE send with the watts the DEVICE
+            # radiates, one row per telemetry tick (~10 Hz). Analyzed by
+            # analyze_tx_continuity.py.
+            _tx_cont_t0 = time.monotonic()
+            try:
+                _tx_cont_csv = open(_TX_CONT_PATH, "w", buffering=1)
+                _tx_cont_csv.write(
+                    "mono_ts,t_rel,watts,volts,temp_c,"
+                    "iq_rms,iq_peak,q_depth,underruns,snap_age_ms\n")
+            except Exception:
+                _tx_cont_csv = None
             # Wait for PTT release — keep receiving telemetry during TX
             while getattr(radio, '_ptt_active', False) and radio.connected:
                 now = time.monotonic()
                 if tx_keepalive_due or (now - last_keepalive >= 0.5):
-                    ctr = _next_tx_counter()
-                    ka_hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, ctr, 0x0001)
+                    _tx_ka_ctr = (_tx_ka_ctr + 0x10000) & 0xFFFFFFFF
+                    ka_hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, _tx_ka_ctr, 0x0001)
                     try:
                         iq_sock.sendto(ka_hdr + b'\x00' * 1200, (DEVICE_HOST, 50002))
                     except Exception:
@@ -1071,6 +1148,22 @@ async def _process_iq_stream():
                                     temp_c = struct.unpack_from('<f', raw_rx, TELEM_TEMP_OFF)[0]
                                     asyncio.ensure_future(_send_ctrl(
                                         f"getTXTelem:{watts:.1f},{volts:.1f},{temp_c:.0f},{int(watts)}"))
+                                    # ── Aligned continuity row: device watts vs
+                                    # the IQ envelope we sent (latest snapshot).
+                                    # snapshot = (mono_ts, iq_rms, iq_peak,
+                                    #             q_depth, underruns)
+                                    if _tx_cont_csv is not None:
+                                        s_ts, s_rms, s_peak, s_q, s_ur = _tx_env_snapshot[0]
+                                        snap_age_ms = (now - s_ts) * 1000.0 if s_ts > 0 else -1.0
+                                        t_rel = now - _tx_cont_t0
+                                        try:
+                                            _tx_cont_csv.write(
+                                                f"{now:.6f},{t_rel:.3f},{watts:.2f},"
+                                                f"{volts:.1f},{temp_c:.0f},"
+                                                f"{s_rms:.5f},{s_peak:.5f},"
+                                                f"{s_q},{s_ur},{snap_age_ms:.1f}\n")
+                                        except Exception:
+                                            pass
                                 except Exception:
                                     pass
                 except (asyncio.TimeoutError, asyncio.CancelledError):
@@ -1082,6 +1175,13 @@ async def _process_iq_stream():
             if tx_thread and tx_thread.is_alive():
                 tx_thread.join(timeout=1.0)
             tx_thread = None
+            # Close the per-TX continuity CSV (flush this burst's rows).
+            if _tx_cont_csv is not None:
+                try:
+                    _tx_cont_csv.close()
+                except Exception:
+                    pass
+                _tx_cont_csv = None
             loop_counter += 1
             continue
 
@@ -1095,6 +1195,26 @@ async def _process_iq_stream():
             try: iq_sock.sendto(hdr + b'\x00'*1200, ("192.168.16.200", 50002))
             except: pass
             last_keepalive = now
+
+        # ── IQ stall watchdog → stream re-boot ───────────────────
+        # If IQ packets stop arriving while the device should be streaming,
+        # re-run the boot/stream-start sequence to re-provoke the stream.
+        # Gated so it can't fire spuriously:
+        #   • dsp_proc ready   — skip the ~11s WDSP init window at startup
+        #   • not _ptt_active  — never re-boot mid-transmit
+        #   • idle > 15s       — well past the 0.5s keep-alive cadence
+        #   • cooldown > 20s   — one re-boot at a time, no storm
+        # reboot() keeps radio.connected True (the keep-alive/heartbeat
+        # threads loop on it) and has its own _rebooting re-entry guard.
+        if (dsp_proc is not None
+                and not getattr(radio, '_ptt_active', False)
+                and now - last_iq_ts > RECOVERY_IDLE_SEC
+                and now - last_recovery_ts > RECOVERY_COOLDOWN_SEC):
+            logger.warning(
+                "IQ recovery: no IQ for %.0fs — re-booting stream",
+                now - last_iq_ts)
+            last_recovery_ts = now
+            asyncio.ensure_future(radio.reboot())
 
         try:
             data = await asyncio.wait_for(loop.sock_recvfrom(iq_sock, 65536), timeout=0.5)
@@ -1134,6 +1254,7 @@ async def _process_iq_stream():
             if dsp_proc is None:
                 continue
             iq_count += 1
+            last_iq_ts = time.monotonic()  # watchdog: stream is alive
             payload = raw[10:]; n = min(200, len(payload)//6)
             iq = np.zeros(n, dtype=np.complex64)
             for i in range(n):
@@ -1749,40 +1870,82 @@ async def ws_audio_tx(ws: WebSocket):
                 pass
 
     async def _tx_uplink_pacer():
-        """Drain WS PCM frames at their native cadence (1 frame / frame_duration).
+        """Drain WS PCM frames as fast as they arrive (immediate drain).
 
-        Once TX_WS_JITTER_PRIME_FRAMES accumulate (initial fill), draining starts
-        and NEVER de-primes.  An empty queue (browser GC pause) just means "wait
-        for the next frame" — the modulator's own jitter buffer absorbs the gap.
+        Frames are drained from _tx_pcm_queue continuously — no per-frame
+        sleep, no clock-driven pacing.  The modulator's own jitter buffer
+        (_mic_iq, 60/20 packet hysteresis) absorbs short-term WiFi jitter.
+        The WS queue itself (TX_WS_JITTER_MAX_FRAMES=60, ~1.2 s) provides
+        a first stage of absorption: frames arriving in WiFi bursts queue
+        up, and the immediate drain feeds them to the modulator as fast as
+        feed_audio() can process them.
+
+        This is intentionally NOT clock-driven: a fixed 20 ms cadence
+        creates a zero-net-fill equilibrium (production ≈ consumption at
+        the resampling ratio), which means the modulator buffer can never
+        climb from 0 to the 60-packet prime threshold after reset_mic().
+        Immediate drain during bursts gives the modulator the temporary
+        surplus it needs to prime and stay primed.
         """
         nonlocal _tx_primed, _tx_first_prime, _tx_last_pace_ts
         while not _tx_pacer_stop.is_set():
+            # ── PTT off: just sleep — do NOT clear the queue. ─────
+            # Previously the queue was cleared here, which discarded
+            # audio frames that arrived slightly before the setPTT:true
+            # control message (the two WebSockets are independent).
+            # Those frames are valid early audio and should be kept.
+            if not getattr(radio, '_ptt_active', False):
+                _tx_primed = False
+                _tx_first_prime = True
+                await asyncio.sleep(0.1)
+                _tx_last_pace_ts = time.monotonic()
+                continue
+
+            # ── Pop one frame (prime first, then drain immediately) ──
             item = None
             async with _tx_queue_lock:
-                if not getattr(radio, '_ptt_active', False):
-                    _tx_pcm_queue.clear()
-                    _tx_primed = False
-                    _tx_first_prime = True
-                else:
-                    if not _tx_primed and len(_tx_pcm_queue) >= TX_WS_JITTER_PRIME_FRAMES:
-                        _tx_primed = True
-                        _tx_first_prime = False
-                    if _tx_primed and _tx_pcm_queue:
-                        item = _tx_pcm_queue.pop(0)
-                    # Empty queue while primed: just wait, NEVER de-prime
+                if not _tx_primed and len(_tx_pcm_queue) >= TX_WS_JITTER_PRIME_FRAMES:
+                    _tx_primed = True
+                    _tx_first_prime = False
+                if _tx_primed and _tx_pcm_queue:
+                    item = _tx_pcm_queue.pop(0)
+                # Empty queue while primed: just loop back immediately.
+                # The modulator's jitter buffer absorbs the shortfall.
             if item is None:
-                _tx_last_pace_ts = time.monotonic()
-                _tx_frame_s = 0.020
-                await asyncio.sleep(_tx_frame_s)
+                # Short sleep to avoid busy-looping when queue is empty
+                await asyncio.sleep(0.005)
                 continue
+
             pcm, tag, wire_bytes = item
             _pace_now = time.monotonic()
             _pace_interval_ms = (_pace_now - _tx_last_pace_ts) * 1000.0
             _tx_last_pace_ts = _pace_now
             await _feed_tx_pcm(pcm, tag, wire_bytes, _pace_now, _pace_interval_ms)
-            samples = len(pcm) // 2
-            _tx_frame_s = samples / max(1, tx_rate)
-            await asyncio.sleep(_tx_frame_s)
+
+            # ── Adaptive backpressure: keep modulator queue at 60-100 pkts ──
+            # Immediate drain during bursts can push the modulator buffer to
+            # 200+ packets (1.1+ s latency).  A soft ceiling keeps latency at
+            # ~400-600 ms while still providing healthy jitter protection.
+            # Band raised 60/100 → 80/120 so the steady-state cushion (~80 pkts,
+            # ~410 ms) sits comfortably above the observed 287 ms browser GC
+            # pause — a single GC stall no longer drains the modulator to empty.
+            #   • q < 80:   no sleep — fill fast (initial prime / recovery)
+            #   • q 80-120: 10 ms sleep — moderate pace
+            #   • q > 120:  20 ms sleep — gentle drain (lets q fall)
+            _pace_sleep = 0.0
+            try:
+                if dsp_proc and dsp_proc.modulator is not None:
+                    with dsp_proc.modulator._mic_lock:
+                        _mic_q = len(dsp_proc.modulator._mic_iq)
+                    if _mic_q > 120:
+                        _pace_sleep = 0.020
+                    elif _mic_q >= 80:
+                        _pace_sleep = 0.010
+            except Exception:
+                pass
+            if _pace_sleep > 0:
+                await asyncio.sleep(_pace_sleep)
+            # Loop back — drain next frame if available
 
     try:
         while True:
@@ -1846,6 +2009,19 @@ async def ws_audio_tx(ws: WebSocket):
                     _finish_tx_capture("stop-text")
                     if dsp_proc and dsp_proc.modulator:
                         dsp_proc.modulator.reset_mic()
+                    # ── Layer-5 forced RX (SDD/15 §15.12) ──────────────
+                    # This TX-audio WS is an INDEPENDENT socket from the
+                    # control WS. When the control WS goes half-open, the
+                    # backup "s:" here is the only path left that can key the
+                    # device down. Clearing the queue alone leaves the
+                    # hardware stuck in TX — we must actually release PTT.
+                    try:
+                        await radio.set_ptt(False)
+                        if dsp_proc:
+                            dsp_proc.demodulator.set_ptt(False)
+                        await _send_ctrl("getPTT:false")
+                    except Exception as e:
+                        logger.warning("TX-WS s: forced-RX failed: %s", e)
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:

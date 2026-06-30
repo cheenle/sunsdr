@@ -1,27 +1,27 @@
 // TX Opus Worker — reads float32 samples from SharedArrayBuffer ring,
-// encodes with Opus, and sends via its own WebSocket.
+// encodes with Opus, and posts encoded packets to the main thread.
 //
-// Zero main-thread involvement after setup:
-//   AudioWorklet (audio thread) → SAB ring buffer → Opus Worker (this thread)
+// Architecture:
+//   AudioWorklet (audio thread) → SAB ring → Opus Worker (encode)
+//        → postMessage({type:'tx_audio', data:ArrayBuffer}) → main thread
+//        → wsAudioTX.send(tagged) → server
 //
-// The main thread only creates the SAB and passes it to both sides — it
-// never touches audio samples, so GC pauses / UI jank can't stall TX.
+// Previously the Worker had its own WebSocket.  On mobile Safari, ws.send()
+// blocks the Worker's event loop on TCP backpressure (WiFi power-save stalls),
+// causing the "burst-then-gap" pattern the server saw as 50-172 ms gaps in
+// /tmp/tx_rx_probe.csv.  By posting encoded frames to the main thread via
+// zero-copy Transferable, the Worker never blocks — the main thread's higher-
+// priority event loop handles WebSocket backpressure without starving the
+// SAB poll timer.  The main thread was already sending 'm:' settings and 's:'
+// stop, so no control-plane changes are needed.
 var AUDIO_TAG_OPUS = 0x01;
 var AUDIO_TAG_PCM  = 0x00;
 var FRAME_SIZE = 320;   // 20 ms @ 16 kHz
-var POLL_MS = 3;        // check SAB every 3 ms (audio thread quanta ≈ 2.67 ms)
 
-function _queryToken() {
-  var m = String(self.location.search || '').match(/[?&]token=([^&]+)/);
-  return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
-}
-
-var AUTH_TOKEN = _queryToken();
-function withToken(path) {
-  return path + (AUTH_TOKEN ? (path.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(AUTH_TOKEN) : '');
-}
-
-importScripts(withToken('/modules/opus_wasm.js'), withToken('/modules/opus_codec.js'));
+// Opus WASM runtime + codec (public assets, no auth needed).
+// importScripts is synchronous — the OpusEncoder global is ready
+// before the first onmessage handler runs.
+importScripts('/modules/opus_wasm.js', '/modules/opus_codec.js');
 
 // ── SAB ring buffer (consumer side) ────────────────────
 // Layout: word[0]=write_pos, word[1]=read_pos, word[2+]=float32 data
@@ -67,19 +67,9 @@ function sabRead(n) {
 // ── Opus encoder ───────────────────────────────────────
 
 var encoder = null;
-var ws = null;
-var wsConnecting = false;
 var running = false;
 var _pollTimer = null;
 var _useOpus = true;      // true = Opus encode, false = raw Int16 PCM
-var _pcmAcc = null;       // accumulate for PCM path (rarely used)
-var dropped = 0;
-
-function wsUrl() {
-  var proto = self.location.protocol === 'https:' ? 'wss://' : 'ws://';
-  return proto + self.location.host + '/WSaudioTX' +
-    (AUTH_TOKEN ? '?token=' + encodeURIComponent(AUTH_TOKEN) : '');
-}
 
 function ensureEncoder() {
   if (!encoder) {
@@ -87,100 +77,72 @@ function ensureEncoder() {
   }
 }
 
-function ensureWs() {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
-  if (wsConnecting) return;
-  wsConnecting = true;
-  ws = new WebSocket(wsUrl());
-  ws.binaryType = 'arraybuffer';
-  ws.onopen = function() {
-    wsConnecting = false;
-    try { ws.send('m:16000,1,16000,20'); } catch (e) {}
-    self.postMessage({ type: 'open' });
-  };
-  ws.onerror = function() {
-    self.postMessage({ type: 'error', message: 'TX Opus worker websocket error' });
-  };
-  ws.onclose = function(e) {
-    wsConnecting = false;
-    ws = null;
-    if (e && e.code === 4001) {
-      running = false;
-      self.postMessage({ type: 'authExpired' });
-      return;
-    }
-    if (running) {
-      setTimeout(ensureWs, 250);
-    }
-    self.postMessage({ type: 'closed' });
-  };
+// Post a codec-tagged frame to the main thread for WebSocket delivery.
+// Transfers the buffer (zero-copy) so the ~40-80 byte Opus packet never
+// crosses threads — only the ArrayBuffer handle moves.
+function postEncodedFrame(tag, payload) {
+  var src = new Uint8Array(payload);
+  var tagged = new Uint8Array(1 + src.length);
+  tagged[0] = tag;
+  tagged.set(src, 1);
+  self.postMessage({ type: 'tx_audio', data: tagged.buffer }, [tagged.buffer]);
 }
 
-function sendPacket(packet) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    ensureWs();
-    return false;
-  }
-  var opusBytes = new Uint8Array(packet);
-  var tagged = new Uint8Array(1 + opusBytes.length);
-  tagged[0] = AUDIO_TAG_OPUS;
-  tagged.set(opusBytes, 1);
-  ws.send(tagged);
-  return true;
-}
-
-function sendPcmFrame(pcmInt16) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    ensureWs();
-    return false;
-  }
-  var tagged = new Uint8Array(1 + pcmInt16.byteLength);
-  tagged[0] = AUDIO_TAG_PCM;
-  tagged.set(new Uint8Array(pcmInt16.buffer, pcmInt16.byteOffset, pcmInt16.byteLength), 1);
-  ws.send(tagged);
-  return true;
-}
-
-function encodeAndSend(floatSamples) {
+function encodeAndPost(floatSamples) {
   if (_useOpus) {
     ensureEncoder();
     var packets = encoder.encode_float(floatSamples);
     for (var p = 0; p < packets.length; p++) {
-      sendPacket(packets[p]);
+      postEncodedFrame(AUDIO_TAG_OPUS, packets[p]);
     }
   } else {
-    // PCM fallback: convert float32 → Int16 and send directly
+    // PCM fallback: convert float32 → Int16
     var i16 = new Int16Array(floatSamples.length);
     for (var i = 0; i < floatSamples.length; i++) {
       var v = floatSamples[i] * 32767;
       i16[i] = v > 32767 ? 32767 : (v < -32768 ? -32768 : (v | 0));
     }
-    sendPcmFrame(i16);
+    postEncodedFrame(AUDIO_TAG_PCM, new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength));
   }
 }
 
-// ── Poll loop: drain SAB every POLL_MS ─────────────────
+// ── Poll loop: one frame per poll, self-scheduling ─────
+// AudioWorklet writes ~160 float32 samples to SAB every ~10 ms.
+// A complete 320-sample Opus frame is ready every ~20 ms.  Polling
+// at 5 ms catches each frame within 5 ms of readiness without ever
+// draining more than one at a time.  The self-scheduling setTimeout
+// (not setInterval) avoids callback stacking when the main thread
+// is briefly busy processing a previous tx_audio post.
 
 function pollSAB() {
   if (!running) return;
-  ensureWs();
   var avail = sabAvailable();
-  while (avail >= FRAME_SIZE) {
+  if (avail >= FRAME_SIZE) {
     var frame = sabRead(FRAME_SIZE);
-    if (!frame || frame.length < FRAME_SIZE) break;
-    encodeAndSend(frame);
-    avail = sabAvailable();
+    if (frame && frame.length >= FRAME_SIZE) {
+      encodeAndPost(frame);
+    }
   }
+}
+
+var _pollTimer = null;
+
+function _scheduleNextPoll() {
+  if (!running) return;
+  _pollTimer = setTimeout(function() {
+    pollSAB();
+    _scheduleNextPoll();
+  }, 5);
 }
 
 function startPolling() {
   if (_pollTimer) return;
-  _pollTimer = setInterval(pollSAB, POLL_MS);
+  _scheduleNextPoll();
 }
 
 function stopPolling() {
   if (_pollTimer) {
-    clearInterval(_pollTimer);
+    clearTimeout(_pollTimer);
     _pollTimer = null;
   }
 }
@@ -203,27 +165,17 @@ self.onmessage = function(ev) {
     var frame = new Int16Array(d.frame);
     var f32 = new Float32Array(frame.length);
     for (var i = 0; i < frame.length; i++) f32[i] = frame[i] / 32768.0;
-    encodeAndSend(f32);
+    encodeAndPost(f32);
   } else if (d.type === 'start') {
     running = true;
-    dropped = 0;
     ensureEncoder();
-    ensureWs();
     // Only start SAB polling if SAB is available; legacy path relies on 'frame' messages
     if (_sab) startPolling();
   } else if (d.type === 'stop') {
     running = false;
     stopPolling();
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try { ws.send('s:'); } catch (e) {}
-    }
   } else if (d.type === 'close') {
     running = false;
     stopPolling();
-    if (ws) {
-      try { ws.send('s:'); } catch (e) {}
-      try { ws.close(); } catch (e) {}
-    }
-    ws = null;
   }
 };

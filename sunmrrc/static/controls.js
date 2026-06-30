@@ -182,6 +182,7 @@ function powertogle()
 		AudioRX_start();
 		AudioTX_start();
 		ControlTRX_start();
+		Waterfall_start();
 		checklatency();
 		poweron = true;
 		
@@ -198,6 +199,7 @@ function powertogle()
 		AudioRX_stop();
 		AudioTX_stop();
 		ControlTRX_stop();
+			Waterfall_stop();
 		poweron = false;
 		button_unlight_all("div-filtershortcut");
 		button_unlight_all("div-mode_menu");
@@ -260,7 +262,7 @@ function AudioRX_start(){
 	}
 	
 	// 避免重复创建连接
-	if (wsAudioRX && wsAudioRX.readyState !== WebSocket.CLOSED) {
+	if (wsAudioRX && (wsAudioRX.readyState === WebSocket.OPEN || wsAudioRX.readyState === WebSocket.CONNECTING)) {
 		console.log('⏭️ AudioRX WebSocket已在连接中或已连接，跳过重复创建');
 		return;
 	}
@@ -696,7 +698,7 @@ function wsAudioRXerror(err){
 function AudioRX_stop()
 {
 	audiobufferready = false;
-	if (wsAudioRX && wsAudioRX.readyState !== WebSocket.CLOSED) {
+	if (wsAudioRX && (wsAudioRX.readyState === WebSocket.OPEN || wsAudioRX.readyState === WebSocket.CONNECTING)) {
 		wsAudioRX.close();
 	}
 	if (AudioRX_source_node) {
@@ -705,6 +707,21 @@ function AudioRX_stop()
 	if (AudioRX_context && AudioRX_context.state !== 'closed') {
 		AudioRX_context.close();
 	}
+	// 重置变量以便下一次 _start() 能干净重连
+	AudioRX_context = null;
+		AudioRX_gain_node = null;
+		AudioRX_biquadFilter_node = null;
+		AudioRX_analyser = null;
+		AudioRX_source_node = null;
+		// 关键：清除 smeter 分析器引用,否则下次 _start() 会尝试把新
+		// AudioContext 的节点连接到已关闭的旧分析器 → .connect() 抛异常
+		// → gain→destination 链路永不建立 → 无声（且被 try/catch 吞掉）
+		delete window.AudioRX_smeter_analyser;
+	wsAudioRX = null;
+	// 清除 ScriptProcessor 累积缓冲区,防止旧数据干扰新连接
+	window.__rxAccumulatedBuffer = [];
+	window.__rxTotalSamples = 0;
+	window.__rxScriptPriming = true;
 }
 
 var muteRX=false;
@@ -875,7 +892,7 @@ var wsControlTRX = "";
 
 function ControlTRX_start(){
 	// 避免重复创建连接：如果已经连接或正在连接，跳过
-	if (wsControlTRX && wsControlTRX.readyState !== WebSocket.CLOSED) {
+	if (wsControlTRX && (wsControlTRX.readyState === WebSocket.OPEN || wsControlTRX.readyState === WebSocket.CONNECTING)) {
 		console.log('⏭️ WebSocket已在连接中或已连接，跳过重复创建');
 		return;
 	}
@@ -1174,7 +1191,7 @@ function onControlConnectionDead(reason) {
 	} catch (e) { console.warn('补发 s: 失败:', e); }
 	// 2) 强制关闭控制通道，触发 onclose → 自动重连
 	try {
-		if (wsControlTRX && wsControlTRX.readyState !== WebSocket.CLOSED) {
+		if (wsControlTRX && (wsControlTRX.readyState === WebSocket.OPEN || wsControlTRX.readyState === WebSocket.CONNECTING)) {
 			wsControlTRX.close();
 		}
 	} catch (e) { /* ignore */ }
@@ -1871,31 +1888,36 @@ OpusEncoderProcessor.prototype.initTxOpusWorker = function()
     }
     var that = this;
     try {
-        this.txOpusWorker = new Worker(wsUrlWithAuth('/tx_opus_worker.js?v=5.9'));
-        this.txOpusWorker.onmessage = function(ev) {
+        // v=6.0: Worker posts encoded frames to main thread (no own WebSocket)
+        this.txOpusWorker = new Worker('/tx_opus_worker.js?v=6.0');
+
+        // Send SAB immediately — importScripts loads synchronously, so
+        // OpusEncoder is ready before the first onmessage handler fires.
+        if (this.txSab) {
+            this.txOpusWorker.postMessage({
+                type: 'sab',
+                sab: this.txSab,
+                ringSize: this.txSabRingSize
+            });
+        }
+
+                this.txOpusWorker.onmessage = function(ev) {
             var d = ev.data || {};
-            if (d.type === 'open') {
-                that.txOpusWorkerReady = true;
-                // Send SAB to worker once WS is open (if available)
-                if (that.txSab) {
-                    that.txOpusWorker.postMessage({
-                        type: 'sab',
-                        sab: that.txSab,
-                        ringSize: that.txSabRingSize
-                    });
+            if (d.type === 'tx_audio') {
+                // Encoded+tagged frame from SAB path — send via main-thread wsAudioTX.
+                // Tag byte already prepended by the Worker (0x00=PCM, 0x01=Opus).
+                if (d.data && that.wsh && that.wsh.readyState === WebSocket.OPEN) {
+                    that.wsh.send(d.data);
+                    window.__txBytes = (window.__txBytes || 0) + d.data.byteLength;
                 }
             } else if (d.type === 'sab_ready') {
-                console.log('✅ TX Opus Worker: SAB ring ready');
-            } else if (d.type === 'sent') {
-                window.__txBytes = (window.__txBytes || 0) + (d.bytes || 0);
-                window.__txOpusDropped = d.dropped || 0;
+                that.txOpusWorkerReady = true;
+                console.log('✅ TX Opus Worker: SAB ring ready (v6.0, main-thread send)');
             } else if (d.type === 'closed') {
                 that.txOpusWorkerReady = false;
-	            } else if (d.type === 'authExpired') {
-	                handleAuthExpired('TX Opus Worker auth expired');
-	            } else if (d.type === 'error') {
-	                console.warn('TX Opus Worker:', d.message || d.type);
-	            }
+            } else if (d.type === 'error') {
+                console.warn('TX Opus Worker:', d.message || d.type);
+            }
         };
         this.txOpusWorker.onerror = function(e) {
             that.txOpusWorkerReady = false;
@@ -1912,18 +1934,7 @@ OpusEncoderProcessor.prototype.startOpusWorker = function()
 {
     this.initTxOpusWorker();
     if (this.txOpusWorker) {
-        // ── Send SAB BEFORE 'start' ──────────────────────────
-        // The old code sent SAB in the WS-open callback, but WS-open is
-        // async — if it takes >100 ms (TLS handshake), the polling loop
-        // starts with _sab==null and never recovers.  By sending SAB
-        // first, the Worker always has it when 'start' fires.
-        if (this.txSab) {
-            this.txOpusWorker.postMessage({
-                type: 'sab',
-                sab: this.txSab,
-                ringSize: this.txSabRingSize
-            });
-        }
+        // SAB already sent in initTxOpusWorker — just send 'start'.
         this.txOpusWorker.postMessage({ type: 'start' });
     }
 };
@@ -2094,7 +2105,7 @@ MediaHandler.prototype.callback = async function( stream )
         this.txWorkletNode = null;
         if (useTXWorklet) {
             try {
-                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=5.9'));
+                await this.context.audioWorklet.addModule(wsUrlWithAuth('/tx_capture_worklet.js?v=6.0'));
                 this.txWorkletNode = new AudioWorkletNode(this.context, 'tx-capture', {
                     numberOfInputs: 1,
                     numberOfOutputs: 0,
@@ -2455,7 +2466,7 @@ function Waterfall_start(){
 	wfCtx.fillRect(0, 0, wfCanvas.width, wfCanvas.height);
 	wfRow = wfCtx.createImageData(wfCanvas.width, 1);
 
-	if (wsSpectrum && wsSpectrum.readyState !== WebSocket.CLOSED) return;
+	if (wsSpectrum && (wsSpectrum.readyState === WebSocket.OPEN || wsSpectrum.readyState === WebSocket.CONNECTING)) return;
 	var url = wsUrlWithAuth((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.href.split('/')[2] + '/WSspectrum');
 	wsSpectrum = new WebSocket(url);
 	wsSpectrum.binaryType = 'arraybuffer';
