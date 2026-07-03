@@ -248,6 +248,37 @@ Healthy gain staging shows `in` peak ~0.5, `drv` peak ~2.0, `lim` peak ~0.96. If
 
 **Consequences**: Response headers are `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless`. This pair enables `SharedArrayBuffer` and allows Worker `importScripts()` on all browsers (Chrome, Firefox, Safari). No `Cross-Origin-Resource-Policy` headers are needed on static assets. If the app later loads cross-origin resources (e.g., CDN scripts), they will load without credentials, which may require CORS configuration on the CDN side. For the current same-origin architecture, this is a strict improvement over `require-corp`.
 
+## AD-017: Spectrum Frequency Marker Accuracy — Exact Sample Rate, Pixel Alignment, Buffer Reset
+
+| Attribute | Value |
+|-----------|-------|
+| Type | UX / Data Accuracy |
+| Status | Implemented |
+| Decision | Frontend uses exact `EXACT_SAMPLE_RATES` lookup table (39062/78125/156250/312500 Hz) matching server `SAMPLE_RATES` dict; FFT canvas uses `xScale=W/n` (bin k→pixel k) for pixel alignment with frequency grid; `SpectrumProcessor.reset()` clears FFT accumulation buffer on sample rate change; frontend `setSampleRate` handler resets FFT EMA buffer and clears waterfall canvas; FFT display uses noise-floor-relative height with gamma 0.65 (no absolute dB labels). |
+
+**Problem**: The frequency markers on the spectrum waterfall/FFT display had accuracy issues at all sample rates, with the error growing proportionally:
+- Frontend used `parseInt('78k',10)*1000 = 78000 Hz` approximation, but actual IQ rate is 78125 Hz (0.16% error). At 312k, labels were off by 500 Hz.
+- FFT curve used `xScale=W/(n-1)` which stretched bins 0..511 to pixels 0..512, causing bin 256 (VFO center) to fall at pixel 257 instead of 256 (1px offset).
+- Sample rate changes left stale FFT EMA data and waterfall pixels from the previous rate, causing transient smearing and misalignment with the new frequency grid.
+- FFT dB labels showed "0/-40/-80/-120" absolute dB, but the curve used noise-floor-relative + gamma 0.65 nonlinear mapping, so labels didn't match displayed data.
+- Remote clients (other browser tabs/devices) didn't receive the `setSampleRate` broadcast, so their frequency scale stayed stale.
+
+**Rationale**: The exact sample rates are non-round values (39062 = 78125/2, 156250 = 78125×2, 312500 = 78125×4) based on 5^7 = 78125 Hz. Using the integer approximation `parseInt()*1000` introduces a systematic error that grows with rate. The FFT pixel mapping should be consistent with the waterfall and frequency grid (both use `bin k = pixel k`). The spectrum buffer must be cleared on rate change to avoid mixing old-rate and new-rate IQ samples in the same FFT. The FFT display is relative (noise-floor-referenced) for visual clarity, so absolute dB labels are misleading and should be removed.
+
+**Consequences**:
+- Frontend: `EXACT_SAMPLE_RATES` lookup table in `controls.js` ensures frequency labels match the actual IQ rate at all sample rates.
+- FFT canvas: `xScale = W/n` aligns bin 256 with pixel 256 (VFO center), eliminating the 1px offset.
+- Server: `SpectrumProcessor.reset()` clears the FFT accumulation buffer on rate change, preventing garbage frames from mixed-rate IQ data.
+- Frontend: `setSampleRate` handler resets FFT EMA buffer, clears waterfall canvas, and redraws frequency scale. This also syncs remote clients when the server broadcasts `setSampleRate:<rate>`.
+- FFT display: removed misleading dB number labels; kept faint horizontal gridlines as visual texture. The S-meter shows absolute signal level.
+- Multi-client: remote clients now receive and apply the `setSampleRate` broadcast, keeping their frequency scale in sync.
+
+**Verification**: Switch sample rates (78k↔312k) and verify:
+1. Frequency labels span the exact range (e.g., 312k left edge = VFO - 156250 Hz, not VFO - 156000 Hz)
+2. VFO red line aligns with FFT curve center (no 1px offset)
+3. Waterfall clears immediately on rate change (no stale pixels)
+4. Second browser tab's frequency scale updates when first tab changes rate
+
 ## 8.11 Decision Summary
 
 | ID | Topic | Status |
@@ -264,6 +295,11 @@ Healthy gain staging shows `in` peak ~0.5, `drv` peak ~2.0, `lim` peak ~0.96. If
 | AD-010 | TX power via device DRIVE (0x0017) | Implemented |
 | AD-011 | TX telemetry from 0x1F00 verified field offsets (forward W, supply V, PA temp °C; no SWR) | Implemented (corrected 2026-06-25) |
 | AD-012 | TX audio gain staging: client preamp ×1.5, server TX_DRIVE_GAIN ×3.0, TX_IQ_PEAK 1.0, tanh soft limiter with light engagement | Implemented |
+| AD-013 | Remove WDSP TX C-chain — Python Hilbert overlap-save is sole SSB modulator | Implemented |
+| AD-014 | SharedArrayBuffer ring buffer for TX audio — zero main-thread path | Implemented |
+| AD-015 | 300 Hz highpass filter for SSB voice efficiency (~96% power utilization) | Implemented |
+| AD-016 | COEP credentialless — enables SharedArrayBuffer without breaking Worker importScripts() | Implemented |
+| AD-017 | Spectrum frequency marker accuracy — exact sample rate lookup, FFT pixel alignment, buffer reset on rate change | Implemented |
 | AD-013 | WDSP TX C-chain removal — Python Hilbert overlap-save is the sole SSB modulator | Implemented |
 | AD-014 | SharedArrayBuffer ring buffer for TX audio — zero main-thread path | Implemented |
 | AD-015 | 300 Hz highpass filter for SSB voice efficiency | Implemented |

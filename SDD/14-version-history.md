@@ -14,6 +14,21 @@
 | SDD V3.5 | 2026-06-26 | Claude | **Code-sync pass** — reconciled SDD with current source. **Port corrected** to `8889` (server.py default + restart.sh) across all chapters (was `8080`/`8081`). **Bind host** is `[::]` IPv6 dual-stack, not `0.0.0.0`. **`start.sh` removed** — only `restart.sh` exists; ch11 StartScript and ch13 I7 dropped, ch12 startup modes rewritten. **Session auth documented as implemented** (was "no server-side auth"): shared-password `_auth_tokens` + `sunmrrc_auth` cookie + `?token=` WS gating; ch5 NFR-023, ch7, ch11 updated. **Audio transport** reframed as tagged dual-codec (Opus default, Int16 PCM fallback) in the older chapters 2/3/4/5/10 that still said Int16-only. **TX voice** marked High/on-air-verified in ch6 UC-005 and ch13 (was "unresolved"/"not complete"). **Recordings** moved from out-of-scope to implemented (ch3). |
 | **SunMRRC V1.0** | **2026-06-24** | **Claude** | **🎉 Initial production release.** RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.4 baseline. |
 | SDD V3.6 | 2026-06-30 | Claude | TX architecture improvements: WDSP TX C-chain removed (AD-013), SharedArrayBuffer ring buffer for TX audio (AD-014), 300 Hz HPF for SSB efficiency (AD-015), COEP credentialless (AD-016); continuous DC blocker, pre-bound IQ socket, dedicated keep-alive thread, TX pacer de-prime removal |
+| SDD V3.7 | 2026-07-03 | Claude | Spectrum frequency marker accuracy: frontend uses exact `EXACT_SAMPLE_RATES` lookup table (39062/78125/156250/312500) instead of `parseInt()*1000` approximation; FFT `xScale=W/n` (not `W/(n-1)`) for pixel alignment with frequency grid; `SpectrumProcessor.reset()` clears FFT buffer on sample rate change; frontend `setSampleRate` handler resets FFT EMA + clears waterfall; FFT dB labels removed (display is relative, not absolute); multi-client sync via `setSampleRate` broadcast; stale "only 78k calibrated" warnings removed; comprehensive PROTOCOL.md update (REST APIs §19, missing commands §20, boot corrections §21, implementation notes §22); sunmrrc/README.md rewritten with directory structure and features |
+
+## Key Changes in SDD V3.7
+
+| Chapter | Change |
+|---------|--------|
+| 8 | AD-017 added: spectrum frequency marker accuracy — exact sample rate lookup, FFT pixel alignment, sample rate reset protocol |
+| 9 | 9.5.1 Spectrum pipeline: `SpectrumProcessor.reset()` clears FFT accumulation buffer on rate change; frontend FFT uses `xScale=W/n` (bin k→pixel k) for VFO center alignment; adaptive noise floor contrast stretch documented |
+| 11 | ControlsJS component: `EXACT_SAMPLE_RATES` lookup table, `setSampleRate` handler with EMA/waterfall reset, FFT relative display (no dB labels), click-to-tune with flash indicator |
+| 13 | I12 resolved: frequency marker accuracy across sample rates (39k/78k/156k/312k) — frontend exact lookup, FFT pixel mapping, buffer reset protocol |
+| 14 | Added this V3.7 changelog |
+| PROTOCOL.md | §19 REST APIs (band_power, mem_channels, recordings, status, auth); §20 missing commands (setATT, setOpusBitrate, setSpectrumFps, setTXDriveGain, extended WDSP); §21 boot corrections (SET_PARAM_5/HW_INIT/STREAM_CTRL trailing values); §22 implementation notes |
+| CLAUDE.md | Exact sample rate values, FFT bin-to-pixel mapping, FFT relative display, sample rate change resets, recording API, status API, TX diagnostic captures |
+| STATUS.md | 2026-07-03 changelog: 7 issues identified and fixed (frequency span miscalculation, FFT pixel misalignment, EMA smear, waterfall stale pixels, misleading dB labels, multi-client sync, stale warnings) |
+| sunmrrc/README.md | Rewritten: directory structure, quick start, key features, authentication |
 
 ## Key Changes in SDD V3.6
 
