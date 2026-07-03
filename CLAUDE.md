@@ -189,4 +189,16 @@ See `SDD/08-architecture-decisions.md` for all 12 ADs (AD-001 through AD-012) wi
 - `/WSATR1000` accepts connections but doesn't interface with real tuner hardware
 - `/api/mem_channels` implemented (GET/POST with JSON persistence to `mem_channels.json`)
 - `/api/band_power` implemented (GET/POST with JSON persistence to `band_power.json`; frontend **Band Power** menu panel edits per-band drive %)
+- `/api/recordings` implemented (GET list, GET download, DELETE) — recordings created via `startRecording`/`stopRecording` WebSocket commands, saved as MP3 to `sunmrrc/static/recordings/`
+- `/api/status` implemented (GET) — returns server connection/dsp/client counts
 - Sample-rate selector (39/78/156/312 kHz) has frontend (**Sample Rate** menu) + backend: `setSampleRate:` → `radio.set_sample_rate()` → sends `0x0001` HW_INIT with word[11]=rate_index (0=39k, 1=78k, 2=156k, 3=312k) during a full re-boot sequence. **Verified 2025-06-24** via ExpertSDR3 capture analysis and direct device testing. The rate is set by `0x0001` (NOT `0x0020`), see `PROTOCOL.md` §4.3 and `sunsdr_direct.py` `build_hw_init()`. Rate change requires a full re-boot because 0x0001 must precede the frequency and stream-start commands.
+
+## TX diagnostic captures
+
+During development and debugging, the modulator saves diagnostic WAV/CSV files to `sunmrrc/captures/`:
+- `tx_post_dcblock_*.wav` — raw audio after the DC blocker (saved by `reset_mic()`)
+- `/tmp/tx_probe.csv` — per-TX-burst pacer timing
+- `/tmp/tx_rx_probe.csv` — incoming mic frame arrival stats
+- `/tmp/tx_continuity.csv` — aligned device watts vs sent IQ envelope
+
+These files are created at runtime for debugging and can be safely deleted.

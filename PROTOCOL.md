@@ -25,6 +25,10 @@
 16. [Hex Reference](#16-hex-reference)
 17. [TX Chain — Verified from Capture](#17-tx-chain--verified-from-capture)
 18. [TX Drive / Power Control (0x0017) — Verified On-Air](#18-tx-drive--power-control-0x0017--verified-on-air)
+19. [REST API Endpoints](#19-rest-api-endpoints)
+20. [Missing Control Commands (WebSocket /WSCTRX)](#20-missing-control-commands-websocket-wsctrx)
+21. [Boot Sequence Corrections](#21-boot-sequence-corrections)
+22. [Implementation Notes](#22-implementation-notes)
 
 ---
 
@@ -1650,6 +1654,228 @@ ceiling (the same value ExpertSDR3 writes), so it will not overdrive the PA on i
 Live forward power (off30 f32) and supply voltage (off16) ARE available in `0x1F00`
 while keyed (§18.5); SWR is NOT (the device sends no reverse-power field) — read it from
 an external SWR meter or the ATR-1000 tuner.
+
+---
+
+## 19. REST API Endpoints
+
+In addition to WebSocket endpoints, the server exposes several REST APIs for configuration and data retrieval.
+
+### 19.1 Band Power API — `/api/band_power`
+
+Controls per-band TX drive percentage. Persisted to `sunmrrc/band_power.json`.
+
+**GET** `/api/band_power`
+Returns the current band power table and default value:
+```json
+{
+  "bands": [
+    {"low": 1800000, "high": 2000000, "power": 100},
+    {"low": 3500000, "high": 4000000, "power": 62},
+    ...
+  ],
+  "default": 80
+}
+```
+
+**POST** `/api/band_power`
+Updates the band power table:
+```json
+{
+  "bands": [...],
+  "default": 80
+}
+```
+The server validates the input, saves to disk, pushes the table to `sunsdr_direct.set_band_power()`, and immediately re-applies drive at the current frequency.
+
+### 19.2 Memory Channels API — `/api/mem_channels`
+
+Stores up to 6 memory channel presets. Persisted to `sunmrrc/mem_channels.json`.
+
+**GET** `/api/mem_channels`
+Returns the 6 channel slots:
+```json
+{
+  "channels": [
+    {"freq": 7074000, "mode": "USB", "label": "FT8 40m"},
+    {"freq": 14074000, "mode": "USB", "label": "FT8 20m"},
+    null, null, null, null
+  ]
+}
+```
+Unused slots are `null`.
+
+**POST** `/api/mem_channels`
+Updates the memory channels:
+```json
+{
+  "channels": [...]
+}
+```
+The server pads/truncates to exactly 6 entries.
+
+### 19.3 Recordings API — `/api/recordings`
+
+Manages saved audio recordings. Recordings are created via the `startRecording`/`stopRecording` WebSocket commands.
+
+**GET** `/api/recordings`
+Returns a list of saved recordings with file metadata (name, size, date).
+
+**GET** `/api/recordings/{filename}`
+Downloads a specific recording file.
+
+**DELETE** `/api/recordings/{filename}`
+Deletes a recording.
+
+### 19.4 Status API — `/api/status`
+
+Returns server and connection status:
+```json
+{
+  "radio_connected": true,
+  "dsp_ready": true,
+  "ctrl_clients": 2,
+  "spectrum_clients": 2,
+  "audio_rx_clients": 1,
+  "audio_tx_clients": 0
+}
+```
+
+### 19.5 Authentication APIs
+
+**GET** `/login`
+Login page.
+
+**POST** `/api/auth/login`
+Authenticate with password. Request body: `{"password": "sunmrrc"}`. Sets `sunmrrc_auth` cookie (30-day lifetime, httponly=False, samesite=strict). Returns `{"ok": true}` or `{"ok": false}`.
+
+**POST** `/api/auth/logout`
+Clears the auth cookie.
+
+**GET** `/api/auth/check`
+Checks if the current session is authenticated. Returns `{"authenticated": true/false}`.
+
+---
+
+## 20. Missing Control Commands (WebSocket `/WSCTRX`)
+
+Several control commands are implemented in `server.py` but were not documented in earlier protocol versions.
+
+### 20.1 Attenuator — `setATT`
+
+Controls the hardware RF attenuator/preamp.
+
+**Command:** `setATT:<level>` where level is 0-3:
+- `0` = -20 dB attenuation
+- `1` = -10 dB attenuation
+- `2` = 0 dB (no attenuation)
+- `3` = +10 dB preamp gain
+
+**Hardware:** Sends `0x0005 SET_PARAM_5` with trailing word = level.
+
+**Response:** Broadcasts `setATT:<level>` to all control clients.
+
+### 20.2 Opus Bitrate — `setOpusBitrate` / `getOpusBitrate`
+
+Controls the RX Opus encoder bitrate.
+
+**Set:** `setOpusBitrate:<kbps>` (e.g., `setOpusBitrate:64` for 64 kbps)
+**Get:** `getOpusBitrate` → `setOpusBitrate:<kbps>`
+
+The server normalizes accidental bps values (e.g., 64000 → 64).
+
+### 20.3 Spectrum FPS — `setSpectrumFps` / `getSpectrumFps`
+
+Controls the spectrum broadcast rate (throttles waterfall updates).
+
+**Set:** `setSpectrumFps:<fps>` (1-38, default 38)
+**Get:** `getSpectrumFps` → `setSpectrumFps:<fps>`
+
+Lower FPS reduces network bandwidth for remote connections. The frontend adjusts `WF_DECIMATE` accordingly (3 when FPS ≤ 12, else 10).
+
+### 20.4 TX Drive Gain — `setTXDriveGain` / `getTXDriveGain`
+
+Controls the mic→IQ make-up gain in the TX modulator (software gain, NOT hardware PA drive).
+
+**Set:** `setTXDriveGain:<float>` (0.1-1.5, default 2.8)
+**Get:** `getTXDriveGain` → `setTXDriveGain:<float>`
+
+This is a software gain applied after the Hilbert SSB modulator, before the tanh soft-limiter. It is NOT the hardware PA drive (which is controlled by `setDrive`).
+
+### 20.5 Extended WDSP Commands
+
+The following WDSP control commands are implemented but were not in the original protocol documentation:
+
+| Command | Handler | Description |
+|---------|---------|-------------|
+| `setWDSPAGCAttack:<int>` | `set_agc_attack()` | AGC attack time (ms) |
+| `setWDSPAGCDecay:<int>` | `set_agc_decay()` | AGC decay time (ms) |
+| `setWDSPAGCHang:<int>` | `set_agc_hang()` | AGC hang time (ms) |
+| `setWDSPAGCSlope:<float>` | `set_agc_slope()` | AGC slope (dB) |
+| `setWDSPEQ:<bool>` | `set_eq_enabled()` | Enable/disable EQ |
+| `setWDSPFMSquelch:<bool>` | `set_fm_squelch_enabled()` | Enable/disable FM squelch |
+| `setWDSPFMSquelchThresh:<float>` | `set_fm_squelch_threshold()` | FM squelch threshold (dB) |
+| `getWDSPSMeter` | `wdspSMeter:<dbm>` | Query WDSP S-meter value |
+| `addWDSPNotch:<fc>,<fw>` | `add_notch()` | Add auto-notch at center freq, width |
+| `editWDSPNotch:<i>,<fc>,<fw>` | `edit_notch()` | Edit notch index i |
+| `deleteWDSPNotch:<i>` | `delete_notch()` | Delete notch index i |
+| `setWDSPNR2GainMethod:<int>` | `set_nr2_gain_method()` | NR2 gain method (0, 1, 2) |
+| `setWDSPNR2NpeMethod:<int>` | `set_nr2_npe_method()` | NR2 NPE method (0, 1, 2) |
+| `setWDSPNR2AeRun:<bool>` | `set_nr2_ae_run()` | NR2 AE run flag |
+
+---
+
+## 21. Boot Sequence Corrections
+
+Several boot sequence parameters differ from the original ExpertSDR3 capture analysis. The current implementation has been verified against real device behavior.
+
+### 21.1 SET_PARAM_5 trailing value
+
+- **Current code:** trailing = `0x00000001`
+- **Original PROTOCOL.md §4.1:** trailing = `0x00000002`
+- **Reason:** Verified against ExpertSDR3 boot capture. `0x00000001` matches ExpertSDR3; `0x00000002` was a misread.
+
+### 21.2 HW_INIT trailing value
+
+- **Current code:** trailing = `0x37E00000`
+- **Original PROTOCOL.md §4.3:** trailing bytes `c0250000` (value `0x000025C3`)
+- **Reason:** Verified against ExpertSDR3 capture. Prior values caused reduced PA power. The correct trailing word is `0x37E00000`.
+
+### 21.3 STREAM_CTRL word[1]
+
+- **Current code:** `STREAM_CTRL_WORDS[1] = 0` (with `assert`)
+- **ExpertSDR3:** uses `1`
+- **Reason:** Setting word[1] = 1 killed TX power on SunSDR2 during testing. The device behaves differently from ExpertSDR3 in this field.
+
+---
+
+## 22. Implementation Notes
+
+### 22.1 Heartbeat and keep-alive are NOT in `SunSDR2DXClient`
+
+The `SunSDR2DXClient` class (sunsdr_direct.py) only handles the boot sequence and control commands. The caller (`sunmrrc/server.py`) must run:
+- **Control-port heartbeat:** `0x0018` every 0.5s to device port 50001
+- **IQ stream keep-alive:** `0xFFFE` every 0.5s to device port 50002 (dedicated OS thread, independent of asyncio)
+
+### 22.2 `set_attenuator` sends hardware command
+
+Despite being listed as "client-side only" in some docs, `set_attenuator()` actually sends the `0x0005 SET_PARAM_5` hardware command with trailing = level.
+
+### 22.3 `set_antenna` and `set_preamp` are client-side only
+
+These commands only update internal state (`self.antenna`, `self.preamp`) and do NOT send hardware packets.
+
+### 22.4 `set_tune` is just PTT
+
+There is no separate "tune" hardware command. `set_tune(enable)` sets `_tune_active` flag and calls `set_ptt(enable)`. The actual tune carrier is generated in software by the modulator.
+
+### 22.5 Boot sends RX_FREQ twice
+
+Phase 4 of the boot sequence sends `RX_FREQ` (0x0008) back-to-back twice. This is intentional and matches ExpertSDR3 behavior.
+
+### 22.6 Control socket bind
+
+`connect()` binds to `192.168.16.100:50001` with `SO_REUSEADDR`. All control traffic MUST originate from this source port; the device identifies the controller by source port.
 
 ---
 
