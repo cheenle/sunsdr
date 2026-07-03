@@ -188,6 +188,11 @@ class SpectrumProcessor:
         f = len(spec) // n_bins
         return np.mean(spec[:f*n_bins].reshape(n_bins, f), axis=1).tolist()
 
+    def reset(self):
+        """Clear the IQ accumulation buffer (call after sample rate change)."""
+        self.buf = np.zeros(self.fft_size, dtype=np.complex64)
+        self.idx = 0
+
 
 # ── Audio Demodulator ──────────────────────────────────────────────
 
@@ -330,6 +335,19 @@ class AudioDemodulator:
             window_type="hamming").astype(np.complex128)
         self._st_fm_nfm = np.zeros(len(self._fm_lpf_nfm) - 1, dtype=np.complex128)
         self._st_fm_wfm = np.zeros(len(self._fm_lpf_wfm) - 1, dtype=np.complex128)
+
+        # ── AM channel filter (complex baseband before envelope detector).
+        #    The abs() envelope detector is nonlinear — out-of-channel signals
+        #    fold into the audio band via cross-products. Limiting to ±8 kHz
+        #    (16 kHz double-sided) passes broadcast AM (~10 kHz) and ham AM
+        #    (~6-8 kHz) while rejecting adjacent channels. Same real-LPF-on-
+        #    complex-data pattern as the FM channel filters.
+        self._am_ch_lpf = design_fir_lowpass(
+            cutoff=8000.0, sample_rate=float(self.sample_rate),
+            attenuation_db=60.0, transition_width_hz=2000.0,
+            window_type="hamming").astype(np.float64)
+        self._st_am_ch = np.zeros(len(self._am_ch_lpf) - 1, dtype=np.float64)
+
         # Cross-block discriminator memory: last complex sample of the
         # previous channel-filtered block. None → seed from first sample.
         self._fm_prev: complex | None = None
@@ -424,6 +442,7 @@ class AudioDemodulator:
         self._build_filters()
         self._st_usb.fill(0); self._st_lsb.fill(0); self._st_lpf.fill(0)
         self._st_fm_nfm.fill(0); self._st_fm_wfm.fill(0)
+        self._st_am_ch.fill(0)
         self._fm_prev = None; self._st_deemph = 0.0
         logger.info("AudioDemodulator rate: %d Hz, decim=%d, audio: %.1f Hz",
                      self.sample_rate, self.decim, self.audio_rate)
@@ -438,6 +457,7 @@ class AudioDemodulator:
             self._build_filters()
             self._st_usb.fill(0); self._st_lsb.fill(0); self._st_lpf.fill(0)
             self._st_fm_nfm.fill(0); self._st_fm_wfm.fill(0)
+            self._st_am_ch.fill(0)
             self._fm_prev = None; self._st_deemph = 0.0
             self._agc_gain = None
             logger.info("Mode %s→%s: RX audio rate now %.1f Hz (decim=%d)",
@@ -621,7 +641,9 @@ class AudioDemodulator:
 
         # ── WDSP I/Q-level path (primary) ──────────────────────────
         is_fm = mode in ("NFM", "FM", "WFM")
+        _wdsp_iq_attempted = False   # prevent audio-WDSP re-processing
         if not is_fm and self._wdsp_enabled and self._wdsp_iq is not None:
+            _wdsp_iq_attempted = True
             try:
                 wdsp_audio = self._wdsp_iq.process_iq(bb)
                 if len(wdsp_audio) > 0:
@@ -664,9 +686,15 @@ class AudioDemodulator:
                         self._wdsp_rms_ts = now
                     self.audio_buffer.extend(audio.tolist())
                     return audio.astype(np.float32)
-            except Exception:
-                pass  # fall through to Python demodulator on any error
+            except Exception as e:
+                logger.warning("WDSP IQ path failed (falling to Python demod): %s", e)
+                # Do NOT let audio-WDSP re-process — I/Q path already attempted
         if mode == "AM":
+            # Channel-limit the complex baseband before the abs() envelope
+            # detector — without this, adjacent signals and out-of-channel
+            # noise contaminate the nonlinear abs() via cross-products (same
+            # principle as the FM channel filter before the discriminator).
+            bb, self._st_am_ch = lfilter(self._am_ch_lpf, [1.0], bb, zi=self._st_am_ch)
             audio = np.abs(bb).astype(np.float64)
             audio, self._st_lpf = lfilter(self._lpf, [1.0], audio, zi=self._st_lpf)
             audio -= np.mean(audio)
@@ -734,6 +762,7 @@ class AudioDemodulator:
             self._wdsp_enabled
             and self._wdsp is not None
             and mode not in ("NFM", "FM", "WFM")
+            and not _wdsp_iq_attempted  # I/Q WDSP already handled this audio
         )
 
         is_fm = mode in ("NFM", "FM", "WFM")
@@ -791,7 +820,15 @@ class AudioDemodulator:
                 # Built-in AGC — used whenever WDSP is bypassed (switch off
                 # or library missing).
                 target = 0.25 * self._volume * 2.0
-                self._agc_gain = self._agc_gain * 0.95 + (target / (rms + 1e-10)) * 0.05
+                # AM envelope detection is sensitive to carrier-level changes
+                # (fading) but the modulation itself causes large RMS swings.
+                # Slower AGC (alpha ~0.01 → ~250 ms) avoids breathing/pumping
+                # on voice peaks while still tracking slow fading. SSB uses
+                # faster alpha (~0.05 → ~50 ms) since sideband power is
+                # independent of the missing carrier.
+                alpha = 0.01 if mode == "AM" else 0.05
+                self._agc_gain = (self._agc_gain * (1.0 - alpha)
+                                  + (target / (rms + 1e-10)) * alpha)
                 audio *= min(self._agc_gain, 50000.0)
                 np.clip(audio, -1.0, 1.0, out=audio)
 
@@ -1338,7 +1375,18 @@ class StreamProcessor:
     def feed_iq(self, iq: np.ndarray):
         spec = self.spectrum.feed(iq)
         if spec is not None:
-            self.latest_spectrum = self.spectrum.bin(spec, 512)
+            binned = self.spectrum.bin(spec, 512)
+            # Rotate so VFO (IF_OFFSET Hz below LO) sits at bin 256 (display
+            # center).  Without this the client would receive a LO-centred
+            # spectrum and have to cyclic-rotate itself — which creates a
+            # frequency-axis wrap discontinuity at the rotation seam.  Doing
+            # it server-side keeps the client's linear pixel→freq mapping
+            # correct in the region around VFO.
+            shift = int(round(IF_OFFSET * 512 / IQ_SAMPLE_RATE))
+            if shift:
+                binned = np.roll(np.asarray(binned, dtype=np.float32),
+                                 shift).tolist()
+            self.latest_spectrum = binned
         audio = self.demodulator.demodulate(iq)
         if audio is not None and len(audio) > 0:
             self.demodulator.audio_buffer.extend(audio.tolist())
@@ -1349,6 +1397,7 @@ class StreamProcessor:
         """Update IQ sample rate for the demodulator + global state."""
         set_iq_sample_rate(hz)
         self.demodulator.set_sample_rate(hz)
+        self.spectrum.reset()
 
     def get_audio(self) -> bytes | None:
         return self.audio_chunks.popleft() if self.audio_chunks else None

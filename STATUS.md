@@ -1,11 +1,36 @@
 # sunmrrc — 项目状态
 
-更新时间: 2026-06-30
+更新时间: 2026-07-03
 
 ## 一句话现状
 
 后端健康，RX 正常出声，TX 语音发射已验证通过：37 dB SNR，96% SSB 效率，零掉帧，IQ peak ~0.69 / RMS ~0.68 @ 100% drive。
 iPhone HTTPS/WSS 安全上下文已解决，入口 `https://radio.vlsc.net:8889`。
+
+---
+
+## 变更记录
+
+### 2026-07-03 频谱频率标注精度修复
+
+修复了频谱/瀑布图频率标记在采样率切换时的准确性问题和多个 UI 缺陷：
+
+**问题根因：**
+1. 前端用 `parseInt('78k',10)*1000 = 78000 Hz` 近似计算频谱 span，但服务端实际 IQ 采样率为 78125 Hz（39k→39062, 156k→156250, 312k→312500），导致频率标签偏差 ~0.16%
+2. FFT 曲线像素映射 `xScale = W/(n-1)` 把 512 bins 拉伸到 0..512 像素，与瀑布图/频率网格的 `bin k = 像素 k`（W/n）约定不一致，VFO 中心 bin 256 落到像素 257（网格 VFO 线在 256）
+3. 采样率切换时 FFT EMA 平滑缓冲不重置，前 ~4 帧混入旧速率数据产生拖影
+4. 采样率切换时瀑布图不清空，旧 span 像素残留与新频率网格错位
+5. FFT dB 标签显示"0/-40/-80/-120"绝对 dB，但曲线用噪声底相对值+gamma 0.65 非线性映射，标签与数据不符
+6. `controls.js` 缺少 `setSampleRate` 处理器，远程客户端（其他标签页/设备）无法同步采样率状态
+7. 移动端"仅 78 kHz 已校准"警告文字过时
+
+**修复：**
+- `controls.js`: 新增 `EXACT_SAMPLE_RATES` 查找表（39062/78125/156250/312500），`_getSampleRateHz()` 改用精确值
+- `controls.js`: 新增 `setSampleRate` 控制消息处理器，重置 FFT EMA、清空瀑布图、重绘频率标尺
+- `controls.js`: FFT `xScale` 从 `W/(n-1)` 改为 `W/n`，bin 256→像素 256 与 VFO 线对齐
+- `controls.js`: 移除 FFT 误导性 dB 数字标签，水平线改为纯视觉等距参考线
+- `dsp.py`: `SpectrumProcessor` 新增 `reset()` 方法，`set_iq_sample_rate()` 中调用以清空 FFT 累积缓冲
+- `mobile.js`: 删除过时的"仅 78 kHz 已校准"注释和 UI 警告
 
 ---
 

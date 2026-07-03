@@ -573,8 +573,10 @@ function setupMemChannels() {
             e.preventDefault();
             if (longPressed) {
                 longPressed = false;
+                hapticFeedback('heavy');
                 return;
             }
+            hapticFeedback('light');
             recallMemoryChannel(index);
         });
     });
@@ -1076,13 +1078,15 @@ function setupEventListeners() {
     // 快捷按钮
     domElements.quickButtons.forEach(button => {
         button.addEventListener('click', function() {
+            hapticFeedback('light');
             handleQuickButton(this);
         });
     });
-    
+
     // 频率调节按钮
     domElements.tuneButtons.forEach(button => {
         button.addEventListener('click', function() {
+            hapticFeedback('light');
             tuneFrequency(parseInt(this.dataset.step));
         });
     });
@@ -1151,6 +1155,7 @@ function setupEventListeners() {
             if (tuneTouchStarted) return;
             tuneTouchStarted = true;
             this.classList.add('active');
+            hapticFeedback('heavy');
             // 异步执行，不阻塞主线程
             setTimeout(function() {
                 if (typeof startTune === 'function') {
@@ -1226,19 +1231,21 @@ function setupEventListeners() {
             this.style.transform = '';
             if (cqTouchStarted) {
                 cqTouchStarted = false;
+                hapticFeedback('medium');
                 playCQAudio();
             }
         }, { passive: false });
-        
+
         // 桌面端鼠标支持
         domElements.cqButton.addEventListener('mousedown', function(e) {
             e.preventDefault();
             this.style.transform = 'scale(0.95)';
         });
-        
+
         domElements.cqButton.addEventListener('mouseup', function(e) {
             e.preventDefault();
             this.style.transform = '';
+            hapticFeedback('medium');
             playCQAudio();
         });
         
@@ -1249,11 +1256,13 @@ function setupEventListeners() {
     if (domElements.recordButton) {
         domElements.recordButton.addEventListener('click', function(e) {
             e.preventDefault();
+            hapticFeedback('medium');
             toggleRecording();
         });
-        
+
         domElements.recordButton.addEventListener('touchend', function(e) {
             e.preventDefault();
+            hapticFeedback('medium');
             toggleRecording();
         }, { passive: false });
         
@@ -1709,6 +1718,8 @@ function updateFrequencyDisplay() {
     if (el10hz) el10hz.textContent = hzStr[1];
 
     updateBandButtonLabel(getCurrentMobileBand());
+    // 频率变化 → 刷新频率标尺
+    if (typeof drawFreqScale === 'function') drawFreqScale();
 }
 
 // 调节频率
@@ -2426,8 +2437,6 @@ function selectMode(mode) {
 
 // 采样率（频谱带宽）选择器 — 39/78/156/312 kHz
 // 对应 SunSDR2 的 0x0020 STREAM_CTRL 采样率档位（5^7 的 1/2、1、2、4 倍）。
-// 注意：后端目前只确认了 78k 档位，其它档位会回退到 78k（见 sunsdr_direct.py
-// 的 STREAM_RATE_FIELD），抓包确认字段后即可全部生效。
 var SAMPLE_RATE_OPTIONS = ['39k', '78k', '156k', '312k'];
 function showSampleRateSelector() {
     const current = mobileState.currentSampleRate || '78k';
@@ -2437,7 +2446,7 @@ function showSampleRateSelector() {
         const label = rate.replace('k', ' kHz');
         html += `<button class="mode-select-btn ${active}" onclick="selectSampleRate('${rate}')">${label}</button>`;
     });
-    html += '</div><p style="font-size:12px;opacity:0.7;margin-top:8px;">目前仅 78 kHz 已校准，其它档位待抓包确认后生效。</p>';
+    html += '</div>';
     html += '<button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';
 
     showModalPanel(html);
@@ -2448,6 +2457,8 @@ function selectSampleRate(rate) {
     sendWebSocketMessage("setSampleRate:" + rate);
     console.log('选择采样率:', rate);
     closeModalPanel();
+    // 采样率变化 → 频率标尺需要重绘（span 变了）
+    if (typeof drawFreqScale === 'function') drawFreqScale();
 }
 
 // 音频编解码（带宽）选择器 — Opus 各码率档 vs Int16 PCM
@@ -4650,7 +4661,7 @@ function cycleWDSPAGC() {
 
 // 更新 DSP 按钮启用/禁用状态
 function updateDSPButtonsState() {
-    const buttons = document.querySelectorAll('.dsp-btn');
+    const buttons = document.querySelectorAll('.dsp-chip');
     buttons.forEach(btn => {
         if (wdspState.enabled) {
             btn.classList.remove('disabled');
@@ -4723,9 +4734,9 @@ function showWDSPSettings() {
 
     // ── 滤波器 ──
     html += '<div class="setting-section"><h4>滤波器</h4>';
-    html += '<button class="dsp-btn" style="width:32%;margin:1px" onclick="toggleWDSPNB();closeModalPanel();showWDSPSettings();">NB<br><span id="wdsp-nb-v">' + (wdspState.nb ? 'ON' : 'OFF') + '</span></button>';
-    html += '<button class="dsp-btn" style="width:32%;margin:1px" onclick="toggleWDSPANF();closeModalPanel();showWDSPSettings();">ANF<br><span id="wdsp-anf-v">' + (wdspState.anf ? 'ON' : 'OFF') + '</span></button>';
-    html += '<button class="dsp-btn" style="width:32%;margin:1px" onclick="toggleWDSPNF();closeModalPanel();showWDSPSettings();">NF<br><span id="wdsp-nf-v">' + (wdspState.nf ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-chip" style="width:32%;margin:1px" onclick="toggleWDSPNB();closeModalPanel();showWDSPSettings();"><span class="dsp-chip-label">NB</span><span class="dsp-chip-val" id="wdsp-nb-v">' + (wdspState.nb ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-chip" style="width:32%;margin:1px" onclick="toggleWDSPANF();closeModalPanel();showWDSPSettings();"><span class="dsp-chip-label">ANF</span><span class="dsp-chip-val" id="wdsp-anf-v">' + (wdspState.anf ? 'ON' : 'OFF') + '</span></button>';
+    html += '<button class="dsp-chip" style="width:32%;margin:1px" onclick="toggleWDSPNF();closeModalPanel();showWDSPSettings();"><span class="dsp-chip-label">NF</span><span class="dsp-chip-val" id="wdsp-nf-v">' + (wdspState.nf ? 'ON' : 'OFF') + '</span></button>';
     html += '</div>';
 
     html += '<button class="close-panel-btn" onclick="closeModalPanel()">关闭</button></div>';

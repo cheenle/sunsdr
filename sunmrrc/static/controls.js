@@ -966,6 +966,22 @@ function wsControlTRXcrtol( msg ){
 		}
 		console.log('🎚️ Spectrum FPS:', param);
 	}
+	else if(action == "setSampleRate"){
+		if (typeof mobileState !== 'undefined') {
+			mobileState.currentSampleRate = param;
+		}
+		// 采样率切换 → span 变化：重置 FFT 平滑缓冲（否则前几帧混入
+		// 旧速率数据产生拖影），并清空瀑布图（旧像素按旧 span 排列，
+		// 与新频率网格错位，留着只会误导）。
+		fftEma = null;
+		if (wfCtx && wfCanvas) {
+			wfCtx.fillStyle = '#000';
+			wfCtx.fillRect(0, 0, wfCanvas.width, wfCanvas.height);
+		}
+		wfAccum = null; wfAccumCount = 0;
+		if (typeof drawFreqScale === 'function') drawFreqScale();
+		console.log('采样率同步:', param);
+	}
 	else if(action == "pttError"){
 		console.error('🚨 PTT 错误:', param);
 		if(param === "tot_timeout"){
@@ -1366,6 +1382,8 @@ function showTRXfreq(freq){
 	if (typeof updateBandButtonLabel === 'function' && typeof getCurrentMobileBand === 'function') {
 		updateBandButtonLabel(getCurrentMobileBand());
 	}
+	// 频率变化 → 刷新频率标尺
+	if (typeof drawFreqScale === 'function') drawFreqScale();
 }
 
 // 全局频率更新函数
@@ -2416,6 +2434,250 @@ function toggleRecord(sendit = false)
 
 
 //////////////////////////////////////////////////////////////////////
+// ══════════════════════════════════════════════════════════════════════
+// 频率标尺 & 网格线 — 在频谱/瀑布图上叠加频率刻度和垂直线
+// ══════════════════════════════════════════════════════════════════════
+
+var EXACT_SAMPLE_RATES = {
+	'39k': 39062,
+	'78k': 78125,
+	'156k': 156250,
+	'312k': 312500
+};
+
+function _getSampleRateHz() {
+	var rateStr = (typeof mobileState !== 'undefined' && mobileState.currentSampleRate)
+		? mobileState.currentSampleRate : '78k';
+	return EXACT_SAMPLE_RATES[rateStr] || EXACT_SAMPLE_RATES['78k'];
+}
+
+function _getFrequencySpan() { return _getSampleRateHz(); }
+
+// SunSDR2 hardware IF offset: RX DDS = VFO + 30500 Hz.
+// The server rotates spectrum bins before sending so VFO sits at display
+// center (bin 256). No client-side rotation needed.
+
+function _getSpectrumCenterFreq() {
+	// Server-rotated spectrum: VFO = display center.
+	var vfo = 7050000;
+	if (typeof TRXfrequency !== 'undefined' && TRXfrequency) vfo = TRXfrequency;
+	else if (typeof mobileState !== 'undefined' && mobileState.currentFrequency) vfo = mobileState.currentFrequency;
+	return vfo;
+}
+
+function _niceTickInterval(spanHz) {
+	// 自适应刻度间距: 目标 ~5–8 个刻度线覆盖全频段
+	var rough = spanHz / 6;
+	var mag = Math.pow(10, Math.floor(Math.log10(rough)));
+	var res = rough / mag;
+	var nice;
+	if (res < 1.5) nice = 1;
+	else if (res < 3.5) nice = 2.5;
+	else if (res < 7.5) nice = 5;
+	else nice = 10;
+	var interval = nice * mag;
+	// 确保至少 3 个刻度，最多 15 个
+	if (spanHz / interval < 3) interval = _niceTickInterval(spanHz / 2);  // 递归缩小
+	return interval;
+}
+
+function _freqToPixel(freqHz, canvasW) {
+	var center = _getSpectrumCenterFreq();
+	var span = _getFrequencySpan();
+	var left = center - span / 2;
+	return Math.round((freqHz - left) / span * canvasW);
+}
+
+function _pixelToFreq(pixelX, canvasW) {
+	// 将画布像素坐标转换为实际 RF 频率 (Hz)
+	var center = _getSpectrumCenterFreq();
+	var span = _getFrequencySpan();
+	var left = center - span / 2;
+	return Math.round(left + (pixelX / canvasW) * span);
+}
+
+// ── 点击频谱跳转频率 ────────────────────────────────────────
+var _tuneFlashX = -1;   // 点击调谐闪烁指示线的 X 坐标 (<0 = 不画)
+
+function _setupClickToTune(canvas) {
+	if (!canvas || canvas.__clickToTuneSetup) return;
+	canvas.__clickToTuneSetup = true;
+
+	function canvasXFromEvent(e) {
+		var rect = canvas.getBoundingClientRect();
+		// CSS 缩放修正: canvas 内部 512px → 显示宽度 rect.width
+		var cssX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+		return Math.round(cssX / rect.width * canvas.width);
+	}
+
+	function handleTap(e) {
+		e.preventDefault();
+		var cx = canvasXFromEvent(e);
+		if (cx < 0 || cx > canvas.width) return;
+		var freqHz = _pixelToFreq(cx, canvas.width);
+		if (freqHz <= 0) return;
+
+		// VFO is at spectrum center → clicked freq becomes the new VFO, signal centers automatically.
+		if (typeof TRXfrequency !== 'undefined') TRXfrequency = freqHz;
+		if (typeof mobileState !== 'undefined') mobileState.currentFrequency = freqHz;
+		if (typeof sendTRXfreq === 'function') sendTRXfreq(freqHz);
+		if (typeof updateFrequencyDisplay === 'function') updateFrequencyDisplay();
+
+		_tuneFlashX = cx;
+		setTimeout(function(){ _tuneFlashX = -1; }, 600);
+
+		console.log('click-tune: signal ' + (freqHz/1000).toFixed(1)
+			+ ' kHz -> VFO (centered)');
+	}
+
+	canvas.addEventListener('click', handleTap);
+	canvas.addEventListener('touchstart', handleTap, { passive: false });
+}
+
+function drawFreqScale() {
+	var canvas = document.getElementById('freq-scale-canvas');
+	if (!canvas) return;
+	var ctx = canvas.getContext('2d');
+	var W = canvas.width, H = canvas.height;
+
+	var centerFreq = _getSpectrumCenterFreq();
+	var span = _getFrequencySpan();
+	var tickInterval = _niceTickInterval(span);
+
+	var leftFreq = centerFreq - span / 2;
+	var rightFreq = centerFreq + span / 2;
+
+	// 背景
+	ctx.fillStyle = '#0a0a14';
+	ctx.fillRect(0, 0, W, H);
+
+	// 顶部微细分割线
+	ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+	ctx.lineWidth = 0.5;
+	ctx.beginPath();
+	ctx.moveTo(0, 0);
+	ctx.lineTo(W, 0);
+	ctx.stroke();
+
+	// 刻度线和标签
+	var firstTick = Math.ceil(leftFreq / tickInterval) * tickInterval;
+	ctx.fillStyle = 'rgba(255,255,255,0.60)';
+	ctx.font = 'bold 13px ' +
+		(typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
+			? '-apple-system, "Helvetica Neue", sans-serif'
+			: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'bottom';
+
+	for (var f = firstTick; f <= rightFreq; f += tickInterval) {
+		var x = _freqToPixel(f, W);
+		if (x < 2 || x > W - 2) continue;
+
+		// 小刻度线
+		ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+		ctx.lineWidth = 0.5;
+		ctx.beginPath();
+		ctx.moveTo(x, 1);
+		ctx.lineTo(x, 7);
+		ctx.stroke();
+
+		// 标签: kHz 或 MHz（跨度 > 1MHz 时用 MHz）
+		var label;
+		if (span >= 1000000) {
+			label = (f / 1000000).toFixed(2) + 'M';
+		} else {
+			label = (f / 1000).toFixed(tickInterval >= 5000 ? 0 : 1);
+		}
+		ctx.fillText(label, x, H - 3);
+	}
+
+	// VFO marker (center of display after spectrum shift)
+	var vfoX = Math.round(W / 2);
+	var vfoHz = _getSpectrumCenterFreq();
+	ctx.strokeStyle = 'rgba(255,80,80,0.40)';
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.moveTo(vfoX, 0);
+	ctx.lineTo(vfoX, H);
+	ctx.stroke();
+	// VFO frequency label
+	ctx.fillStyle = 'rgba(255,100,100,0.70)';
+	ctx.font = 'bold 10px ' +
+		(typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
+			? '-apple-system, "Helvetica Neue", sans-serif'
+			: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
+	ctx.textAlign = 'center';
+	ctx.fillText((vfoHz/1000).toFixed(1) + 'k', vfoX, 12);
+}
+
+function _drawFreqGridOnWaterfall() {
+	var canvas = document.getElementById('waterfall-canvas');
+	if (!canvas) return;
+	var ctx = canvas.getContext('2d');
+	var W = canvas.width, H = canvas.height;
+
+	var centerFreq = _getSpectrumCenterFreq();
+	var span = _getFrequencySpan();
+	var tickInterval = _niceTickInterval(span);
+
+	var leftFreq = centerFreq - span / 2;
+	var rightFreq = centerFreq + span / 2;
+	var firstTick = Math.ceil(leftFreq / tickInterval) * tickInterval;
+
+	// 刻度网格线 — 极淡，仅作视觉参考
+	ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+	ctx.lineWidth = 0.5;
+	for (var f = firstTick; f <= rightFreq; f += tickInterval) {
+		var x = _freqToPixel(f, W);
+		if (x < 1 || x > W - 1) continue;
+		ctx.beginPath();
+		ctx.moveTo(x, 0);
+		ctx.lineTo(x, H);
+		ctx.stroke();
+	}
+
+	// VFO marker (center of display after spectrum shift)
+	var vfoX = Math.round(W / 2);
+	ctx.strokeStyle = 'rgba(255,100,100,0.18)';
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.moveTo(vfoX, 0);
+	ctx.lineTo(vfoX, H);
+	ctx.stroke();
+}
+
+// ── 将 FFT 频率网格线绘制抽成独立函数，_fftDraw 和外部都可复用 ──
+function _drawFreqGridOnFFT(ctx, W, H) {
+	var centerFreq = _getSpectrumCenterFreq();
+	var span = _getFrequencySpan();
+	var tickInterval = _niceTickInterval(span);
+
+	var leftFreq = centerFreq - span / 2;
+	var rightFreq = centerFreq + span / 2;
+	var firstTick = Math.ceil(leftFreq / tickInterval) * tickInterval;
+
+	// 刻度网格线
+	ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+	ctx.lineWidth = 0.5;
+	for (var f = firstTick; f <= rightFreq; f += tickInterval) {
+		var x = _freqToPixel(f, W);
+		if (x < 1 || x > W - 1) continue;
+		ctx.beginPath();
+		ctx.moveTo(x, 0);
+		ctx.lineTo(x, H);
+		ctx.stroke();
+	}
+
+	// VFO marker (center of display after spectrum shift)
+	var vfoX = Math.round(W / 2);
+	ctx.strokeStyle = 'rgba(255,100,100,0.20)';
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.moveTo(vfoX, 0);
+	ctx.lineTo(vfoX, H);
+	ctx.stroke();
+}
+
 // 宽带射频瀑布图 (Waterfall) — 数据来自后端 /WSspectrum
 // 后端每帧推送 512 字节 uint8 (0=-120dB, 255=0dB)，约 38Hz。
 // 渲染：每收到一帧，把画布整体下移 1px，在顶部画一行新频谱。
@@ -2460,6 +2722,7 @@ function Waterfall_start(){
 	wfCanvas = document.getElementById('waterfall-canvas');
 	if (!wfCanvas) return;                 // 桌面端无此元素
 	wfCtx = wfCanvas.getContext('2d');
+	_setupClickToTune(wfCanvas);
 	if (!wfColorLUT) _wfBuildColorLUT();
 	// 初始化为全黑
 	wfCtx.fillStyle = '#000';
@@ -2473,7 +2736,10 @@ function Waterfall_start(){
 	wsSpectrum.onmessage = function(ev){
 		if (!wfCtx || !(ev.data instanceof ArrayBuffer)) return;
 		var bins = new Uint8Array(ev.data);
+		// Server already rotates spectrum so VFO = bin 256 (display center).
+		// No client-side rotation needed — the frequency axis is linear.
 		var n = bins.length;
+			window.__fftLatestBins = new Uint8Array(bins);
 		// 累积：多帧求和，攒够 WF_DECIMATE 帧才画一行 → 慢 10 倍且更平滑
 		if (!wfAccum || wfAccum.length !== n){ wfAccum = new Float32Array(n); wfAccumCount = 0; }
 		for (var k = 0; k < n; k++){ wfAccum[k] += bins[k]; }
@@ -2505,11 +2771,25 @@ function Waterfall_start(){
 			px[o] = wfColorLUT[c]; px[o+1] = wfColorLUT[c+1]; px[o+2] = wfColorLUT[c+2]; px[o+3] = 255;
 		}
 		wfCtx.putImageData(wfRow, 0, 0);
+		// 叠加频率网格线（每帧绘制，覆盖在瀑布数据之上）
+		_drawFreqGridOnWaterfall();
+		// click-to-tune flash on waterfall
+		if (_tuneFlashX >= 0) {
+			wfCtx.strokeStyle = 'rgba(255,220,100,0.65)';
+			wfCtx.lineWidth = 1.5;
+			wfCtx.beginPath();
+			wfCtx.moveTo(_tuneFlashX, 0);
+			wfCtx.lineTo(_tuneFlashX, wfCanvas.height);
+			wfCtx.stroke();
+		}
 		// 重置累积
 		wfAccum.fill(0); wfAccumCount = 0;
 	};
 	wsSpectrum.onclose = function(){ /* 等下次 start 重连 */ };
 	wsSpectrum.onerror = function(){ try { wsSpectrum.close(); } catch(e){} };
+		FFT_start();
+	// 初始化频率标尺（后续频率/采样率变化也会更新）
+	drawFreqScale();
 }
 
 function Waterfall_stop(){
@@ -2522,4 +2802,181 @@ function Waterfall_stop(){
 		wfCtx.fillStyle = '#000';
 		wfCtx.fillRect(0, 0, wfCanvas.width, wfCanvas.height);
 	}
+		FFT_stop();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// RF FFT 频谱折线图 — 与瀑布图共享 /WSspectrum 数据，高频刷新
+// ══════════════════════════════════════════════════════════════════════
+
+var fftCanvas = null;
+var fftCtx = null;
+var fftEma = null;			// EMA 持久平滑缓冲, 替代 fftPrevBins
+var fftAnimId = null;
+
+function _fftClear() {
+	if (!fftCtx || !fftCanvas) return;
+	fftCtx.fillStyle = '#08080d';
+	fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
+}
+
+// uint8 (0=-120dB, 255=0dB) → 归一化 0..1, 强信号=1 (上方)
+function _fftNormalize(v) {
+	return v / 255.0;
+}
+
+function _fftDraw() {
+	if (!fftCtx || !fftCanvas) { fftAnimId = requestAnimationFrame(_fftDraw); return; }
+
+	// ── 帧抽取：rAF ~60fps → 仅每 6 帧渲染一次 (~10fps) ──
+	if (typeof fftDrawSkip === 'undefined') fftDrawSkip = 0;
+	fftDrawSkip++;
+	if (fftDrawSkip < 6) { fftAnimId = requestAnimationFrame(_fftDraw); return; }
+	fftDrawSkip = 0;
+
+	var bins = window.__fftLatestBins;
+	if (!bins || bins.length < 2) { fftAnimId = requestAnimationFrame(_fftDraw); return; }
+
+	// ── EMA 指数平滑: alpha=0.25 → ~4帧时间常数, 平滑且快速 ──
+	if (!fftEma || fftEma.length !== bins.length) {
+		fftEma = new Float32Array(bins);
+	}
+	var alpha = 0.25;
+	var blended = new Float32Array(bins.length);
+	for (var i = 0; i < bins.length; i++) {
+		fftEma[i] = fftEma[i] * (1 - alpha) + bins[i] * alpha;
+		blended[i] = fftEma[i];
+	}
+
+	var W = fftCanvas.width;
+	var H = fftCanvas.height;
+	var n = blended.length;
+
+	// ── 背景 ──────────────────────────────────────────────
+	fftCtx.clearRect(0, 0, W, H);
+	fftCtx.fillStyle = '#08080d';
+	fftCtx.fillRect(0, 0, W, H);
+
+	var pad = 4;
+
+	// ── 水平参考线（纯视觉刻度，不标绝对 dB） ───────────
+	// 注意：FFT 曲线用噪声底相对值 + gamma 拉伸，不映射到绝对 dB，
+	// 所以不画 dB 数字标签以免误导。仅留等距淡线作高度参照。
+	fftCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+	fftCtx.lineWidth = 0.5;
+	for (var i = 1; i < 6; i++) {
+		var gy = Math.round(pad + (H - 2 * pad) * i / 6);
+		fftCtx.beginPath();
+		fftCtx.moveTo(0, gy);
+		fftCtx.lineTo(W, gy);
+		fftCtx.stroke();
+	}
+
+	// ── 垂直频率网格线 + VFO 中心线 ───────────────────────
+	_drawFreqGridOnFFT(fftCtx, W, H);
+
+		// ── 噪声底归零 + 信号线性拉伸 ──────────────────────
+		// bin k → pixel k (W/n mapping)，与瀑布图/频率网格一致：
+		// bin 0 = 左边缘像素 0，bin n-1 = 最右像素 n-1。
+		// 不要用 W/(n-1)：那会把曲线拉伸 1px，使 VFO 中心 bin 256
+		// 落到像素 257（网格 VFO 线在 256），边缘也错位。
+		var xScale = W / n;
+
+		// 15% 百分位 = 噪声基线 → 画布底部
+		var sorted = new Float32Array(blended);
+		Array.prototype.sort.call(sorted, function(a, b) { return a - b; });
+		var floor = sorted[Math.floor(n * 0.15)];
+		var range = 70;  // 固定 70 uint8 跨度 (~33dB), 信号更突出
+
+		function _fftHeight(raw) {
+			if (raw <= floor) return 0;
+			var v = (raw - floor) / range;
+			if (v <= 0) return 0;
+			if (v >= 1.0) return 1.0;
+			return Math.pow(v, 0.65);  // 温和 Gamma, 信号突出噪声不显
+		}
+
+		// ── 填充区域路径 ────────────────────────────────────
+		fftCtx.beginPath();
+		fftCtx.moveTo(0, H - pad);
+		for (var k = 0; k < n; k++) {
+			var x = Math.round(k * xScale);
+			var h = _fftHeight(blended[k]);
+			var y = pad + (H - 2 * pad) * (1.0 - h);
+			fftCtx.lineTo(x, y);
+		}
+		fftCtx.lineTo(W, H - pad);
+		fftCtx.closePath();
+
+		// ── 细微填充 ────────────────────────────────────────
+		var grad = fftCtx.createLinearGradient(0, pad, 0, H - pad);
+		grad.addColorStop(0,    'rgba(0, 220, 255, 0.22)');
+		grad.addColorStop(0.3,  'rgba(0, 180, 230, 0.10)');
+		grad.addColorStop(0.7,  'rgba(0, 100, 180, 0.03)');
+		grad.addColorStop(1.0,  'rgba(0,  30,  80, 0.00)');
+		fftCtx.fillStyle = grad;
+		fftCtx.fill();
+
+		// ── 折线 Layer 1: 宽辉光 ────────────────────────────
+		fftCtx.beginPath();
+		for (var m = 0; m < n; m++) {
+			var sx = Math.round(m * xScale);
+			var sh = _fftHeight(blended[m]);
+			var sy = pad + (H - 2 * pad) * (1.0 - sh);
+			if (m === 0) fftCtx.moveTo(sx, sy);
+			else fftCtx.lineTo(sx, sy);
+		}
+		fftCtx.strokeStyle = 'rgba(0, 200, 240, 0.30)';
+		fftCtx.lineWidth = 5.0;
+		fftCtx.lineCap = 'round';
+		fftCtx.lineJoin = 'round';
+		fftCtx.stroke();
+
+		// ── 折线 Layer 2: 锐利峰值 ──────────────────────────
+		fftCtx.beginPath();
+		for (var p = 0; p < n; p++) {
+			var px = Math.round(p * xScale);
+			var ph = _fftHeight(blended[p]);
+			var py = pad + (H - 2 * pad) * (1.0 - ph);
+			if (p === 0) fftCtx.moveTo(px, py);
+			else fftCtx.lineTo(px, py);
+		}
+		fftCtx.strokeStyle = '#00f0ff';
+		fftCtx.lineWidth = 2.0;
+		fftCtx.shadowColor = 'rgba(0, 240, 255, 0.6)';
+		fftCtx.shadowBlur = 3;
+		fftCtx.stroke();
+		fftCtx.shadowBlur = 0;
+
+
+// click-to-tune flash indicator
+		if (_tuneFlashX >= 0) {
+			fftCtx.strokeStyle = 'rgba(255,220,100,0.70)';
+			fftCtx.lineWidth = 1.5;
+			fftCtx.beginPath();
+			fftCtx.moveTo(_tuneFlashX, 0);
+			fftCtx.lineTo(_tuneFlashX, H);
+			fftCtx.stroke();
+		}
+
+	fftAnimId = requestAnimationFrame(_fftDraw);
+}
+
+function FFT_start() {
+	fftCanvas = document.getElementById('fft-canvas');
+	if (!fftCanvas) return;
+	fftCanvas.style.display = 'block';
+	fftCtx = fftCanvas.getContext('2d');
+	_setupClickToTune(fftCanvas);
+	_fftClear();
+	if (fftAnimId) { cancelAnimationFrame(fftAnimId); }
+	fftAnimId = requestAnimationFrame(_fftDraw);
+}
+
+function FFT_stop() {
+	if (fftAnimId) { cancelAnimationFrame(fftAnimId); fftAnimId = null; }
+	fftEma = null;
+	fftDrawSkip = undefined;
+	_fftClear();
+	if (fftCanvas) fftCanvas.style.display = 'none';
 }
