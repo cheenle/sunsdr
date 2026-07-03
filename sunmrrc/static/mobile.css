@@ -1,68 +1,91 @@
 /* Modern Mobile Interface CSS - 蓝色系风格 */
 /* 采用统一蓝色专业配色方案 */
 
-/* CSS 变量 - SDR 现代风格 */
+/* ═══════════════════════════════════════════════════════════════════
+   CSS Design Tokens — SunSDR Control Panel
+   Dark-only theme optimized for OLED / low-light amateur radio operation.
+   Spacing follows an 8dp baseline grid with 4dp half-steps.
+   ═══════════════════════════════════════════════════════════════════ */
 :root {
-    /* 主背景色 */
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #12121a;
-    --bg-tertiary: #1a1a25;
-    --bg-card: #1e1e2a;
-    --bg-button: #252535;
-    --bg-button-hover: #2d2d42;
-    --bg-active: #3a3a55;
+    /* ── Surface / Background ────────────────────────────────────── */
+    --bg-primary: #08080d;
+    --bg-secondary: #0f0f18;
+    --bg-tertiary: #161625;
+    --bg-card: #1a1a2e;
+    --bg-button: #1f1f35;
+    --bg-button-hover: #282844;
+    --bg-active: #323258;
+    --bg-glass: rgba(22, 22, 40, 0.65);
 
-    /* 强调色 - 统一使用频率显示青色 */
+    /* ── Accent — Cyan SDR waterfall palette ───────────────────── */
     --accent-primary: #00d4ff;
-    --accent-secondary: #00d4ff;
+    --accent-secondary: #00b8e6;
+    --accent-glow: rgba(0, 212, 255, 0.35);
     --accent-warning: #f59e0b;
+    --accent-warning-glow: rgba(245, 158, 11, 0.3);
     --accent-danger: #ef4444;
+    --accent-danger-glow: rgba(239, 68, 68, 0.35);
+    --accent-success: #22c55e;
     --accent-tx: #ef4444;
     --accent-rx: #00d4ff;
 
-    /* 文字颜色 */
-    --text-primary: #ffffff;
-    --text-secondary: #a0a0b0;
-    --text-muted: #606070;
-    --text-inactive: #404050;
+    /* ── Text ────────────────────────────────────────────────────── */
+    --text-primary: #f0f0f5;
+    --text-secondary: #9898b0;
+    --text-muted: #585870;
+    --text-inactive: #3a3a50;
 
-    /* 边框和分隔 */
-    --border-color: #2a2a3a;
-    --divider: #1f1f2f;
+    /* ── Border & Divider ────────────────────────────────────────── */
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --divider: rgba(255, 255, 255, 0.06);
 
-    /* 仪表颜色 - 青色 */
-    --meter-bg: #1a1a28;
-    --meter-fill: linear-gradient(90deg, #00d4ff, #00d4ff);
+    /* ── Meter / Gauge ───────────────────────────────────────────── */
+    --meter-bg: #12122a;
+    --meter-fill: linear-gradient(90deg, #00d4ff, #00e5ff);
     --meter-fill-warning: linear-gradient(90deg, #f59e0b, #ef4444);
     --meter-fill-danger: linear-gradient(90deg, #ef4444, #dc2626);
 
-    /* 阴影 */
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    /* ── Elevation / Shadow ──────────────────────────────────────── */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55);
+    --shadow-glow-sm: 0 0 8px var(--accent-glow);
+    --shadow-glow-md: 0 0 16px var(--accent-glow);
 
-    /* 圆角 */
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
+    /* ── Border Radius ───────────────────────────────────────────── */
+    --radius-xs: 3px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
     --radius-full: 9999px;
 
-    /* 间距 */
+    /* ── Spacing (8dp baseline) ──────────────────────────────────── */
+    --space-2xs: 2px;
     --space-xs: 4px;
     --space-sm: 8px;
     --space-md: 12px;
     --space-lg: 16px;
     --space-xl: 24px;
+    --space-2xl: 32px;
 
-    /* 字体 */
+    /* ── Typography ──────────────────────────────────────────────── */
     --font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
-    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
 
-    /* 动画 */
-    --transition-fast: 150ms ease;
-    --transition-normal: 250ms ease;
-    --transition-slow: 400ms ease;
+    /* ── Animation ───────────────────────────────────────────────── */
+    --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    /* ── Glass Effect ────────────────────────────────────────────── */
+    --glass-blur: 16px;
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-bg: rgba(20, 20, 38, 0.55);
 }
 
 /* CSS Reset and Base Styles */
@@ -73,11 +96,40 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+/* ── Unified Touch Feedback (Cinema Dark UX) ────────────────────── */
+/* All interactive elements: smooth press scale + transition */
+button, .quick-btn, .dsp-chip, .mem-btn, .tuning-btn,
+.mode-btn, .band-btn, .ptt-button, .side-btn,
+.off-canvas-menu li, .menu-item, .header-btn {
+    touch-action: manipulation;
+    transition: transform var(--transition-fast),
+                box-shadow var(--transition-fast),
+                border-color var(--transition-fast),
+                background var(--transition-fast);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Press/active: 3% scale-down, within 100ms response */
+button:active, .quick-btn:active, .dsp-chip:active, .mem-btn:active,
+.tuning-btn:active, .ptt-button:active, .side-btn:active,
+.off-canvas-menu li:active, .menu-item:active, .header-btn:active {
+    transform: scale(0.97);
+    transition-duration: 80ms;
+}
+
+/* Touch target minimum: 44×44px for all interactive elements */
+.quick-btn, .dsp-chip, .tuning-btn, .side-btn, .header-btn,
+.control-row button, .mem-btn {
+    min-height: 44px;
+    min-width: 44px;
+}
+
 body {
     font-family: var(--font-system);
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    height: 100vh;
+    height: 100dvh;
     width: 100vw;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
@@ -85,6 +137,34 @@ body {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ── Professional Scrollbar (WebKit) ─────────────────────────── */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Global Focus-Visible (keyboard a11y) ────────────────────── */
+:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+}
+:focus:not(:focus-visible) {
+    outline: none;
 }
 
 /* Safe Area Insets for iPhone X+ */
@@ -98,21 +178,130 @@ body {
     background-color: var(--bg-secondary);
 }
 
-/* Main Container */
-.mobile-modern-container {
+/* ═══════════════════════════════════════════════════════════════════
+   Glass Card — reusable frosted-glass surface used by meter frames,
+   DSP controls, and modal panels.
+   ═══════════════════════════════════════════════════════════════════ */
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ── Section Label — subtle uppercase header for grouped controls ── */
+.section-label {
     display: flex;
-    flex-direction: column;
-    height: 100dvh;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 0 var(--space-xs);
+    font-size: 11px;    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-xs);
+    user-select: none;
+}
+.section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SVG Icon System — replaces emoji / Unicode icons.
+   Each icon is an inline SVG mask rendered via background-color so it
+   inherits the currentColor or a custom token.
+   ═══════════════════════════════════════════════════════════════════ */
+.icon-power,
+.icon-volume,
+.icon-record,
+.icon-chevron-left,
+.icon-chevron-right,
+.icon-chevron-double-left,
+.icon-chevron-double-right,
+.icon-menu-close {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    background-color: currentColor;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+    vertical-align: middle;
+}
+
+/* Power ⏻ → SVG circle-with-gap */
+.icon-power {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M12 2v10'/%3E%3Cpath d='M18.4 5.6a8 8 0 1 1-12.8 0'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M12 2v10'/%3E%3Cpath d='M18.4 5.6a8 8 0 1 1-12.8 0'/%3E%3C/svg%3E");
+}
+
+/* Volume 🔊 → SVG speaker */
+.icon-volume {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'%3E%3C/polygon%3E%3Cpath d='M15.54 8.46a5 5 0 0 1 0 7.07'/%3E%3Cpath d='M19.07 4.93a10 10 0 0 1 0 14.14'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'%3E%3C/polygon%3E%3Cpath d='M15.54 8.46a5 5 0 0 1 0 7.07'/%3E%3Cpath d='M19.07 4.93a10 10 0 0 1 0 14.14'/%3E%3C/svg%3E");
+}
+
+/* Record ● → SVG circle */
+.icon-record {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3C/svg%3E");
+    width: 14px;
+    height: 14px;
+}
+
+/* Chevrons for tuning */
+.icon-chevron-left {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'%3E%3C/polyline%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'%3E%3C/polyline%3E%3C/svg%3E");
+}
+.icon-chevron-right {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'%3E%3C/polyline%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'%3E%3C/polyline%3E%3C/svg%3E");
+}
+.icon-chevron-double-left {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='11 17 6 12 11 7'/%3E%3Cpolyline points='18 17 13 12 18 7'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='11 17 6 12 11 7'/%3E%3Cpolyline points='18 17 13 12 18 7'/%3E%3C/svg%3E");
+}
+.icon-chevron-double-right {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='13 17 18 12 13 7'/%3E%3Cpolyline points='6 17 11 12 6 7'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='13 17 18 12 13 7'/%3E%3Cpolyline points='6 17 11 12 6 7'/%3E%3C/svg%3E");
+}
+
+/* Menu close × */
+.icon-menu-close {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+}
+
+/* ── Icon sizing variants ─────────────────────────────────────── */
+.icon-sm { width: 16px; height: 16px; }
+.icon-md { width: 20px; height: 20px; }
+.icon-lg { width: 24px; height: 24px; }
+
+/* Main Container — 正常文档流，PTT fixed 在底部 */
+.mobile-modern-container {
+    min-height: 100dvh;
+    min-height: 100vh;
     padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    padding-bottom: 130px;  /* 为 fixed PTT 留出空间 */
     background-color: var(--bg-primary);
 }
 
 /* Header Styles - 统一蓝色风格 */
 .app-header {
-    background-color: var(--bg-secondary);
-    padding: clamp(4px, 1vh, 8px) clamp(8px, 2vw, 12px);
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(15, 15, 24, 0.95) 100%);
+    padding: 2px clamp(8px, 2vw, 10px);
     border-bottom: 1px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
     z-index: 100;
     flex-shrink: 0;
 }
@@ -121,19 +310,18 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: clamp(2px, 0.5vh, 4px);
+    margin-bottom: 1px;
 }
 
 .header-btn {
     background: var(--bg-button);
-    border: none;
-    color: var(--text-primary);
-    font-size: 22px;
-    cursor: pointer;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 23px;    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,15 +333,15 @@ body {
 
 .header-btn:active {
     background-color: var(--bg-button-hover);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
     transform: scale(0.95);
 }
 
 /* 电源按钮 */
 .power-btn {
     background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
-    font-size: 24px;
-    border: 1px solid var(--border-color);
-}
+    font-size: 25px;}
 
 .power-btn:active {
     background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 212, 255, 0.2));
@@ -161,9 +349,10 @@ body {
 }
 
 .power-btn.active {
-    background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 212, 255, 0.3));
-    border-color: var(--accent-secondary);
-    box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 212, 255, 0.15));
+    border-color: rgba(0, 212, 255, 0.5);
+    color: var(--accent-primary);
+    box-shadow: 0 0 14px var(--accent-glow);
 }
 
 .menu-btn {
@@ -194,8 +383,7 @@ body {
 .hamburger:after { bottom: -6px; }
 
 .power-icon {
-    font-size: 24px;
-}
+    font-size: 25px;}
 
 /* Frequency Display - SDR 蓝色数码管风格 */
 .frequency-display-large {
@@ -209,33 +397,33 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: clamp(44px, 12vw, 68px);  /* 字号小一号：百兆位挤出来也不截断 */
-    font-weight: 700;
-    letter-spacing: 2px;
+    font-size: clamp(42px, 11vw, 64px);
+    font-weight: 750;
+    letter-spacing: 3px;
     font-variant-numeric: tabular-nums;
     font-family: var(--font-mono);
-    /* SDR 青色荧光效果 */
     color: #00d4ff;
-    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
-    padding: clamp(6px, 1.5vh, 12px) clamp(12px, 3vw, 24px);
+    text-shadow: 0 0 12px rgba(0, 212, 255, 0.45), 0 0 2px rgba(0, 180, 220, 0.8);
+    background: linear-gradient(180deg, rgba(0, 180, 224, 0.06) 0%, rgba(0, 160, 200, 0.02) 100%);
+    padding: 2px clamp(10px, 3vw, 20px);
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
-    transition: color 0.4s ease, text-shadow 0.4s ease, border-color 0.4s ease;
+    border: 1px solid rgba(0, 212, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(0, 212, 255, 0.06);
+    transition: color 0.4s ease, text-shadow 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* TX 状态 - 频率显示变红色 */
 .freq-main.tx-active {
-    color: #ff4444;
-    text-shadow: 0 0 12px rgba(255, 68, 68, 0.6);
-    border-color: rgba(255, 68, 68, 0.3);
+    color: #ff5252;
+    text-shadow: 0 0 14px rgba(255, 68, 68, 0.55), 0 0 2px rgba(255, 50, 50, 0.9);
+    border-color: rgba(255, 68, 68, 0.25);
+    background: linear-gradient(180deg, rgba(255, 68, 68, 0.06) 0%, rgba(255, 40, 40, 0.02) 100%);
     animation: freq-tx-glow 2s ease-in-out infinite;
 }
 
 @keyframes freq-tx-glow {
-    0%, 100% { text-shadow: 0 0 12px rgba(255, 68, 68, 0.6); }
-    50% { text-shadow: 0 0 18px rgba(255, 68, 68, 0.8); }
+    0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 68, 68, 0.08); }
+    50% { box-shadow: inset 0 1px 0 rgba(255, 68, 68, 0.18), 0 0 20px rgba(255, 68, 68, 0.2); }
 }
 
 /* 频率输入框样式 - SDR 青色风格 */
@@ -247,8 +435,7 @@ body {
     transform: translateX(-50%);
     width: 200px;
     height: 48px;
-    font-size: 28px;
-    font-weight: 700;
+    font-size: 29px;    font-weight: 700;
     text-align: center;
     font-family: var(--font-mono);
     background: var(--bg-secondary);
@@ -267,8 +454,7 @@ body {
 
 .freq-input-hidden::placeholder {
     color: var(--text-muted);
-    font-size: 14px;
-    font-family: var(--font-system);
+    font-size: 15px;    font-family: var(--font-system);
 }
 
 .freq-input-visible {
@@ -309,8 +495,7 @@ body {
 }
 
 .freq-unit {
-    font-size: 16px;
-    color: var(--text-secondary);
+    font-size: 17px;    color: var(--text-secondary);
     margin-left: 4px;
 }
 
@@ -323,8 +508,7 @@ body {
     display: flex;
     justify-content: center;
     gap: 10px;
-    font-size: 13px;
-    color: #888;
+    font-size: 14px;    color: #888;
 }
 
 .vfo-indicator,
@@ -341,8 +525,7 @@ body {
 .mode-indicator-header {
     margin-left: auto;
     padding: 2px 8px;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 13px;    font-weight: 500;
     color: var(--accent-secondary);
     font-family: var(--font-mono);
 }
@@ -353,23 +536,23 @@ body {
     flex-direction: row;
     justify-content: center;
     align-items: center;
-    gap: clamp(4px, 1vw, 8px);
-    padding: clamp(2px, 0.5vh, 4px) 0;
+    gap: 4px;
+    padding: 1px 0;
     flex-wrap: wrap;
 }
 
 .status-item {
-    font-size: 10px;
-    padding: 3px 10px;
-    border-radius: 4px;
-    background: rgba(30, 30, 30, 0.8);
-    border: 1px solid #444;
+    font-size: 10px;    padding: 2px 7px;
+    border-radius: var(--radius-xs);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    color: #888;
+    gap: 4px;
+    color: var(--text-muted);
     white-space: nowrap;
     font-weight: 500;
+    letter-spacing: 0.02em;
     transition: all 0.3s ease;
 }
 
@@ -386,36 +569,37 @@ body {
 
 /* 连接状态 - 绿点 + 蓝色风格 */
 .status-item.connected {
-    color: #00d4ff;
-    border-color: rgba(0, 212, 255, 0.5);
-    background: rgba(0, 212, 255, 0.1);
+    color: var(--accent-primary);
+    border-color: rgba(0, 212, 255, 0.25);
+    background: rgba(0, 212, 255, 0.08);
 }
 
 .status-item.connected .status-dot {
     background: #44ff44;
-    box-shadow: 0 0 4px rgba(68, 255, 68, 0.6);
+    box-shadow: 0 0 5px rgba(68, 255, 68, 0.5);
 }
 
 /* TX发射状态 - 红色闪烁 */
 .status-item#status-tx.active {
     color: #ff6b6b;
-    border-color: rgba(255, 107, 107, 0.5);
-    background: rgba(255, 107, 107, 0.15);
+    border-color: rgba(255, 107, 107, 0.3);
+    background: rgba(255, 107, 107, 0.12);
 }
 
 .status-item#status-tx.active .status-dot {
     background: #ff4444;
     animation: pulse 1s infinite;
-    box-shadow: 0 0 4px rgba(255, 68, 68, 0.6);
+    box-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
 }
 
 /* 模式指示器 - 高亮显示 */
 .status-item.mode-indicator {
-    font-weight: bold;
-    color: #00ffff;
-    border-color: rgba(0, 255, 255, 0.6);
-    background: rgba(0, 255, 255, 0.2);
-    text-shadow: 0 0 4px rgba(0, 255, 255, 0.5);
+    font-weight: 700;
+    font-size: 12px;    color: #00e5ff;
+    border-color: rgba(0, 212, 255, 0.3);
+    background: rgba(0, 212, 255, 0.1);
+    text-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
+    letter-spacing: 0.04em;
 }
 
 /* 网络状态指示器 */
@@ -451,8 +635,7 @@ body {
 #status-bitrates {
     color: #00ffcc;
     font-weight: 700;
-    font-size: 13px;
-    text-shadow: 0 0 5px rgba(0,255,204,0.35);
+    font-size: 14px;    text-shadow: 0 0 5px rgba(0,255,204,0.35);
 }
 
 @keyframes pulse {
@@ -460,36 +643,57 @@ body {
     50% { opacity: 0.6; }
 }
 
-/* Main Content - 统一蓝色风格 */
+/* Main Content — 正常文档流，自然高度 */
 .main-content {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
     overflow-x: hidden;
-    padding: clamp(4px, 1vh, 8px) clamp(8px, 2vw, 12px);
+    padding: 2px clamp(6px, 2vw, 10px);
     display: flex;
     flex-direction: column;
-    gap: clamp(4px, 1vh, 8px);
-    -webkit-overflow-scrolling: touch;
+    gap: 3px;
     background: var(--bg-primary);
 }
 
-/* 宽带射频瀑布图 - S表上方的小高度滚动瀑布 */
+/* 宽带射频瀑布图 - S表上方的滚动瀑布，3x 高度提升可见性 */
 .waterfall-canvas {
     display: block;
     width: 100%;
     max-width: 100%;
-    height: 48px;
+    height: 144px;
     background-color: #000;
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-xs);
+    border-radius: var(--radius-xs);
+    margin-bottom: 2px;
+    cursor: pointer;
     image-rendering: pixelated;
+}
+
+/* 射频 FFT 频谱折线图 — 瀑布图上方实时幅度-频率曲线 */
+.fft-canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 96px;
+    background-color: #08080d;
+    border-radius: var(--radius-xs);
+    margin-bottom: 0;
+    cursor: pointer;
+    /* 不要 pixelated — FFT 折线需要平滑抗锯齿 */
+}
+
+/* 频率标尺 — FFT/瀑布图之间的频率刻度标签 */
+.freq-scale-canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 28px;
+    background-color: #0a0a14;
+    border-radius: 0;
+    margin-bottom: 0;
 }
 
 /* S-Meter Section - 统一蓝色风格 */
 .s-meter-section {
     text-align: center;
-    padding: var(--space-xs) 0;
+    padding: 1px 0;
     margin: 0;
     line-height: 0;
 }
@@ -498,24 +702,23 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-sm);
+    gap: 6px;
 }
 
 #s-meter-canvas {
     width: 100%;
     max-width: 280px;
-    height: 30px;
+    height: 22px;
     background-color: var(--meter-bg);
     border-radius: var(--radius-sm);
     display: block;
 }
 
 .s-meter-value {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 15px;    font-weight: 700;
     color: var(--accent-primary);
     font-family: var(--font-mono);
-    min-width: 45px;
+    min-width: 40px;
     text-align: left;
 }
 
@@ -523,24 +726,41 @@ body {
     display: none; /* 隐藏标签节省空间 */
 }
 
-/* 显示区域外框 - 玻璃拟态效果 */
+/* 显示区域外框 - 多层玻璃拟态效果 (Cinema Dark style) */
 .meter-display-frame {
-    background: rgba(30, 30, 42, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: linear-gradient(135deg,
+        rgba(22, 22, 45, 0.75) 0%,
+        rgba(18, 18, 36, 0.70) 50%,
+        rgba(14, 14, 30, 0.72) 100%);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     border-radius: var(--radius-md);
-    padding: clamp(4px, 0.8vh, 8px);
+    padding: var(--space-sm) var(--space-sm) 4px;
     margin: 0;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: var(--shadow-sm);
-    contain: layout style paint;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow:
+        0 0 0 1px rgba(0, 212, 255, 0.06),
+        0 2px 8px rgba(0, 0, 0, 0.40),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+/* 顶部微光条 — 玻璃拟态的深度暗示 */
+.meter-display-frame::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%; height: 1px;
+    background: linear-gradient(90deg,
+        transparent, rgba(0, 212, 255, 0.18), transparent);
+    pointer-events: none;
+    z-index: 1;
 }
 
 /* 功率/驻波显示在S表下边 */
 .atr-under-meter {
-    margin-top: var(--space-xs);
-    padding-top: var(--space-xs);
+    margin-top: 2px;
+    padding-top: 2px;
     border-top: 1px solid rgba(255,255,255,0.1);
 }
 
@@ -548,47 +768,44 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     flex-wrap: nowrap;
 }
 
 .atr-under-label {
-    font-size: 11px;
-    color: var(--text-muted);
+    font-size: 10px;    color: var(--text-muted);
 }
 
 .atr-under-value {
-    font-size: 18px;
-    font-weight: bold;
+    font-size: 16px;    font-weight: bold;
     color: var(--accent-primary);
     line-height: 1;
-    min-width: 40px;
+    min-width: 35px;
     text-align: right;
 }
 
 .atr-under-unit {
-    font-size: 11px;
-    color: var(--text-secondary);
+    font-size: 10px;    color: var(--text-secondary);
 }
 
 .atr-under-divider {
     color: var(--border-color);
-    margin: 0 6px;
+    margin: 0 4px;
 }
 
 .atr-under-bar {
-    width: 50px;
-    height: 4px;
+    width: 40px;
+    height: 3px;
     background: rgba(255,255,255,0.1);
     border-radius: 2px;
     overflow: hidden;
 }
 
-/* Quick Controls - 统一蓝色风格按钮 */
+/* Quick Controls - 统一按钮行，8dp 间距 */
 .quick-controls {
     display: flex;
     flex-direction: column;
-    gap: clamp(2px, 0.5vh, 4px);
+    gap: var(--space-sm);
     margin: 0;
     flex-shrink: 0;
 }
@@ -600,29 +817,37 @@ body {
 
 .quick-btn {
     flex: 1;
-    background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    color: var(--text-primary);
-    padding: clamp(6px, 1.2vh, 12px) 4px;
-    font-size: 14px;
-    font-weight: 500;
+    background: linear-gradient(180deg,
+        rgba(31, 31, 53, 0.85) 0%,
+        rgba(25, 25, 42, 0.75) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    padding: 4px 3px;
+    font-size: 12px;    font-weight: 600;
+    letter-spacing: 0.02em;
     cursor: pointer;
     transition: all var(--transition-fast);
-    min-height: clamp(36px, 6vh, 44px);
+    min-height: 32px;
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .quick-btn:active {
-    transform: scale(0.97);
     background: var(--bg-button-hover);
     border-color: var(--accent-primary);
+    color: var(--text-primary);
 }
 
 .quick-btn.active {
-    background: rgba(0, 212, 255, 0.15);
-    border-color: rgba(0, 212, 255, 0.3);
+    background: linear-gradient(135deg,
+        rgba(0, 212, 255, 0.14) 0%,
+        rgba(0, 180, 230, 0.08) 100%);
+    border-color: rgba(0, 212, 255, 0.35);
     color: var(--accent-primary);
+    box-shadow:
+        0 0 10px rgba(0, 212, 255, 0.12),
+        inset 0 0 8px rgba(0, 212, 255, 0.04);
 }
 
 /* CW按钮样式 - 统一蓝色风格 */
@@ -651,25 +876,41 @@ body {
     border-color: var(--accent-warning);
 }
 
-/* PTT Section */
+/* PTT Section — fixed 在屏幕底部，始终可见 */
 .ptt-section {
-    flex-shrink: 0;
-    background-color: var(--bg-secondary);
-    border-top: 1px solid var(--border-color);
-    padding-top: clamp(4px, 1vh, 8px);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: linear-gradient(0deg,
+        rgba(14, 14, 28, 0.98) 0%,
+        rgba(20, 20, 38, 0.95) 60%,
+        rgba(22, 22, 45, 0.90) 100%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    padding-top: 4px;
+    padding-bottom: env(safe-area-inset-bottom, 6px);
+    box-shadow:
+        0 -2px 20px rgba(0, 0, 0, 0.55),
+        0 -1px 0 rgba(0, 212, 255, 0.04);
 }
 
 /* Off-canvas Menu */
 .off-canvas-menu {
     position: fixed;
     top: 0;
-    left: -280px;
-    width: 280px;
+    left: -285px;
+    width: 285px;
+    height: 100dvh;
     height: 100vh;
-    background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(10, 10, 18, 0.98) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     z-index: 1001;
-    transition: left var(--transition-normal);
-    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.4);
+    transition: left var(--transition-slow) var(--ease-out-expo);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
     padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
     border-right: 1px solid var(--border-color);
 }
@@ -688,8 +929,7 @@ body {
 }
 
 .menu-header h2 {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 19px;    font-weight: 600;
     color: var(--accent-primary);
 }
 
@@ -697,8 +937,7 @@ body {
     background: var(--bg-button);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
-    font-size: 26px;
-    cursor: pointer;
+    font-size: 27px;    cursor: pointer;
     width: 44px;
     height: 44px;
     display: flex;
@@ -723,17 +962,19 @@ body {
 
 .menu-item {
     display: block;
-    padding: 14px 16px;
-    color: var(--text-primary);
+    padding: 14px 20px;
+    color: var(--text-secondary);
     text-decoration: none;
-    font-size: 15px;
-    border-bottom: 1px solid var(--border-color);
+    font-size: 16px;    font-weight: 500;
+    border-bottom: 1px solid var(--divider);
     transition: all var(--transition-fast);
+    letter-spacing: 0.01em;
 }
 
 .menu-item:active {
-    background: var(--bg-tertiary);
+    background: rgba(0, 212, 255, 0.06);
     color: var(--accent-primary);
+    padding-left: 24px;
 }
 
 /* Menu Footer - Version Display */
@@ -746,8 +987,7 @@ body {
 }
 
 .version-text {
-    font-size: 12px;
-    color: var(--text-muted);
+    font-size: 13px;    color: var(--text-muted);
     font-weight: 500;
     letter-spacing: 0.5px;
 }
@@ -780,42 +1020,43 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(10, 10, 15, 0.9);
+    background: rgba(0, 0, 0, 0.7);
     z-index: 1000;
     justify-content: center;
     align-items: center;
     padding: var(--space-md);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 .modal-panel {
-    background: rgba(30, 30, 42, 0.8);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-radius: var(--radius-lg);
-    padding: var(--space-md);
-    max-width: 320px;
+    padding: var(--space-lg);
+    max-width: 340px;
     width: 100%;
-    max-height: 75vh;
+    max-height: 78vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-lg), 0 0 40px rgba(0, 0, 0, 0.4);
 }
 
 .modal-panel h3 {
     text-align: center;
     margin-bottom: var(--space-md);
-    font-size: 16px;
+    font-size: 17px;    font-weight: 700;
     color: var(--accent-primary);
+    letter-spacing: 0.03em;
 }
 
 .modal-panel p {
     text-align: center;
     color: var(--text-secondary);
     margin-bottom: var(--space-xs);
-    font-size: 13px;
-}
+    font-size: 14px;}
 
 .modal-panel hr {
     border: none;
@@ -836,28 +1077,30 @@ body {
 .mode-select-btn,
 .filter-select-btn {
     padding: 12px 6px;
-    background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
+    background: linear-gradient(180deg, var(--bg-button) 0%, rgba(31, 31, 53, 0.6) 100%);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    color: var(--text-primary);
-    font-size: 13px;
+    color: var(--text-secondary);
+    font-size: 14px;    font-weight: 600;
     cursor: pointer;
     min-height: 44px;
     transition: all var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .band-select-btn:active,
 .mode-select-btn:active,
 .filter-select-btn:active {
-    background: rgba(0, 212, 255, 0.15);
+    background: rgba(0, 212, 255, 0.12);
     border-color: rgba(0, 212, 255, 0.3);
     color: var(--accent-primary);
 }
 
 .mode-select-btn.active {
-    background: rgba(0, 212, 255, 0.15);
+    background: rgba(0, 212, 255, 0.12);
     border-color: rgba(0, 212, 255, 0.3);
     color: var(--accent-primary);
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.08);
 }
 
 /* TX EQ 选择按钮 */
@@ -874,8 +1117,7 @@ body {
     border: 2px solid var(--border-color);
     border-radius: var(--radius-md);
     color: var(--text-primary);
-    font-size: 14px;
-    cursor: pointer;
+    font-size: 15px;    cursor: pointer;
     min-height: 80px;
     transition: all var(--transition-fast);
     text-align: center;
@@ -902,8 +1144,7 @@ body {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     color: var(--text-primary);
-    font-size: 15px;
-    cursor: pointer;
+    font-size: 16px;    cursor: pointer;
     min-height: 48px;
     transition: all var(--transition-fast);
 }
@@ -954,8 +1195,7 @@ body {
     justify-content: center;
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 800;
+    font-size: 14px;    font-weight: 800;
     color: var(--text-secondary);
     letter-spacing: 0.03em;
 }
@@ -972,8 +1212,7 @@ body {
 
 .mem-card-freq {
     font-family: var(--font-mono);
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 17px;    font-weight: 700;
     color: var(--accent-warning);
     letter-spacing: 1px;
 }
@@ -990,14 +1229,12 @@ body {
 }
 
 .mem-card-mode {
-    font-size: 11px;
-    color: var(--text-secondary);
+    font-size: 12px;    color: var(--text-secondary);
     font-weight: 600;
 }
 
 .mem-card-band {
-    font-size: 10px;
-    padding: 1px 6px;
+    font-size: 11px;    padding: 1px 6px;
     background: rgba(245, 158, 11, 0.1);
     border-radius: var(--radius-sm);
     color: var(--accent-warning);
@@ -1005,8 +1242,7 @@ body {
 }
 
 .mem-card-time {
-    font-size: 9px;
-    color: var(--text-muted);
+    font-size: 10px;    color: var(--text-muted);
     margin-top: 1px;
 }
 
@@ -1019,8 +1255,7 @@ body {
 
 .mem-action-btn {
     padding: 5px 10px;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 11px;    font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
     background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
@@ -1065,8 +1300,7 @@ body {
     flex: 1;
     min-width: 60px;
     padding: 10px 8px;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;    font-weight: 600;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
@@ -1104,8 +1338,7 @@ body {
     display: block;
     margin-bottom: 6px;
     color: #aaa;
-    font-size: 13px;
-}
+    font-size: 14px;}
 
 .setting-item input[type="range"] {
     width: 100%;
@@ -1129,22 +1362,22 @@ body {
 /* 较大屏幕适配 */
 @media (min-width: 390px) {
     .ptt-button {
-        width: 130px;
+        min-height: 74px;
     }
 }
 
 @media (min-width: 428px) {
     .quick-btn {
-        padding: 14px 6px;
+        padding: 6px 5px;
+        font-size: 13px;
     }
 
     .ptt-button {
-        width: 140px;
+        min-height: 78px;
     }
 
     .ptt-label {
-        font-size: 26px;
-    }
+        font-size: 19px;    }
 }
 
 @media (min-width: 768px) {
@@ -1158,121 +1391,167 @@ body {
 /* 小屏幕纵向适配 - 确保一屏显示 */
 @media (max-height: 700px) {
     .freq-main {
-        font-size: clamp(48px, 12vw, 64px);
-        padding: clamp(4px, 1vh, 6px) clamp(8px, 2vw, 12px);
+        font-size: clamp(38px, 11vw, 56px);
+        padding: 1px clamp(8px, 2vw, 16px);
     }
 
     .s-meter-labels {
         display: none;
     }
 
+    .waterfall-canvas {
+        height: 96px;
+    }
+
+    .freq-scale-canvas {
+        height: 22px;
+    }
+
+    .fft-canvas {
+        height: 67px;
+    }
+
+    #s-meter-canvas {
+        height: 18px;
+    }
+
     .dsp-controls-section {
-        padding: 2px clamp(4px, 1vw, 8px);
+        padding: 2px 4px;
     }
 
-    .dsp-buttons-row {
-        gap: 2px;
+    .dsp-chips {
+        gap: 3px;
     }
 
-    .dsp-btn {
-        min-height: clamp(20px, 3.5vh, 28px);
-        padding: 2px 2px;
+    .dsp-chip {
+        min-height: 32px;
+        padding: 3px 2px;
     }
 
-    .dsp-btn-label {
-        display: none;
+    .dsp-chip-label {
+        font-size: 9px;
+    }
+
+    .dsp-chip-val {
+        font-size: 7px;
     }
 
     .ptt-button {
-        height: clamp(50px, 10vh, 70px);
+        min-height: 56px;
     }
+
+    .ptt-label {
+        font-size: 15px;    }
 
     .quick-btn {
-        min-height: clamp(30px, 5vh, 36px);
-        padding: clamp(4px, 0.8vh, 6px) 4px;
-    }
+        min-height: 28px;
+        padding: 3px 3px;
+        font-size: 11px;    }
 
     .tuning-row.single-row {
-        gap: clamp(2px, 0.8vw, 4px);
+        gap: 3px;
     }
 
     .tune-btn-grid,
     .tune-step-display {
-        padding: clamp(4px, 0.8vh, 6px) 4px;
-        min-height: clamp(30px, 5vh, 36px);
-    }
+        padding: 4px 3px;
+        min-height: 28px;
+        font-size: 13px;    }
+
+    .tune-step-display {
+        min-width: 52px;
+        font-size: 12px;    }
 
     .volume-control-compact {
         padding: 0 4px;
     }
 
     .main-content {
-        gap: clamp(2px, 0.5vh, 4px);
-        padding: clamp(2px, 0.5vh, 4px) clamp(6px, 1.5vw, 12px);
+        gap: 2px;
+        padding: 1px 4px;
     }
+
+    .mem-btn {
+        min-height: 26px;
+        padding: 1px 3px;
+    }
+
+    .mem-name, .mem-info {
+        font-size: 11px;    }
 }
 
 /* 横屏适配 */
 @media (orientation: landscape) and (max-height: 500px) {
     .app-header {
-        padding: 4px 12px;
+        padding: 2px 8px;
     }
-    
+
     .header-main {
-        margin-bottom: 4px;
+        margin-bottom: 1px;
     }
-    
+
     .freq-main {
-        font-size: 64px;
-        margin-bottom: 2px;
+        font-size: 48px;
+        padding: 1px 8px;
     }
-    
-    .freq-sub {
-        font-size: 11px;
-    }
-    
+
     .status-bar {
-        padding: 2px 0;
+        padding: 1px 0;
     }
-    
+
     .main-content {
-        padding: 6px;
-        gap: 8px;
+        padding: 3px;
+        gap: 3px;
     }
-    
+
     #s-meter-canvas {
-        height: 36px;
+        height: 20px;
     }
-    
+
+    .waterfall-canvas {
+        height: 72px;
+    }
+
+    .freq-scale-canvas {
+        height: 18px;
+    }
+
+    .fft-canvas {
+        height: 48px;
+    }
+
     .quick-controls {
         flex-direction: row;
         flex-wrap: wrap;
     }
-    
+
     .control-row {
         flex: 1;
         min-width: 200px;
     }
-    
-    .tuning-controls {
-        grid-template-columns: repeat(6, 1fr);
-    }
-    
+
     .ptt-section {
-        padding: 8px 10px;
+        padding: 2px 6px;
     }
-    
+
     .ptt-button {
-        width: 80px;
-        height: 160px;
+        min-height: 48px;
     }
-    
+
     .ptt-label {
-        font-size: 18px;
-    }
-    
+        font-size: 14px;    }
+
     .ptt-sublabel {
         display: none;
+    }
+
+    .cq-button-wide {
+        height: 24px;
+        font-size: 11px;    }
+
+    .tune-button-footer,
+    .record-button-footer {
+        height: 28px;
     }
 }
 
@@ -1317,192 +1596,166 @@ body {
 // V4.4 精简布局样式
 ////////////////////////////////////////////////////////////
 
-/* DSP 控制区域 - SDR 风格重构 */
+/* ═══════════════════════════════════════════════════════════════════
+   DSP 控制面板 — 专业音频处理器风格
+   单行布局：左侧电源开关 + 右侧 4 个处理芯片
+   ═══════════════════════════════════════════════════════════════════ */
 .dsp-controls-section {
-    background: rgba(30, 30, 42, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: linear-gradient(180deg,
+        rgba(22, 22, 45, 0.65) 0%,
+        rgba(18, 18, 36, 0.60) 100%);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     border-radius: var(--radius-md);
-    padding: clamp(3px, 0.6vh, 6px) clamp(6px, 1.5vw, 12px);
+    padding: 7px 10px;
     margin: 0;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: var(--shadow-sm);
-    contain: layout style paint;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
     flex-shrink: 0;
 }
 
-.dsp-header {
+/* 单行：开关 + 芯片 */
+.dsp-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex-wrap: nowrap;
+    gap: 10px;
 }
 
-/* DSP 主开关 + 标签 - 紧凑 inline */
-.dsp-switch {
-    position: relative;
-    display: inline-flex;
+/* ── 左侧 DSP 电源 ─────────────────────────────────────────── */
+.dsp-power {
+    display: flex;
     align-items: center;
-    gap: 4px;
-    width: auto;
-    height: 22px;
+    gap: 5px;
     flex-shrink: 0;
 }
 
-.dsp-switch-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent-primary);
-    margin-left: 2px;
-    white-space: nowrap;
+.dsp-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
 }
 
-.dsp-switch input {
+/* iOS 风格 Toggle Switch */
+.dsp-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 24px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.dsp-toggle input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.dsp-slider {
+.dsp-toggle-track {
     position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--bg-button);
-    transition: var(--transition-fast);
-    border-radius: var(--radius-full);
-    border: 1px solid var(--border-color);
+    inset: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.dsp-slider:before {
+.dsp-toggle-track::before {
+    content: '';
     position: absolute;
-    content: "";
-    height: 16px;
-    width: 16px;
+    width: 18px;
+    height: 18px;
     left: 2px;
-    bottom: 2px;
-    background: var(--text-secondary);
-    transition: var(--transition-fast);
+    top: 2px;
+    background: var(--text-muted);
     border-radius: 50%;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-.dsp-switch input:checked + .dsp-slider {
-    background: rgba(0, 212, 255, 0.3);
-    border-color: var(--accent-primary);
+.dsp-toggle input:checked + .dsp-toggle-track {
+    background: rgba(0, 212, 255, 0.25);
+    border-color: rgba(0, 212, 255, 0.45);
 }
 
-.dsp-switch input:checked + .dsp-slider:before {
+.dsp-toggle input:checked + .dsp-toggle-track::before {
+    transform: translateX(16px);
     background: var(--accent-primary);
-    transform: translateX(18px);
+    box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* DSP 按钮行 - SDR 风格 */
-.dsp-buttons-row {
+/* ── 右侧处理芯片行 ────────────────────────────────────────── */
+.dsp-chips {
     display: flex;
-    gap: var(--space-xs);
-    justify-content: space-between;
+    flex: 1;
+    gap: 5px;
 }
 
-.dsp-btn {
+.dsp-chip {
     flex: 1;
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    padding: clamp(3px, 0.6vh, 6px) 4px;
-    background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    gap: 1px;
+    padding: 5px 4px 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
-    font-size: 10px;
     cursor: pointer;
-    transition: all var(--transition-fast);
-    min-height: clamp(24px, 4vh, 32px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 40px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
 }
 
-.dsp-btn:active {
-    transform: scale(0.95);
-    background: var(--bg-button-hover);
+.dsp-chip:active {
+    transform: scale(0.96);
+    background: rgba(0, 212, 255, 0.08);
 }
 
-/* 开启状态 - 柔和蓝色 */
-.dsp-btn.active {
-    background: rgba(0, 212, 255, 0.15);
+/* 激活态 — 青色发光芯片 (Cinema Dark layered glow) */
+.dsp-chip.active {
+    background: linear-gradient(180deg,
+        rgba(0, 212, 255, 0.18) 0%,
+        rgba(0, 180, 220, 0.08) 100%);
+    border-color: rgba(0, 212, 255, 0.35);
     color: var(--accent-primary);
-    border-color: rgba(0, 212, 255, 0.3);
+    box-shadow:
+        0 0 12px rgba(0, 212, 255, 0.14),
+        0 0 2px rgba(0, 212, 255, 0.20),
+        inset 0 1px 0 rgba(0, 212, 255, 0.08);
 }
 
-/* 禁用状态 */
-.dsp-btn.disabled {
+.dsp-chip.disabled {
     opacity: 0.3;
     pointer-events: none;
 }
 
-.dsp-btn-icon {
-    font-size: 12px;
-    opacity: 0.5;
-    transition: opacity var(--transition-fast);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-}
-
-/* DSP 按钮图标 - Unicode 符号样式 */
-.nr2-icon::before {
-    content: '';
-    display: block;
-    width: 10px;
-    height: 10px;
-    background: currentColor;
-    border-radius: 50%;
-    box-shadow: -3px 0 0 currentColor, 3px 0 0 currentColor;
-}
-
-.nb-icon {
-    font-size: 14px;
-}
-
-.anf-icon {
-    font-size: 11px;
-}
-
-.nf-icon {
+.dsp-chip-label {
     font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1;
 }
 
-.agc-icon {
-    font-size: 11px;
-}
-
-/* 开启状态图标 */
-.dsp-btn.active .dsp-btn-icon {
-    opacity: 1;
-}
-
-.dsp-btn-label {
-    font-weight: 600;
-    font-size: 10px;
-    letter-spacing: 0.3px;
-}
-
-.dsp-btn-status {
-    font-size: 8px;
-    padding: 2px 5px;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
+.dsp-chip-val {
+    font-size: 9px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
     color: var(--text-muted);
-    transition: all var(--transition-fast);
-    white-space: nowrap;
+    line-height: 1.3;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 开启状态文字 */
-.dsp-btn.active .dsp-btn-status {
-    background: rgba(0, 212, 255, 0.3);
+.dsp-chip.active .dsp-chip-val {
+    background: rgba(0, 212, 255, 0.2);
     color: var(--accent-primary);
 }
 
@@ -1544,18 +1797,15 @@ body {
 }
 
 .atr-status-icon {
-    font-size: 10px;
-    color: var(--text-muted);
+    font-size: 11px;    color: var(--text-muted);
 }
 
 .atr-horizontal-label {
-    font-size: 11px;
-    color: var(--text-muted);
+    font-size: 12px;    color: var(--text-muted);
 }
 
 .atr-horizontal-value {
-    font-size: 20px;  /* 缩小2号 */
-    font-weight: bold;
+    font-size: 21px;  /* 缩小2号 */    font-weight: bold;
     color: var(--accent-primary);
     line-height: 1;
     min-width: 40px;
@@ -1563,8 +1813,7 @@ body {
 }
 
 .atr-horizontal-unit {
-    font-size: 11px;
-    color: var(--text-secondary);
+    font-size: 12px;    color: var(--text-secondary);
 }
 
 .atr-horizontal-divider {
@@ -1593,8 +1842,7 @@ body {
 }
 
 .atr-compact-label {
-    font-size: 11px;
-    color: var(--text-muted);
+    font-size: 12px;    color: var(--text-muted);
     display: block;
     margin-bottom: 2px;
 }
@@ -1607,15 +1855,13 @@ body {
 }
 
 .atr-compact-value {
-    font-size: 26px;  /* 缩小2号 */
-    font-weight: bold;
+    font-size: 27px;  /* 缩小2号 */    font-weight: bold;
     color: var(--accent-primary);
     line-height: 1;
 }
 
 .atr-compact-unit {
-    font-size: 11px;
-    color: var(--text-secondary);
+    font-size: 12px;    color: var(--text-secondary);
 }
 
 /* 精简版进度条 */
@@ -1645,7 +1891,7 @@ body {
 
 /* 音量控制精简版 - 无边框极简 */
 .volume-control-compact {
-    padding: clamp(1px, 0.3vh, 2px) clamp(6px, 1.5vw, 8px);
+    padding: 0 6px;
     margin: 0;
     flex-shrink: 0;
 }
@@ -1653,19 +1899,12 @@ body {
 .volume-row-compact {
     display: flex;
     align-items: center;
-    gap: 6px;
-}
-
-.volume-icon-small {
-    font-size: 14px;
-    opacity: 0.6;
-    min-width: 18px;
-    text-align: center;
+    gap: 4px;
 }
 
 .volume-slider-compact {
     flex: 1;
-    height: 28px;
+    height: 22px;
     -webkit-appearance: none;
     appearance: none;
     background: transparent;
@@ -1699,13 +1938,13 @@ body {
 .volume-slider-compact::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     background: var(--text-secondary);
     cursor: pointer;
     box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-    margin-top: -7px;
+    margin-top: -6px;
     transition: background var(--transition-fast), transform var(--transition-fast);
 }
 
@@ -1715,8 +1954,8 @@ body {
 }
 
 .volume-slider-compact::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     background: var(--text-secondary);
     cursor: pointer;
@@ -1731,23 +1970,22 @@ body {
 }
 
 .volume-value-small {
-    font-size: 10px;
-    color: var(--text-muted);
-    min-width: 28px;
+    font-size: 10px;    color: var(--text-muted);
+    min-width: 24px;
 }
 
 /* 频率调谐网格布局 - 两排 */
 .frequency-tuning-grid {
-    padding: clamp(2px, 0.5vh, 4px) clamp(8px, 2vw, 10px);
-    margin: 0;
+    padding: var(--space-sm) clamp(6px, 2vw, 8px);
+    margin: var(--space-xs) 0;
     flex-shrink: 0;
 }
 
 .tuning-row {
     display: flex;
-    gap: clamp(3px, 1vw, 6px);
+    gap: var(--space-sm);
     justify-content: center;
-    margin-bottom: clamp(2px, 0.4vh, 4px);
+    margin-bottom: 0;
 }
 
 .tuning-row:last-child {
@@ -1760,16 +1998,16 @@ body {
 
 /* 步进显示按钮样式 - 统一蓝色风格 */
 .tune-step-display {
-    min-width: 70px;
-    padding: clamp(6px, 1.2vh, 10px) 8px;
+    min-width: 68px;
+    padding: 8px 8px;
     text-align: center;
-    background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
+    background: linear-gradient(180deg, var(--bg-button) 0%, rgba(31, 31, 53, 0.7) 100%);
     color: var(--accent-primary);
-    font-size: 14px;
-    font-weight: 600;
-    font-family: inherit;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
+    font-size: 15px;    font-weight: 700;
+    font-family: var(--font-system);
+    letter-spacing: 0.03em;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(0, 212, 255, 0.18);
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
@@ -1782,34 +2020,30 @@ body {
 }
 
 .tune-step-display:active {
-    background: var(--bg-button-hover);
+    background: rgba(0, 212, 255, 0.12);
     border-color: var(--accent-primary);
     transform: scale(0.95);
 }
 
-.tune-step-display:hover {
-    background: var(--bg-button-hover);
-}
-
 .tune-btn-grid {
     flex: 1;
-    max-width: 75px;
-    padding: clamp(6px, 1.2vh, 10px) 6px;
-    border: none;
-    border-radius: var(--radius-md);
-    background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
-    color: var(--text-primary);
-    font-size: 15px;
-    font-weight: 800;
+    max-width: 70px;
+    padding: 8px 4px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, var(--bg-button) 0%, rgba(31, 31, 53, 0.6) 100%);
+    color: var(--text-secondary);
+    font-size: 17px;    font-weight: 800;
     font-family: var(--font-mono);
     cursor: pointer;
     transition: all var(--transition-fast);
-    border: 1px solid var(--border-color);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .tune-btn-grid:active {
     background: var(--bg-button-hover);
     border-color: var(--accent-primary);
+    color: var(--text-primary);
     transform: scale(0.95);
 }
 
@@ -1817,8 +2051,8 @@ body {
 .memory-channel-strip {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: clamp(4px, 0.8vw, 6px);
-    padding: 0 clamp(8px, 2vw, 10px) clamp(4px, 0.8vh, 6px);
+    gap: 3px;
+    padding: 0 clamp(6px, 2vw, 8px) 2px;
     margin: 0;
     flex-shrink: 0;
 }
@@ -1831,11 +2065,11 @@ body {
     align-items: center;
     justify-content: center;
     gap: 1px;
-    min-height: clamp(32px, 5.5vh, 42px);
-    padding: clamp(2px, 0.4vh, 5px) clamp(4px, 1vw, 8px);
-    background: linear-gradient(135deg, var(--bg-button), var(--bg-tertiary));
+    min-height: 30px;
+    padding: 2px 4px;
+    background: linear-gradient(180deg, var(--bg-button) 0%, rgba(31, 31, 53, 0.5) 100%);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-xs);
     color: var(--text-muted);
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -1865,11 +2099,16 @@ body {
     background: rgba(245, 158, 11, 0.08);
 }
 
-/* 已填充状态 - 琥珀色高亮 */
+/* 已填充状态 - 琥珀色高亮 (layered glow) */
 .mem-btn.filled {
     color: var(--text-primary);
-    border-color: rgba(245, 158, 11, 0.3);
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.03));
+    border-color: rgba(245, 158, 11, 0.30);
+    background: linear-gradient(180deg,
+        rgba(245, 158, 11, 0.10) 0%,
+        rgba(245, 158, 11, 0.03) 100%);
+    box-shadow:
+        0 0 10px rgba(245, 158, 11, 0.08),
+        inset 0 1px 0 rgba(245, 158, 11, 0.05);
 }
 
 .mem-btn.filled .mem-name {
@@ -1893,16 +2132,14 @@ body {
 }
 
 .mem-name {
-    font-size: clamp(10px, 2vw, 12px);
-    font-weight: 700;
+    font-size: 11px;    font-weight: 700;
     letter-spacing: 0.04em;
     line-height: 1;
     transition: color var(--transition-fast);
 }
 
 .mem-info {
-    font-size: clamp(10px, 2vw, 12px);
-    font-family: var(--font-mono);
+    font-size: 10px;    font-family: var(--font-mono);
     color: var(--text-muted);
     line-height: 1.15;
     white-space: nowrap;
@@ -1919,89 +2156,84 @@ body {
 /* 底部 TUNE 按钮 - 蓝色 */
 .tune-button-footer {
     flex: 0.6;
-    height: clamp(36px, 6vh, 47px);
-    border: none;
-    border-radius: var(--radius-md);
-    background: linear-gradient(180deg, rgba(0, 212, 255, 0.3), rgba(0, 212, 255, 0.2));
-    color: var(--accent-secondary);
-    font-size: clamp(12px, 2.5vw, 14px);
-    font-weight: bold;
+    height: 34px;
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, rgba(0, 212, 255, 0.18) 0%, rgba(0, 180, 220, 0.1) 100%);
+    color: var(--accent-primary);
+    font-size: 11px;    font-weight: 700;
+    letter-spacing: 0.04em;
     cursor: pointer;
     transition: all var(--transition-fast);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid rgba(0, 212, 255, 0.3);
+    box-shadow: var(--shadow-xs);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .tune-button-footer:active {
-    background: linear-gradient(180deg, rgba(0, 212, 255, 0.4), rgba(0, 212, 255, 0.3));
+    background: linear-gradient(180deg, rgba(0, 212, 255, 0.3), rgba(0, 180, 220, 0.2));
     transform: scale(0.95);
-    border-color: var(--accent-secondary);
-}
-
-.tune-label {
-    font-size: 12px;
+    border-color: rgba(0, 212, 255, 0.4);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
 }
 
 /* 底部 CQCQCQ 宽按钮 - 蓝色 */
 .cq-button-wide {
     width: 100%;
-    height: clamp(36px, 6vh, 44px);
-    border: none;
-    border-radius: var(--radius-md);
-    background: linear-gradient(180deg, rgba(0, 212, 255, 0.2), rgba(0, 212, 255, 0.2));
+    height: 30px;
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, rgba(0, 212, 255, 0.12) 0%, rgba(0, 180, 220, 0.06) 100%);
     color: var(--accent-primary);
-    font-size: clamp(14px, 3vw, 16px);
-    font-weight: bold;
+    font-size: 13px;    font-weight: 700;
+    letter-spacing: 0.06em;
     cursor: pointer;
     transition: all var(--transition-fast);
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid rgba(0, 212, 255, 0.3);
+    box-shadow: var(--shadow-xs);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .cq-button-wide:active {
-    background: linear-gradient(180deg, rgba(0, 212, 255, 0.3), rgba(0, 212, 255, 0.3));
-    transform: scale(0.98);
-    border-color: var(--accent-primary);
-}
-
-.cq-label-wide {
-    font-size: 14px;
-    letter-spacing: 1px;
+    background: linear-gradient(180deg, rgba(0, 212, 255, 0.25), rgba(0, 180, 220, 0.15));
+    transform: scale(0.97);
+    border-color: rgba(0, 212, 255, 0.35);
+    box-shadow: 0 0 14px rgba(0, 212, 255, 0.15);
 }
 
 /* 底部录音按钮 - 统一蓝色风格 */
 .record-button-footer {
     flex: 0.5;
-    height: clamp(36px, 6vh, 47px);
-    border: none;
-    border-radius: var(--radius-md);
-    background: linear-gradient(180deg, var(--bg-button), var(--bg-tertiary));
-    color: var(--text-secondary);
-    font-size: clamp(10px, 2vw, 11px);
-    font-weight: bold;
+    height: 34px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, var(--bg-button) 0%, rgba(31, 31, 53, 0.6) 100%);
+    color: var(--text-muted);
+    font-size: 9px;    font-weight: 700;
     cursor: pointer;
     transition: all var(--transition-fast);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-xs);
     min-width: 50px;
-    border: 1px solid var(--border-color);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .record-button-footer.recording {
-    background: linear-gradient(180deg, rgba(255, 71, 87, 0.3), rgba(255, 71, 87, 0.2));
+    background: linear-gradient(180deg, rgba(229, 57, 53, 0.25), rgba(183, 28, 28, 0.15));
     color: var(--accent-danger);
-    border-color: var(--accent-danger);
+    border-color: rgba(239, 68, 68, 0.3);
     animation: pulse-record 1.5s infinite;
 }
 
@@ -2015,28 +2247,29 @@ body {
     border-color: var(--text-secondary);
 }
 
-.record-icon {
-    font-size: 14px;
-    margin-bottom: 1px;
+.record-icon,
+.record-button-footer .icon-record {
+    font-size: 15px;    margin-bottom: 1px;
     color: inherit;
+    background-color: currentColor;  /* SVG mask uses background-color */
 }
 
-.record-button-footer.recording .record-icon {
+.record-button-footer.recording .record-icon,
+.record-button-footer.recording .icon-record {
     color: var(--accent-danger);
+    background-color: var(--accent-danger);
 }
 
 .record-label {
-    font-size: 10px;
-}
+    font-size: 11px;}
 
 /* 更新 PTT 区域布局 - 统一蓝色风格 */
 .ptt-container {
     display: flex;
-    gap: clamp(6px, 2vw, 12px);
+    gap: 5px;
     justify-content: center;
     align-items: stretch;
-    padding: 0 clamp(8px, 2vw, 12px);
-    padding-bottom: clamp(4px, 1vh, 8px);
+    padding: 0 6px 3px;
 }
 
 /* 右侧控制区域 - 录音/TUNE/CQCQCQ 垂直排列 */
@@ -2044,55 +2277,63 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: clamp(3px, 0.8vh, 8px);
+    gap: 3px;
 }
 
 /* 右侧控制区域第一行 - 录音和 TUNE 并排 */
 .side-controls-row {
     display: flex;
-    gap: clamp(3px, 0.8vh, 8px);
+    gap: 3px;
     flex: 1;
 }
 
 .side-controls-row .record-button-footer,
 .side-controls-row .tune-button-footer {
     flex: 1;
-    height: clamp(36px, 6vh, 47px);
+    height: 34px;
 }
 
 /* PTT 按钮调整 - SDR 红色渐变 */
 .ptt-button {
     flex: 1.4;
-    height: clamp(60px, 12vh, 94px);
-    min-height: clamp(50px, 10vh, 75px);
-    border: none;
-    border-radius: var(--radius-lg);
-    background: linear-gradient(180deg, var(--accent-danger), #b91c1c);
+    height: auto;
+    min-height: 68px;
+    border: 1px solid rgba(255, 71, 87, 0.3);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, #e53935 0%, #b71c1c 100%);
     color: var(--text-primary);
-    font-size: clamp(14px, 3vw, 18px);
-    font-weight: bold;
+    font-size: 17px;    font-weight: 700;
+    letter-spacing: 0.06em;
     cursor: pointer;
     transition: all var(--transition-fast);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 3px 10px rgba(255, 71, 87, 0.4);
+    box-shadow: 0 3px 10px rgba(229, 57, 53, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .ptt-button:active {
-    transform: scale(0.98);
-    box-shadow: 0 2px 6px rgba(255, 71, 87, 0.3);
+    transform: scale(0.97);
+    box-shadow: 0 2px 6px rgba(229, 57, 53, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    background: linear-gradient(180deg, #c62828 0%, #991717 100%);
 }
 
 .ptt-button.active {
-    background: linear-gradient(180deg, var(--accent-secondary), #00a8cc);
-    box-shadow: 0 3px 10px rgba(0, 212, 255, 0.4);
+    background: linear-gradient(180deg, #00b8d4 0%, #008299 100%);
+    border-color: rgba(0, 212, 255, 0.4);
+    box-shadow: 0 3px 14px rgba(0, 212, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.ptt-button.active:active {
+    background: linear-gradient(180deg, #0097b2 0%, #006680 100%);
+    box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
 }
 
 .ptt-label {
-    font-size: 18px;
-}
+    font-size: 17px;}
 
 .ptt-sublabel {
     display: none;  /* 隐藏子标签，更简洁 */
@@ -2111,8 +2352,7 @@ body {
 .wdsp-settings h4 {
     margin: 0 0 var(--space-md) 0;
     color: var(--accent-primary);
-    font-size: 14px;
-    display: flex;
+    font-size: 15px;    display: flex;
     align-items: center;
     gap: 8px;
 }
@@ -2139,8 +2379,7 @@ body {
 
 .switch-label span:first-child {
     color: var(--text-primary);
-    font-size: 14px;
-}
+    font-size: 15px;}
 
 /* 开关滑块样式 - SDR 蓝色 */
 .switch-slider {
@@ -2198,8 +2437,7 @@ body {
     border: 1px solid #555;
     border-radius: 6px;
     padding: 8px 12px;
-    font-size: 13px;
-    min-width: 100px;
+    font-size: 14px;    min-width: 100px;
 }
 
 .wdsp-item select:disabled {

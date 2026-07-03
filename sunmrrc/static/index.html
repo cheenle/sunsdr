@@ -61,7 +61,7 @@
                 </div>
                 
                 <button id="power-btn" class="header-btn power-btn" aria-label="Power">
-                    <span class="power-icon">&#x23FB;</span>
+                    <span class="icon-power icon-md"></span>
                 </button>
             </div>
             
@@ -78,6 +78,10 @@
         <main class="main-content">
             <!-- S-Meter & Power/SWR visualization -->
             <div class="meter-display-frame">
+                <!-- 射频 FFT 频谱图 — 实时折线 (与瀑布图共享 /WSspectrum 数据) -->
+                <canvas id="fft-canvas" class="fft-canvas" width="512" height="96"></canvas>
+                <!-- 频率标尺 — 频谱/瀑布图下方的频率刻度标签 -->
+                <canvas id="freq-scale-canvas" class="freq-scale-canvas" width="512" height="28"></canvas>
                 <!-- 宽带射频瀑布图 (数据来自后端 /WSspectrum, 512 bin) -->
                 <canvas id="waterfall-canvas" class="waterfall-canvas" width="512" height="48"></canvas>
                 <section class="s-meter-section">
@@ -131,19 +135,21 @@
                 </div>
             </section>
 
-            <!-- DSP Controls - 紧凑单行 -->
+            <!-- DSP Controls — 专业音频处理面板 -->
             <section class="dsp-controls-section" id="dsp-controls">
-                <div class="dsp-header">
-                    <label class="dsp-switch">
-                        <input type="checkbox" id="dsp-main-toggle">
-                        <span class="dsp-slider"></span>
-                        <span class="dsp-switch-label">DSP</span>
-                    </label>
-                    <div class="dsp-buttons-row" id="dsp-buttons">
-                        <button class="dsp-btn" id="dsp-nr2-btn"><span class="dsp-btn-label">NR2</span><span class="dsp-btn-status" id="dsp-nr2-status">L</span></button>
-                        <button class="dsp-btn" id="dsp-nb-btn"><span class="dsp-btn-label">NB</span><span class="dsp-btn-status" id="dsp-nb-status">OFF</span></button>
-                        <button class="dsp-btn" id="dsp-anf-btn"><span class="dsp-btn-label">ANF</span><span class="dsp-btn-status" id="dsp-anf-status">OFF</span></button>
-                        <button class="dsp-btn" id="dsp-agc-btn"><span class="dsp-btn-label">AGC</span><span class="dsp-btn-status" id="dsp-agc-status">MED</span></button>
+                <div class="dsp-row">
+                    <div class="dsp-power">
+                        <span class="dsp-label">DSP</span>
+                        <label class="dsp-toggle" aria-label="DSP power">
+                            <input type="checkbox" id="dsp-main-toggle">
+                            <span class="dsp-toggle-track"></span>
+                        </label>
+                    </div>
+                    <div class="dsp-chips" id="dsp-buttons">
+                        <button class="dsp-chip" id="dsp-nr2-btn" type="button"><span class="dsp-chip-label">NR2</span><span class="dsp-chip-val" id="dsp-nr2-status">L</span></button>
+                        <button class="dsp-chip" id="dsp-nb-btn" type="button"><span class="dsp-chip-label">NB</span><span class="dsp-chip-val" id="dsp-nb-status">OFF</span></button>
+                        <button class="dsp-chip" id="dsp-anf-btn" type="button"><span class="dsp-chip-label">ANF</span><span class="dsp-chip-val" id="dsp-anf-status">OFF</span></button>
+                        <button class="dsp-chip" id="dsp-agc-btn" type="button"><span class="dsp-chip-label">AGC</span><span class="dsp-chip-val" id="dsp-agc-status">MED</span></button>
                     </div>
                 </div>
             </section>
@@ -151,7 +157,7 @@
             <!-- Volume Control - 精简版 -->
             <section class="volume-control-compact">
                 <div class="volume-row-compact">
-                    <span class="volume-icon-small">&#x1F50A;</span>
+                    <span class="icon-volume icon-sm" style="opacity:0.5;"></span>
                     <input type="range" id="main-af-gain" class="volume-slider-compact" min="0" max="100" value="50" oninput="setMainAFGain(this.value)">
                     <span class="volume-value-small" id="main-af-value">50%</span>
                 </div>
@@ -163,11 +169,11 @@
             <!-- Frequency tuning - 单行布局（左右调谐） -->
             <section class="frequency-tuning-grid">
                 <div class="tuning-row single-row">
-                    <button class="tune-btn-grid tune-btn-minus" id="tune-left-fast" data-step="-5000">◀◀</button>
-                    <button class="tune-btn-grid tune-btn-minus" id="tune-left-slow" data-step="-1000">◀</button>
+                    <button class="tune-btn-grid tune-btn-minus" id="tune-left-fast" data-step="-5000" aria-label="Tune down 5kHz"><span class="icon-chevron-double-left icon-sm"></span></button>
+                    <button class="tune-btn-grid tune-btn-minus" id="tune-left-slow" data-step="-1000" aria-label="Tune down 1kHz"><span class="icon-chevron-left icon-sm"></span></button>
                     <button class="tune-step-display" id="step-btn" type="button">1kHz</button>
-                    <button class="tune-btn-grid tune-btn-plus" id="tune-right-slow" data-step="1000">▶</button>
-                    <button class="tune-btn-grid tune-btn-plus" id="tune-right-fast" data-step="5000">▶▶</button>
+                    <button class="tune-btn-grid tune-btn-plus" id="tune-right-slow" data-step="1000" aria-label="Tune up 1kHz"><span class="icon-chevron-right icon-sm"></span></button>
+                    <button class="tune-btn-grid tune-btn-plus" id="tune-right-fast" data-step="5000" aria-label="Tune up 5kHz"><span class="icon-chevron-double-right icon-sm"></span></button>
                 </div>
             </section>
 
@@ -193,7 +199,7 @@
                 <div class="side-controls">
                     <div class="side-controls-row">
                         <button id="record-btn" class="record-button-footer" aria-label="Record">
-                            <span class="record-icon">&#x25CF;</span>
+                            <span class="icon-record icon-sm"></span>
                             <span class="record-label">REC</span>
                         </button>
                         <button id="tune-btn" class="tune-button-footer" aria-label="Tune">
@@ -212,7 +218,7 @@
     <div class="off-canvas-menu" id="main-menu">
         <div class="menu-header">
             <h2>Menu</h2>
-            <button id="menu-close" class="menu-close-btn">×</button>
+            <button id="menu-close" class="menu-close-btn" aria-label="Close menu"><span class="icon-menu-close icon-sm"></span></button>
         </div>
         <div class="menu-content">
             <ul class="menu-list">

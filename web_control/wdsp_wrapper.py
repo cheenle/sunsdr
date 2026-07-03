@@ -334,31 +334,22 @@ class WDSPProcessor:
     def _apply_nr2_params(self, level: int):
         """Set NR2 strength via AE zeta & psi parameters.
 
-        SetRXAEMNRgainLine does NOT exist in this libwdsp build.
-        We emulate NR2 strength by adjusting the AE (Acquisition
-        Enhancement) statistical prior parameters:
+        NR2 musical-noise ("数码音") is the classic WDSP artifact
+        at high settings — low zeta forces hard speech/noise decisions
+        that create tonal whistles in residual noise.  The old mapping
+        ran zeta→0.08 at max, which is the musical-noise regime.
 
-          aeZetaThresh — speech / noise discrimination point.
-              Lower zeta → harder to trigger speech detection
-              → more aggressive noise suppression.
-              Strength   0 → zeta 0.50  (light)
-              Strength 100 → zeta 0.08  (heavy)
-
-          aePsi — noise-floor adaptation rate.
-              Higher psi → faster adaptation → tracks changing
-              noise floors more aggressively.
-              Strength   0 → psi 0.01  (slow, gentle)
-              Strength 100 → psi 0.08  (fast, aggressive)
-
-        The exponential mapping (t ** 0.6 / t ** 0.8) gives more
-        resolution at the heavy end where users typically operate.
+        New mapping uses LINEAR interpolation with a softer floor,
+        trading ultimate noise reduction for artifact-free audio:
+          Strength   0 → zeta 0.50  psi 0.01  (gentle)
+          Strength 100 → zeta 0.22  psi 0.05  (effective, no musical noise)
         """
         clamped = max(0, min(100, level))
         t = clamped / 100.0
-        # zeta: 0.50 → 0.08  (weighted toward aggressive)
-        zeta = 0.50 - (t ** 0.6) * 0.42
-        # psi:  0.01 → 0.08  (weighted toward aggressive)
-        psi  = 0.01 + (t ** 0.8) * 0.07
+        # zeta: 0.50 → 0.22  (linear, softer floor avoids musical noise)
+        zeta = 0.50 - t * 0.28
+        # psi:  0.01 → 0.05  (linear, slower adaptation = less warble)
+        psi  = 0.01 + t * 0.04
 
         if _check_symbol("SetRXAEMNRaeZetaThresh"):
             _wdsp.SetRXAEMNRaeZetaThresh(
@@ -717,10 +708,14 @@ class WDSPIQProcessor:
     # ── NR2 (delegated to the same zeta/psi AE control) ─────
 
     def _apply_iq_nr2(self, level: int):
+        """NR2 for IQ WDSP — same softer linear mapping as audio WDSP.
+        See _apply_nr2_params() for rationale."""
         clamped = max(0, min(100, level))
         t = clamped / 100.0
-        zeta = 0.50 - (t ** 0.6) * 0.42
-        psi  = 0.01 + (t ** 0.8) * 0.07
+        # zeta: 0.50 → 0.22  (linear, softer floor avoids musical noise)
+        zeta = 0.50 - t * 0.28
+        # psi:  0.01 → 0.05  (linear, slower adaptation = less warble)
+        psi  = 0.01 + t * 0.04
         if _check_symbol("SetRXAEMNRaeZetaThresh"):
             _wdsp.SetRXAEMNRaeZetaThresh(
                 ctypes.c_int(self.channel), ctypes.c_double(zeta))
