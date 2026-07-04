@@ -43,8 +43,8 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
       } else if (d.type === 'flush') {
         this._inBuf = new Float32Array(0);
         this._frameAcc = new Float32Array(0);
-        if (this._writePtr) Atomics.store(this._writePtr, 0);
-        if (this._readPtr)  Atomics.store(this._readPtr, 0);
+        if (this._writePtr) Atomics.store(this._writePtr, 0, 0);
+        if (this._readPtr)  Atomics.store(this._readPtr, 0, 0);
       }
     };
   }
@@ -62,7 +62,7 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
     if (n > free) {
       // Drop oldest samples (buffer is ~1s deep — this should be rare)
       var drop = n - free;
-      Atomics.store(this._readPtr, rp + drop);
+      Atomics.store(this._readPtr, 0, rp + drop);
     }
     var idx = wp & mask;
     var first = Math.min(n, size - idx);
@@ -71,7 +71,7 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
     if (n > first) {
       for (var i = 0; i < n - first; i++) data[i] = samples[first + i];
     }
-    Atomics.store(this._writePtr, wp + n);
+    Atomics.store(this._writePtr, 0, wp + n);
   }
 
   // ── Audio processing ─────────────────────────────────

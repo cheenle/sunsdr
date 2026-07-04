@@ -119,8 +119,8 @@ button:active, .quick-btn:active, .dsp-chip:active, .mem-btn:active,
 }
 
 /* Touch target minimum: 44×44px for all interactive elements */
-.quick-btn, .dsp-chip, .tuning-btn, .side-btn, .header-btn,
-.control-row button, .mem-btn {
+/* .quick-btn / .dsp-chip / .control-row button 各自有自己的 min-height，不在此处设全局值 */
+.tuning-btn, .side-btn, .header-btn, .mem-btn {
     min-height: 44px;
     min-width: 44px;
 }
@@ -292,7 +292,7 @@ body {
     min-height: 100dvh;
     min-height: 100vh;
     padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
-    padding-bottom: 130px;  /* 为 fixed PTT 留出空间 */
+    padding-bottom: 150px;  /* 为 fixed PTT 留出空间 (+30%高度) */
     background-color: var(--bg-primary);
 }
 
@@ -812,7 +812,7 @@ body {
 
 .control-row {
     display: flex;
-    gap: var(--space-sm);
+    gap: 3px;
 }
 
 .quick-btn {
@@ -823,12 +823,13 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    padding: 4px 3px;
-    font-size: 12px;    font-weight: 600;
+    padding: 2px 2px;
+    font-size: 11px;    font-weight: 600;
     letter-spacing: 0.02em;
     cursor: pointer;
     transition: all var(--transition-fast);
-    min-height: 32px;
+    min-height: 22px;
+    line-height: 1.1;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
@@ -890,7 +891,7 @@ body {
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-top: 1px solid rgba(255, 255, 255, 0.10);
-    padding-top: 4px;
+    padding-top: 6px;
     padding-bottom: env(safe-area-inset-bottom, 6px);
     box-shadow:
         0 -2px 20px rgba(0, 0, 0, 0.55),
@@ -1362,22 +1363,22 @@ body {
 /* 较大屏幕适配 */
 @media (min-width: 390px) {
     .ptt-button {
-        min-height: 74px;
+        min-height: 96px;
     }
 }
 
 @media (min-width: 428px) {
     .quick-btn {
-        padding: 6px 5px;
-        font-size: 13px;
+        padding: 4px 3px;
+        font-size: 12px;
     }
 
     .ptt-button {
-        min-height: 78px;
+        min-height: 100px;
     }
 
     .ptt-label {
-        font-size: 19px;    }
+        font-size: 22px;    }
 }
 
 @media (min-width: 768px) {
@@ -1437,16 +1438,16 @@ body {
     }
 
     .ptt-button {
-        min-height: 56px;
+        min-height: 72px;
     }
 
     .ptt-label {
-        font-size: 15px;    }
+        font-size: 17px;    }
 
     .quick-btn {
-        min-height: 28px;
-        padding: 3px 3px;
-        font-size: 11px;    }
+        min-height: 22px;
+        padding: 2px 2px;
+        font-size: 10px;    }
 
     .tuning-row.single-row {
         gap: 3px;
@@ -1531,27 +1532,27 @@ body {
     }
 
     .ptt-section {
-        padding: 2px 6px;
+        padding: 3px 6px;
     }
 
     .ptt-button {
-        min-height: 48px;
+        min-height: 62px;
     }
 
     .ptt-label {
-        font-size: 14px;    }
+        font-size: 16px;    }
 
     .ptt-sublabel {
         display: none;
     }
 
     .cq-button-wide {
-        height: 24px;
-        font-size: 11px;    }
+        height: 28px;
+        font-size: 12px;    }
 
     .tune-button-footer,
     .record-button-footer {
-        height: 28px;
+        height: 30px;
     }
 }
 
@@ -1606,8 +1607,8 @@ body {
         rgba(18, 18, 36, 0.60) 100%);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
-    border-radius: var(--radius-md);
-    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    padding: 4px 6px;
     margin: 0;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
@@ -1618,21 +1619,21 @@ body {
 .dsp-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
 }
 
 /* ── 左侧 DSP 电源 ─────────────────────────────────────────── */
 .dsp-power {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 3px;
     flex-shrink: 0;
 }
 
 .dsp-label {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-muted);
 }
@@ -1641,8 +1642,8 @@ body {
 .dsp-toggle {
     position: relative;
     display: inline-block;
-    width: 40px;
-    height: 24px;
+    width: 32px;
+    height: 20px;
     flex-shrink: 0;
     cursor: pointer;
 }
@@ -1657,7 +1658,7 @@ body {
     position: absolute;
     inset: 0;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1665,8 +1666,8 @@ body {
 .dsp-toggle-track::before {
     content: '';
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
     left: 2px;
     top: 2px;
     background: var(--text-muted);
@@ -1681,7 +1682,7 @@ body {
 }
 
 .dsp-toggle input:checked + .dsp-toggle-track::before {
-    transform: translateX(16px);
+    transform: translateX(12px);
     background: var(--accent-primary);
     box-shadow: 0 0 8px var(--accent-glow);
 }
@@ -1699,15 +1700,15 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1px;
-    padding: 5px 4px 4px;
+    gap: 0px;
+    padding: 3px 2px 2px;
     background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    min-height: 40px;
+    min-height: 28px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
     user-select: none;
@@ -1737,20 +1738,20 @@ body {
 }
 
 .dsp-chip-label {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     line-height: 1;
 }
 
 .dsp-chip-val {
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 500;
-    padding: 1px 6px;
-    border-radius: 8px;
+    padding: 0px 4px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.06);
     color: var(--text-muted);
-    line-height: 1.3;
+    line-height: 1.2;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -2263,13 +2264,13 @@ body {
 .record-label {
     font-size: 11px;}
 
-/* 更新 PTT 区域布局 - 统一蓝色风格 */
+/* 更新 PTT 区域布局 - 统一蓝色风格 (+30%高度) */
 .ptt-container {
     display: flex;
-    gap: 5px;
+    gap: 6px;
     justify-content: center;
     align-items: stretch;
-    padding: 0 6px 3px;
+    padding: 0 6px 4px;
 }
 
 /* 右侧控制区域 - 录音/TUNE/CQCQCQ 垂直排列 */
@@ -2290,19 +2291,19 @@ body {
 .side-controls-row .record-button-footer,
 .side-controls-row .tune-button-footer {
     flex: 1;
-    height: 34px;
+    height: 42px;
 }
 
-/* PTT 按钮调整 - SDR 红色渐变 */
+/* PTT 按钮调整 - SDR 红色渐变 (+30%高度) */
 .ptt-button {
-    flex: 1.4;
+    flex: 1.5;
     height: auto;
-    min-height: 68px;
+    min-height: 88px;
     border: 1px solid rgba(255, 71, 87, 0.3);
     border-radius: var(--radius-md);
     background: linear-gradient(180deg, #e53935 0%, #b71c1c 100%);
     color: var(--text-primary);
-    font-size: 17px;    font-weight: 700;
+    font-size: 18px;    font-weight: 700;
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -2333,7 +2334,7 @@ body {
 }
 
 .ptt-label {
-    font-size: 17px;}
+    font-size: 20px;}
 
 .ptt-sublabel {
     display: none;  /* 隐藏子标签，更简洁 */

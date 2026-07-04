@@ -210,6 +210,8 @@ class SunSDR2DXClient:
         self.tx_freq: float = 7_074_000.0
         self.mode: str = "USB"
         self.ptt: bool = False
+        self._ptt_active: bool = False  # 乐观值 (UDP发送后设置)
+        self._ptt_device_confirmed: bool = False  # P0修复: 设备真实TX状态 (0x1F01确认)
         self.drive: int = 100
         self.volume: float = 0.5
         self.preamp: bool = False
@@ -364,13 +366,28 @@ class SunSDR2DXClient:
         On TX assert, (re)send the current drive (0x0017) first — ExpertSDR3
         does the same, and it guards against the device having reset 0x0017 to
         a band-calibration value on the last frequency change. Without this the
-        far end heard very low power because drive was stuck at the boot byte."""
+        far end heard very low power because drive was stuck at the boot byte.
+
+        P0修复 (2026-07-04): _ptt_active 现在在 UDP 发送之后设置，而不是之前。
+        之前 _ptt_active = tx 在 _send_raw 之前执行，导致 UDP 丢包时服务端
+        误以为设备已键控，启动 TX pacer 但设备实际仍在 RX → 零功率发射。
+        """
         if tx:
             await self._send_drive_byte()
+        # ── 先发送 UDP 命令，再设置状态标志 ──
+        # _ptt_device_confirmed 在服务端收到 0x1F01 确认包后才设为 True
+        self._ptt_device_confirmed = False
+        try:
+            await self._send_raw(
+                build_packet(CmdID.PTT, struct.pack("<I", 0), trailing=1 if tx else 0))
+        except Exception as e:
+            logger.error("PTT UDP send failed: %s", e)
+            # UDP 发送失败 → 不设置 _ptt_active，避免误判
+            if tx:
+                logger.warning("PTT ON: UDP send failed, device may not be keyed")
+            return
         self.ptt = tx
         self._ptt_active = tx
-        await self._send_raw(
-            build_packet(CmdID.PTT, struct.pack("<I", 0), trailing=1 if tx else 0))
 
     # ── Sample rate (spectrum/IQ width) ────────────────────────
 
@@ -535,3 +552,19 @@ class SunSDR2DXClient:
             "split_enable": self.split_enable, "vfo_lock": self.vfo_lock,
             "antenna": self.antenna,
         }
+
+    # ── PTT device-confirmed state (P0修复) ──────────────────────
+    # _ptt_active 是乐观值（UDP发送后设置），_ptt_device_confirmed
+    # 是设备真实状态（0x1F01 bit 16 翻转确认后设置）。两者分离后，
+    # getPTT 可以返回设备确认状态而非乐观值，避免"假发射"显示。
+
+    def mark_ptt_confirmed(self, confirmed: bool):
+        """Called by server.py when 0x1F01 packet confirms device TX state."""
+        if self._ptt_device_confirmed != confirmed:
+            logger.info("PTT device-confirmed: %s (was: %s)", confirmed,
+                        self._ptt_device_confirmed)
+        self._ptt_device_confirmed = confirmed
+
+    def is_ptt_confirmed(self) -> bool:
+        """Return device-confirmed PTT state (from 0x1F01 telemetry)."""
+        return self._ptt_device_confirmed

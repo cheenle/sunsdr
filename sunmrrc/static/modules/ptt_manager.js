@@ -19,6 +19,68 @@ var PTT_PREDICTED_STATE = false; // 本地预测的PTT状态（仅用于临时�
 var PTT_LAST_UPDATE_TIME = 0; // 最后状态更新时间
 var PTT_USER_INTENT = false; // 用户意图状态（按下TX时为true，松开时为false）
 
+// --- PTT 键控命令 ACK 重发（P0修复：setPTT:true 也需要投递确认）---
+// 此前只有释放方向(setPTT:false)有ACK机制，键控方向静默丢失会导致
+// "按下PTT但无功率"——这是该bug的根因之一。
+var PTT_KEY_ACK_TIMEOUT = 800;   // 等待 getPTT:true 确认的超时
+var PTT_KEY_MAX_RETRY = 2;       // 最大重发次数
+var _pttKeyAckTimer = null;
+var _pttKeyRetryCount = 0;
+
+function startPTTKeyAck() {
+	cancelPTTKeyAck();
+	_pttKeyRetryCount = 0;
+	_pttKeyAckTimer = setTimeout(_pttKeyAckCheck, PTT_KEY_ACK_TIMEOUT);
+}
+
+function _pttKeyAckCheck() {
+	_pttKeyAckTimer = null;
+	// 设备已确认键控 → 成功，无需动作
+	if (PTT_DEVICE_STATE === true) {
+		console.log('✅ [PTT键控确认] 设备已确认进入TX');
+		return;
+	}
+	// 用户已改变意图（松开了PTT）→ 放弃这次键控确认
+	if (PTT_USER_INTENT === false) {
+		console.log('⏭️ [PTT键控确认] 用户已松开PTT，放弃确认');
+		return;
+	}
+	_pttKeyRetryCount++;
+	if (_pttKeyRetryCount <= PTT_KEY_MAX_RETRY) {
+		console.warn(`⚠️ [PTT键控未确认] 第 ${_pttKeyRetryCount} 次重发 setPTT:true`);
+		if (wsControlTRX && wsControlTRX.readyState === WebSocket.OPEN && poweron) {
+			wsControlTRX.send("setPTT:true");
+			_pttKeyAckTimer = setTimeout(_pttKeyAckCheck, PTT_KEY_ACK_TIMEOUT);
+		} else {
+			// 控制通道不可用 → 判定连接死亡
+			console.error('🚨 [PTT键控] 重发时控制通道不可用');
+			// 通知用户
+			if (typeof updatePTTStatusDisplay === 'function') {
+				updatePTTStatusDisplay(false, true);
+			}
+		}
+	} else {
+		// 多次重发仍未确认 → 控制通道很可能半开
+		console.error('🚨 [PTT键控] 多次重发仍未收到确认，PTT可能未生效');
+		// 强制重置本地状态，让用户看到真实情况
+		PTT_PREDICTED_STATE = false;
+		if (typeof updatePTTStatusDisplay === 'function') {
+			updatePTTStatusDisplay(false, true);
+		}
+		if (typeof onControlConnectionDead === 'function') {
+			onControlConnectionDead('PTT 键控多次重发未确认');
+		}
+	}
+}
+
+function cancelPTTKeyAck() {
+	if (_pttKeyAckTimer) {
+		clearTimeout(_pttKeyAckTimer);
+		_pttKeyAckTimer = null;
+	}
+	_pttKeyRetryCount = 0;
+}
+
 function sendTRXptt(stat){
 	const message = "setPTT:"+stat;
 	const currentTime = Date.now();
@@ -61,8 +123,11 @@ function sendTRXptt(stat){
 		// 强制重连控制通道。键控方向(true)无此风险，不做 ACK。
 		if (stat === false) {
 			startPTTReleaseAck();
+			cancelPTTKeyAck();  // 释放时取消键控确认
 		} else {
 			cancelPTTReleaseAck(); // 新的键控请求，取消任何残留的释放确认
+			// P0修复：键控方向也启动ACK确认，防止"按下PTT但无功率"
+			startPTTKeyAck();
 		}
 
 		// 最终重置命令发送标志
@@ -147,6 +212,10 @@ function updatePTTStatus(isPTTOn) {
 	// 设备确认已收回（getPTT:false）→ 释放命令投递成功，关闭 ACK 重发闭环
 	if (isPTTOn === false && typeof cancelPTTReleaseAck === 'function') {
 		cancelPTTReleaseAck();
+	}
+	// 设备确认已键控（getPTT:true）→ 键控命令投递成功，关闭 ACK 重发闭环
+	if (isPTTOn === true && typeof cancelPTTKeyAck === 'function') {
+		cancelPTTKeyAck();
 	}
 
 	// 状态一致性检查（仅调试用，已简化）

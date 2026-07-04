@@ -1121,8 +1121,24 @@ async def _process_iq_stream():
             except Exception:
                 _tx_cont_csv = None
             # Wait for PTT release — keep receiving telemetry during TX
+            # P0修复: PTT 确认看门狗。如果 _ptt_active=True 但设备
+            # 2秒内未通过 0x1F01 确认进入TX，则 UDP 命令可能丢失，
+            # 重发一次 PTT 命令。
+            _ptt_confirm_deadline = time.monotonic() + 2.0
+            _ptt_confirm_retried = False
             while getattr(radio, '_ptt_active', False) and radio.connected:
                 now = time.monotonic()
+                # PTT 确认看门狗: 2秒内未确认 → 重发 PTT
+                if (not _ptt_confirm_retried
+                        and not getattr(radio, '_ptt_device_confirmed', False)
+                        and now > _ptt_confirm_deadline):
+                    _ptt_confirm_retried = True
+                    logger.warning("PTT: device TX not confirmed after 2s — re-sending PTT ON")
+                    try:
+                        await radio.set_ptt(True)
+                    except Exception as e:
+                        logger.error("PTT re-send failed: %s", e)
+                    _ptt_confirm_deadline = now + 2.0  # 再给一次机会
                 if tx_keepalive_due or (now - last_keepalive >= 0.5):
                     _tx_ka_ctr = (_tx_ka_ctr + 0x10000) & 0xFFFFFFFF
                     ka_hdr = struct.pack("<HHIH", 0xFF32, 0xFFFE, _tx_ka_ctr, 0x0001)
@@ -1166,6 +1182,18 @@ async def _process_iq_stream():
                                             pass
                                 except Exception:
                                     pass
+                        elif sub == 0x1F01 and len(raw_rx) >= 22:
+                            # P0修复: TX-mode 0x1F01 handler — 在发射循环中确认设备TX状态
+                            try:
+                                _t = struct.unpack_from('<I', raw_rx, len(raw_rx) - 4)[0]
+                                _is_tx = bool(_t & 0x10000)
+                                if _is_tx != getattr(radio, '_ptt_device_confirmed', False):
+                                    radio.mark_ptt_confirmed(_is_tx)
+                                    if _is_tx:
+                                        logger.info("PTT: device TX confirmed via 0x1F01 (TX loop)")
+                                        asyncio.ensure_future(_send_ctrl("getPTT:true"))
+                            except Exception:
+                                pass
                 except (asyncio.TimeoutError, asyncio.CancelledError):
                     pass
                 except Exception:
@@ -1312,9 +1340,20 @@ async def _process_iq_stream():
                     logger.warning(f"0x1F00 parse error: {e}")
 
         elif sub == 0x1F01 and len(raw) >= 22:
-            # TX-only frame marker (trailing bit 16 toggles during TX).
-            # Forward power is in 0x1F00 off30 f32 (watts); this is a flag only.
-            pass
+            # P0修复: TX-only frame marker — 设备仅在发射时发送此包。
+            # 用于确认设备真实进入了TX状态（区别于 _ptt_active 乐观值）。
+            # trailing word bit 16 在发射期间翻转。
+            try:
+                _t = struct.unpack_from('<I', raw, len(raw) - 4)[0]
+                _is_tx = bool(_t & 0x10000)
+                if _is_tx != getattr(radio, '_ptt_device_confirmed', False):
+                    radio.mark_ptt_confirmed(_is_tx)
+                    if _is_tx:
+                        logger.info("PTT: device TX confirmed via 0x1F01")
+                        # 广播设备确认的 PTT 状态给所有客户端
+                        asyncio.ensure_future(_send_ctrl("getPTT:true"))
+            except Exception:
+                pass
 
         # Periodic stats (doesn't send keep-alive — that's handled above)
         now = time.monotonic()
@@ -1423,6 +1462,9 @@ async def ws_ctrl(ws: WebSocket):
     if token not in _auth_tokens:
         await ws.accept(); await ws.close(code=4001, reason="auth required"); return
     await ws.accept(); ctrl_clients.add(ws)
+    # Push current sample rate to the new client immediately,
+    # so spectrum frequency labels are correct from the first frame.
+    await ws.send_text(f"setSampleRate:{radio.sample_rate_key}")
     try:
         while True:
             msg = await ws.receive_text()
@@ -1442,7 +1484,11 @@ async def ws_ctrl(ws: WebSocket):
                     dsp_mode = dsp_proc.demodulator.mode if dsp_proc else "USB"
                     await ws.send_text(f"getMode:{dsp_mode}")
                 elif cmd == "getPTT":
-                    await ws.send_text(f"getPTT:{str(getattr(radio,'ptt',False)).lower()}")
+                    # P0修复: 返回设备确认的PTT状态，而非乐观值
+                    # radio.ptt 是乐观值（UDP发送后设置），
+                    # radio._ptt_device_confirmed 是设备真实状态（0x1F01确认）
+                    confirmed = getattr(radio, '_ptt_device_confirmed', False)
+                    await ws.send_text(f"getPTT:{str(confirmed).lower()}")
                 elif cmd == "setFreq":
                     await radio.set_frequency(float(val))
                     await ws.send_text(f"getFreq:{val}")
@@ -1465,6 +1511,9 @@ async def ws_ctrl(ws: WebSocket):
                         if dsp_proc:
                             dsp_proc.set_iq_sample_rate(new_hz)
                         await _send_ctrl(f"setSampleRate:{val.lower()}")
+                elif cmd == "getSampleRate":
+                    # Query current IQ sample rate key (39k/78k/156k/312k)
+                    await _send_ctrl(f"getSampleRate:{radio.sample_rate_key}")
                 elif cmd == "setOpus":
                     # RX audio codec toggle. "on"/"true" → Opus (~18-24 kbps),
                     # else Int16 PCM (~256 kbps). Each /WSaudioRX frame carries a
@@ -1524,7 +1573,12 @@ async def ws_ctrl(ws: WebSocket):
                     await radio.set_ptt(tx)
                     if dsp_proc: dsp_proc.demodulator.set_ptt(tx)
                     logger.info(f"PTT {'ON ' if tx else 'OFF'}")
+                    # P0修复: 发送乐观状态作为即时反馈，但标记为预测值
+                    # 设备确认状态会通过 0x1F01 → _send_ctrl("getPTT:true") 广播
                     await ws.send_text(f"getPTT:{str(tx).lower()}")
+                    if not tx:
+                        # PTT释放时重置设备确认状态
+                        radio.mark_ptt_confirmed(False)
                 elif cmd == "tune":
                     tune_on = val.lower() == "true"
                     await radio.set_tune(tune_on)
@@ -1693,6 +1747,7 @@ async def ws_ctrl(ws: WebSocket):
                     # TX-audio-channel backup PTT release: force RX.
                     await radio.set_ptt(False)
                     if dsp_proc: dsp_proc.demodulator.set_ptt(False)
+                    radio.mark_ptt_confirmed(False)  # P0修复: 重置设备确认状态
                     await _send_ctrl("getPTT:false")
                 elif cmd == "cq":
                     # SunMRRC has no server-side CQ voice playback (TX audio
@@ -1975,6 +2030,17 @@ async def ws_audio_tx(ws: WebSocket):
                         pcm = opus_tx_decoder.decode(frame)
                         if not pcm:
                             continue
+                    elif tag == AUDIO_TAG_OPUS and not opus_tx_decoder:
+                        # P0修复: Opus 解码器不可用，通知客户端降级到 PCM
+                        # 之前这里静默丢弃所有 Opus 帧 → 零功率发射
+                        if not getattr(radio, '_opus_tx_warned', False):
+                            radio._opus_tx_warned = True
+                            logger.warning(
+                                "TX audio: Opus decoder unavailable, "
+                                "dropping Opus frames — client should use PCM")
+                            asyncio.ensure_future(
+                                _send_ctrl("setOpus:unavailable"))
+                        continue
                     elif tag == AUDIO_TAG_PCM:
                         pcm = frame
                     else:
@@ -2019,6 +2085,7 @@ async def ws_audio_tx(ws: WebSocket):
                         await radio.set_ptt(False)
                         if dsp_proc:
                             dsp_proc.demodulator.set_ptt(False)
+                        radio.mark_ptt_confirmed(False)  # P0修复
                         await _send_ctrl("getPTT:false")
                     except Exception as e:
                         logger.warning("TX-WS s: forced-RX failed: %s", e)

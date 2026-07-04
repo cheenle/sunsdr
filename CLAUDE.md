@@ -165,13 +165,13 @@ The IQ processing loop sends both heartbeat (0x0018 to port 50001 every 0.5s) an
 - **FFT bin-to-pixel mapping** — FFT canvas uses `xScale = W/n` (bin k → pixel k), consistent with waterfall and frequency grid. Do NOT use `W/(n-1)` which stretches bins 0..511 to pixels 0..512, causing 1px offset at VFO center (bin 256 → pixel 257 instead of 256).
 - **FFT display is relative, not absolute dB** — curve uses noise-floor-relative height with gamma 0.65, so horizontal grid lines are pure visual texture (no dB number labels). The S-meter shows absolute signal level.
 - **Sample rate change resets** — `set_iq_sample_rate()` calls `spectrum.reset()` to clear FFT accumulation buffer; frontend `setSampleRate` handler resets FFT EMA buffer and clears waterfall canvas to avoid stale data from previous rate.
-- **PTT release is safety-critical** (AD-007) — frontend has ACK retry + watchdog; backend has forced-RX handler on `s:` command
+- **PTT reliability is safety-critical** (AD-007) — bidirectional ACK retry for both key-up and release; service端 has 0x1F01-based device TX confirmation watchdog; frontend has `isTXWebSocketReady()` check before keying; backend has forced-RX handler on `s:` command. See §PTT Reliability Architecture below.
 - **RX audio is tagged dual-codec** (AD-004) — each `/WSaudioRX` frame carries a 1-byte codec tag (`0x00`=Int16 PCM, `0x01`=Opus 16 kHz mono); default Opus (~18-24 kbps vs ~256 kbps PCM), switchable via `setOpus:` (Audio Codec menu). Server encodes via a direct `ctypes` libopus binding in `web_control/opus_rx.py` (NOT `opuslib` — arm64 macOS can't call the variadic `opus_encoder_ctl` through ctypes, so bitrate is set via the `max_data_bytes` cap on `opus_encode`). Falls back to PCM if libopus is missing. 16 kHz resampled server-side from 15625 Hz native rate
 - **COEP header uses `credentialless`** (not `require-corp`) — `require-corp` breaks Worker `importScripts()` on Safari. `credentialless` enables `SharedArrayBuffer` while allowing workers to load their own sub-resources.
 - **TX audio uses SharedArrayBuffer ring buffer** — `AudioWorklet` (tx_capture_worklet.js) writes float32 samples directly to SAB; Opus Worker (tx_opus_worker.js) polls SAB every 3ms, reads 320-sample frames, Opus-encodes, and sends via its own dedicated WebSocket to `/WSaudioTX`. Zero main-thread involvement after setup. Deleted `modules/tx_sab_ring.js` (dead code — SAB ring logic is embedded directly in worklet/worker).
 - **Continuous DC blocker** — IIR highpass @ 20Hz replaces the old per-frame mean subtraction. Instant convergence, no DC wander across frame boundaries.
 - **300Hz 4th-order Butterworth HPF** — inserted between DC blocker and anti-alias LPF in `feed_audio()`. Removes sub-300Hz energy that carries no voice intelligibility but consumes amplifier headroom; improves SSB power efficiency from ~69% to ~96%.
-- **TX pacer: no de-prime** — once primed with 10 frames, drains every available frame immediately. Constants: `TX_MIC_PRIME_PKTS=60`, `TX_MIC_REPRIME_PKTS=20`.
+- **TX pacer: no de-prime** — once primed with 10 frames, drains every available frame immediately. Constants: `TX_MIC_PRIME_PKTS=60`, `TX_MIC_REPRIME_PKTS=8`.
 - **IQ socket pre-bound before boot** — UDP socket bound to port 50002 before `boot_sequence()` sends HW_INIT, avoiding lost early packets. Dedicated keep-alive thread sends 0xFFFE independently of the asyncio event loop.
 
 ## Architecture decisions
@@ -202,3 +202,75 @@ During development and debugging, the modulator saves diagnostic WAV/CSV files t
 - `/tmp/tx_continuity.csv` — aligned device watts vs sent IQ envelope
 
 These files are created at runtime for debugging and can be safely deleted.
+
+## PTT Reliability Architecture (P0 fixes, 2026-07-04)
+
+The PTT control chain was found to be "optimistic" — every layer assumed the next layer
+succeeded, with zero hardware confirmation. This caused intermittent "PTT pressed but no
+TX power" failures. The following fixes were applied:
+
+### PTT command flow (post-fix)
+
+```
+User presses PTT button
+  → TXControl('start')                          [tx_button.js]
+    → ① isTXWebSocketReady() check + wait        ← NEW: check audio WS before keying
+    → ② toggleRecord(true) → isRecording=true    ← MOVED: before setPTT:true
+    → ③ send warmup frames
+    → ④ sendTRXptt(true) → wsControlTRX.send()   ← MOVED: last step
+      → ⑤ startPTTKeyAck()                       ← NEW: ACK for key-up direction
+    → Server: radio.set_ptt(True)
+      → _send_drive_byte() (UDP)
+      → _send_raw(PTT ON) (UDP)                  ← error-detected now
+      → _ptt_active = True                       ← MOVED: AFTER UDP send
+      → _ptt_device_confirmed = False            ← NEW: reset before waiting
+    → IQ loop: sees _ptt_active=True → starts TX pacer
+    → PTT confirmation watchdog: waits 2s for 0x1F01
+    → Device enters TX → sends 0x1F01 packets
+    → Server: 0x1F01 bit 16 → radio.mark_ptt_confirmed(True)
+      → _send_ctrl("getPTT:true") → client ACK success
+    → If 0x1F01 NOT received within 2s:
+      → Watchdog re-sends PTT ON → another 2s window
+```
+
+### Key changes by file
+
+| File | Change |
+|------|--------|
+| `modules/ptt_manager.js` | **Bidirectional ACK**: `startPTTKeyAck()` / `_pttKeyAckCheck()` for `setPTT:true` (800ms timeout, 2 retries). Previously only `setPTT:false` had ACK. `updatePTTStatus()` cancels the appropriate ACK timer on device confirmation. |
+| `web_control/sunsdr_direct.py` | **`_ptt_active` moved after UDP**: flag set only after `_send_raw` succeeds. **`_ptt_device_confirmed`**: separate flag for device-verified TX state (set by `mark_ptt_confirmed()` when 0x1F01 confirms). **Error handling**: `set_ptt()` catches `_send_raw` exceptions and returns early without setting flags. |
+| `sunmrrc/server.py` | **0x1F01 handler in BOTH RX and TX loops**: parses trailing word bit 16 to confirm device TX state. **Critical fix (2026-07-04)**: the 0x1F01 handler was initially only in the RX-mode loop, but during PTT the IQ processing enters a TX-mode `while _ptt_active` loop that only handled 0x1F00 — 0x1F01 packets were silently dropped, `_ptt_device_confirmed` was never set, and the confirmation watchdog re-sent PTT ON every 2s in a dead loop. Now duplicated in the TX-mode loop. **`getPTT` returns device-confirmed state** (`radio._ptt_device_confirmed`), not the optimistic `radio.ptt`. **TX confirmation watchdog**: if `_ptt_active` but no 0x1F01 within 2s, re-sends PTT ON. **Opus TX fallback**: when `opus_tx_decoder` is None, warns and notifies client to switch to PCM instead of silently dropping Opus frames. |
+| `tx_button.js` | **Reordered TX start**: audio WS check → start recording → warmup → THEN send `setPTT:true`. **`isTXWebSocketReady()`**: new function checking WS state + AudioContext (but NOT Opus Worker readiness — Worker catches up async). **`button_pressed`/`button_unpressed`**: pass `TXState.element` explicitly instead of relying on global `event`. |
+| `tx_capture_worklet.js` | **`Atomics.store` index fix**: `Atomics.store(ptr, 0, val)` was missing the index parameter (was `Atomics.store(ptr, val)` treating the value as index → `Invalid atomic access index` on large values). Fixed all 3 occurrences. |
+
+### PTT state tracking (two-tier)
+
+- **`radio.ptt` / `_ptt_active`**: optimistic value — set after UDP PTT command is sent. Drives the TX pacer thread start.
+- **`radio._ptt_device_confirmed`**: device-verified value — set when 0x1F01 packets confirm the device is actually in TX. Drives the `getPTT` response.
+- **Frontend `PTT_DEVICE_STATE`**: mirrors `_ptt_device_confirmed` from server. Used for UI display (green = confirmed, yellow = predicted).
+- **Frontend `PTT_USER_INTENT`**: tracks what the user last requested. Used by ACK logic to decide whether to retry or abandon.
+
+### 0x1F01 — TX confirmation telemetry
+
+The device sends 0x1F01 packets (22+ bytes) only during TX. The trailing word's bit 16
+(0x10000) toggles during transmission. This is the ONLY reliable way to confirm the
+device actually keyed up — the UDP PTT command (0x0006) has no hardware ACK.
+
+### SAB ring buffer Atomics bug (fixed)
+
+The `tx_capture_worklet.js` had `Atomics.store(ptr, value)` instead of the correct
+`Atomics.store(ptr, 0, value)`. The missing index caused the value (e.g., 1000000) to
+be interpreted as the array index, which was out of bounds for the 1-element
+Uint32Array → `Invalid atomic access index`. This silently broke the SAB audio path,
+causing the TX audio worklet to crash on every write.
+
+### `isTXWebSocketReady` — TX audio readiness check
+
+Checks before PTT keying:
+1. `wsAudioTX.readyState === WebSocket.OPEN` (TX audio WS connected)
+2. `mh.context.state !== 'suspended'` (AudioContext active, critical for iOS)
+3. `ap` encoder object exists (but does NOT wait for Opus Worker — it catches up async)
+
+Does NOT check `ap.txOpusWorkerReady` — the Worker loads WASM asynchronously (~200-500ms),
+and blocking on it would cause a perceptible delay on first press. The Worker starts
+consuming the SAB ring buffer as soon as it's ready; no audio is lost.

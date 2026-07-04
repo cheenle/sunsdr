@@ -82,7 +82,9 @@ async function TXControl(action) {
                 if (typeof window.resumeAudioContext === 'function') window.resumeAudioContext();
                 if (typeof toggleaudioRX === 'function') toggleaudioRX(false);
                 if (typeof window.updatePTTStatus === 'function') window.updatePTTStatus(false);
-                if (typeof button_unpressed === 'function') button_unpressed();
+                if (typeof button_unpressed === 'function') {
+                try { button_unpressed(TXState.element); } catch(e) {}
+              }
                 if (typeof window.ATR1000 !== 'undefined') {
                     if (window.ATR1000.onTXStop) window.ATR1000.onTXStop();
                     if (window.ATR1000.clearDisplay) window.ATR1000.clearDisplay();
@@ -103,22 +105,14 @@ async function TXControl(action) {
             navigator.vibrate(50);
         }
         
-        // 执行TX功能 - 优先发送PTT命令
+        // 执行TX功能 - P0修复: 先确保音频通道就绪，再发送PTT:true
+        // 原来的顺序是"先PTT:true → 再检查音频通道"，如果音频通道未就绪，
+        // 回滚的 PTT:false 也可能丢失 → 设备键控但无音频 → 零功率发射。
         try {
-            // 0. 立即PTT优先
-            console.log(`[${timestamp}] 🔧 按下即PTT:true`);
-            if (typeof sendTRXptt === 'function') {
-                sendTRXptt(true);
-                console.log(`[${timestamp}] 📡 已发送PTT:true`);
-            }
-
-            // 1. 同步开始录音
-            console.log(`[${timestamp}] 🔧 同步初始化TX`);
-            // 先检查 TX WebSocket 状态
+            // 0. 先检查 TX WebSocket 状态并等待就绪
+            console.log(`[${timestamp}] 🔧 检查TX音频通道就绪状态`);
             if (typeof isTXWebSocketReady === "function" && !isTXWebSocketReady()) {
                 console.warn("⚠️ TX WebSocket 未就绪，等待连接...");
-                // 真正异步等待最多 500ms（每 50ms 轮询一次，期间让出事件循环）
-                // F5 修复：原实现是同步计数器忙等，从不让出，等同于不等待。
                 let waited = 0;
                 while (waited < 500) {
                     if (isTXWebSocketReady()) break;
@@ -128,18 +122,18 @@ async function TXControl(action) {
                 if (!isTXWebSocketReady()) {
                     console.error("❌ TX WebSocket 连接超时，无法开始TX");
                     TXState.isPressed = false;
-                    TXState.isProcessing = false;  // 释放锁，避免后续 TX 被永久阻塞
+                    TXState.isProcessing = false;
                     TXState.processingStartTime = 0;
-                    // 回滚已发送的 PTT:true，防止键控但无音频
-                    if (typeof sendTRXptt === 'function') sendTRXptt(false);
                     if (TXState.pttWatchdogTimer) {
                         clearTimeout(TXState.pttWatchdogTimer);
                         TXState.pttWatchdogTimer = null;
                     }
-                    if (typeof window.updatePTTStatus === 'function') window.updatePTTStatus(false);
                     return false;
                 }
             }
+
+            // 1. 先开始录音（设置 isRecording=true），确保音频开始流动
+            console.log(`[${timestamp}] 🔧 开始录音（音频通道就绪后）`);
             toggleRecord(true);
 
             // 2. 发送预热帧（减少到3帧，更快完成）
@@ -154,31 +148,39 @@ async function TXControl(action) {
                             if (encode && ap && ap.opusEncoder) {
                                 const packets = ap.opusEncoder.encode_float(warmup);
                                 for (let k = 0; k < packets.length; k++) {
-                                    // Prepend Opus tag byte (0x01) — server expects
-                                    // tagged frames on /WSaudioTX, same as RX path.
                                     const tagged = new Uint8Array(1 + packets[k].byteLength);
-                                    tagged[0] = 0x01; // AUDIO_TAG_OPUS
+                                    tagged[0] = 0x01;
                                     tagged.set(new Uint8Array(packets[k]), 1);
                                     wsAudioTX.send(tagged);
                                 }
                             } else if (ap && ap.i16arr) {
-                                // Prepend PCM tag byte (0x00)
                                 const i16 = new Int16Array(warmup.length);
                                 const tagged = new Uint8Array(1 + i16.byteLength);
-                                tagged[0] = 0x00; // AUDIO_TAG_PCM
+                                tagged[0] = 0x00;
                                 tagged.set(new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength), 1);
                                 wsAudioTX.send(tagged);
                             }
                         }
-                    } catch(e) { 
-                        console.warn(`TX warmup skip frame ${i}:`, e); 
+                    } catch(e) {
+                        console.warn(`TX warmup skip frame ${i}:`, e);
                     }
-                }, i * 3); // 更快的预热
+                }, i * 3);
+            }
+
+            // 3. 音频通道就绪 + 录音已开始 → 现在才发送 PTT:true
+            // P0修复: 这是键控前的最后一步，确保前面的准备工作都已完成
+            console.log(`[${timestamp}] 🔧 音频通道已就绪，发送 PTT:true`);
+            if (typeof sendTRXptt === 'function') {
+                sendTRXptt(true);
+                console.log(`[${timestamp}] 📡 已发送PTT:true`);
             }
 
             // 3. 执行其他功能
             console.log(`[${timestamp}] 🔧 调用button_pressed()`);
-            button_pressed();
+            // 修复: button_pressed() 依赖 event.srcElement，手动传参
+            if (typeof button_pressed === 'function') {
+                try { button_pressed(TXState.element); } catch(e) {}
+            }
             
             console.log(`[${timestamp}] 🔧 调用toggleaudioRX(true) - 静音RX`);
             toggleaudioRX(true);  // 明确设置静音RX
@@ -351,7 +353,7 @@ async function TXControl(action) {
             
             // 7. 其他清理（异步执行，不阻塞切换）
             if (typeof button_unpressed === 'function') {
-                button_unpressed();
+                try { button_unpressed(TXState.element); } catch(e) {}
             }
             
             console.log(`[${timestamp}] ✅ TX停止成功 - 切换延迟最小化`);
@@ -583,6 +585,32 @@ function TXtogle(state) {
     } else {
         return TXControl(TXState.isPressed ? 'stop' : 'start');
     }
+}
+
+// P0修复: TX音频通道就绪检查（之前被引用但从未定义，导致检查总是被跳过）
+// 检查 TX WebSocket 是否已连接，以及 AudioContext 是否已恢复（iOS关键）
+// 注意: 不检查 Opus Worker 就绪状态——Worker 首次加载需要几百ms，
+// 如果等它就绪才键控，用户会感到明显的延迟。Worker 就绪后会自动开始
+// 处理 SAB ring buffer 中的数据，不会丢失音频。
+function isTXWebSocketReady() {
+	// 1. TX WebSocket 必须已连接
+	if (!wsAudioTX || wsAudioTX.readyState !== WebSocket.OPEN) {
+		return false;
+	}
+	// 2. AudioContext 不能处于 suspended 状态（iOS Safari 常见问题）
+	if (mh && mh.context && mh.context.state === 'suspended') {
+		console.warn('⚠️ TX AudioContext 处于 suspended 状态，尝试恢复...');
+		try {
+			mh.context.resume();
+		} catch(e) {}
+		return false;
+	}
+	// 3. Opus 编码器对象必须已创建（但不要求 Worker 已就绪）
+	if (encode && (!ap || typeof ap.initTxOpusWorker !== 'function')) {
+		console.warn('⚠️ TX Opus 编码器未初始化');
+		return false;
+	}
+	return true;
 }
 
 console.log('🎯 TX按钮系统加载完成 (优化版)');
