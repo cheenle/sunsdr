@@ -39,7 +39,9 @@ echo "Checking required files..."
 REQUIRED_FILES=(
     "index.html"
     "zh/index.html"
-    "css/octen.css"
+    "css/scope.css"
+    "js/scope.js"
+    "images/qr-wechat-group.jpg"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
