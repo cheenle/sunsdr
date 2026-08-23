@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Convert SDD markdown files to styled HTML pages (SunMRRC dark theme)."""
-import subprocess, sys, os, re
+"""Convert SDD markdown files to styled HTML pages (SunMRRC Scope.css theme)."""
+import subprocess, sys, re
 from pathlib import Path
 
 SDD_DIR = Path("/Users/cheenle/HAM/sunsdr/SDD")
 OUT_DIR = Path("/Users/cheenle/HAM/sunsdr/sunmrrc/website/sdd")
-CSS_PATH = "../css/octen.css"
+CSS_PATH = "../css/scope.css?v=1"
 
 FILES = [
     ("README.md", "index.html", "SDD Overview"),
@@ -45,6 +45,31 @@ NAV_ITEMS = [
     ("15-ptt-safety-architecture.html", "15. PTT Safety"),
 ]
 
+
+def add_scope_classes(body_html: str) -> str:
+    """Apply Scope.css component classes to pandoc-generated tables and code."""
+    # Tables
+    def table_class(match):
+        attrs = match.group(1) or ""
+        if 'class=' in attrs:
+            return re.sub(r'class="([^"]*)"', r'class="scope-table \1"', match.group(0))
+        return '<table class="scope-table"' + attrs + '>'
+    body_html = re.sub(r'<table([^>]*)>', table_class, body_html)
+
+    # Code blocks: add scope-code to <pre>, preserving existing classes
+    body_html = re.sub(
+        r'<pre(?:\s+class="([^"]*)")?\s*>',
+        lambda m: '<pre class="scope-code' + (' ' + m.group(1) if m.group(1) else '') + '">',
+        body_html
+    )
+
+    # Inline code (not inside a <pre> block)
+    parts = re.split(r'(<pre.*?</pre>)', body_html, flags=re.DOTALL)
+    for i in range(0, len(parts), 2):
+        parts[i] = re.sub(r'<code>([^<]*)</code>', r'<code class="scope-code">\1</code>', parts[i])
+    return ''.join(parts)
+
+
 def build_nav_sidebar(current_file: str) -> str:
     items = []
     for href, label in NAV_ITEMS:
@@ -52,8 +77,10 @@ def build_nav_sidebar(current_file: str) -> str:
         items.append(f'            <li><a href="{href}"{cls}>{label}</a></li>')
     return "\n".join(items)
 
+
 def build_page(body_html: str, title: str, current_file: str) -> str:
     sidebar = build_nav_sidebar(current_file)
+    body_html = add_scope_classes(body_html)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,89 +92,66 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{CSS_PATH}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout {{ display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }}
         .sdd-sidebar {{
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }}
         .sdd-sidebar h4 {{
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }}
-        .sdd-sidebar ul {{ list-style: none; }}
+        .sdd-sidebar ul {{ list-style: none; margin: 0; padding: 0; }}
         .sdd-sidebar a {{
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }}
-        .sdd-sidebar a:hover {{ color: var(--text-primary); border-left-color: var(--border-hover); }}
+        .sdd-sidebar a:hover {{ color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }}
         .sdd-sidebar a.active {{
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }}
         .sdd-content {{ flex: 1; min-width: 0; padding-bottom: 4rem; }}
-        .sdd-content h1 {{ font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }}
-        .sdd-content h2 {{ font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }}
-        .sdd-content h3 {{ font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }}
-        .sdd-content h4 {{ font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }}
-        .sdd-content p, .sdd-content li {{ color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }}
-        .sdd-content table {{
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }}
-        .sdd-content th, .sdd-content td {{
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }}
-        .sdd-content th {{ background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }}
-        .sdd-content td {{ color: var(--text-secondary); }}
-        .sdd-content code {{
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }}
-        .sdd-content pre {{
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }}
-        .sdd-content pre code {{
-            background: none; padding: 0; color: var(--text-secondary);
-        }}
-        .sdd-content blockquote {{
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }}
+        .sdd-content h1 {{ font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }}
+        .sdd-content h2 {{ font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }}
+        .sdd-content h3 {{ font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }}
+        .sdd-content h4 {{ font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }}
+        .sdd-content p, .sdd-content li {{ color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }}
         .sdd-content ul, .sdd-content ol {{ margin-left: 1.5rem; margin-bottom: 1rem; }}
-        .sdd-content hr {{ border: none; border-top: 1px solid var(--border); margin: 2rem 0; }}
-        .sdd-content a {{ color: var(--accent); }}
+        .sdd-content hr {{ border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }}
+        .sdd-content a {{ color: var(--scope-primary); }}
+        .sdd-content blockquote {{
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }}
         @media (max-width: 900px) {{
             .sdd-layout {{ flex-direction: column; padding: 0 1rem; }}
             .sdd-sidebar {{ width: 100%; position: static; max-height: none; }}
         }}
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -164,32 +168,17 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {{
-    document.querySelector('.nav-links').classList.toggle('active');
-}}
-document.querySelectorAll('a[href^="#"]').forEach(a => {{
-    a.addEventListener('click', function(e) {{
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
-    }});
-}});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {{
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-}});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>"""
+
 
 def convert(md_path: Path) -> str:
     """Convert markdown to HTML body using pandoc."""
@@ -203,6 +192,7 @@ def convert(md_path: Path) -> str:
         sys.exit(1)
     return result.stdout.strip()
 
+
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for md_name, html_name, title in FILES:
@@ -215,6 +205,7 @@ def main():
         page = build_page(body, title, html_name)
         (OUT_DIR / html_name).write_text(page, encoding="utf-8")
     print(f"\nDone. {len(FILES)} pages written to {OUT_DIR}")
+
 
 if __name__ == "__main__":
     main()

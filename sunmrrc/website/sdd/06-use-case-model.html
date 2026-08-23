@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -121,7 +98,7 @@
     <main class="sdd-content">
 <h1 id="use-case-model-art-0508">6. Use Case Model (ART 0508)</h1>
 <h2 id="actors">6.1 Actors</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -153,7 +130,7 @@
 </table>
 <h2 id="core-use-cases">6.2 Core Use Cases</h2>
 <h3 id="uc-001-start-mobile-session">UC-001: Start Mobile Session</h3>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -175,7 +152,7 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User opens <code>https://radio.vlsc.net:8080</code>; server returns <code>index.html</code>; scripts load; user powers on; frontend opens <code>/WSCTRX</code>, <code>/WSaudioRX</code>, <code>/WSaudioTX</code>; <code>Waterfall_start()</code> opens <code>/WSspectrum</code> (and <code>Waterfall_stop()</code> closes it on power off)</td>
+<td>User opens <code class="scope-code">https://radio.vlsc.net:8889</code>; server returns <code class="scope-code">index.html</code>; scripts load; user powers on; frontend opens <code class="scope-code">/WSCTRX</code>, <code class="scope-code">/WSaudioRX</code>, <code class="scope-code">/WSaudioTX</code>; <code class="scope-code">Waterfall_start()</code> opens <code class="scope-code">/WSspectrum</code> (and <code class="scope-code">Waterfall_stop()</code> closes it on power off)</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -188,7 +165,7 @@
 </tbody>
 </table>
 <h3 id="uc-002-remote-receive-audio">UC-002: Remote Receive Audio</h3>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -206,11 +183,11 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>Radio connected; IQ stream available on UDP <code>50002</code>; <code>/WSaudioRX</code> connected</td>
+<td>Radio connected; IQ stream available on UDP <code class="scope-code">50002</code>; <code class="scope-code">/WSaudioRX</code> connected</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Server receives IQ packet; decodes 24-bit I/Q; feeds <code>StreamProcessor</code>; obtains PCM; resamples to 16 kHz; broadcasts Int16 bytes; browser decodes to Float32; Web Audio plays output</td>
+<td>Server receives IQ packet; decodes 24-bit I/Q; feeds <code class="scope-code">StreamProcessor</code>; obtains PCM; resamples to 16 kHz; broadcasts Int16 bytes; browser decodes to Float32; Web Audio plays output</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -223,7 +200,7 @@
 </tbody>
 </table>
 <h3 id="uc-003-tune-frequency-and-mode">UC-003: Tune Frequency and Mode</h3>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -241,11 +218,11 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td><code>/WSCTRX</code> connected and radio control initialized</td>
+<td><code class="scope-code">/WSCTRX</code> connected and radio control initialized</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User taps band/step/frequency/mode controls; frontend sends <code>setFreq:*</code> or <code>setMode:*</code>; server calls <code>radio.set_frequency()</code> or demodulator <code>set_mode()</code>; server returns <code>getFreq:*</code> or <code>getMode:*</code></td>
+<td>User taps band/step/frequency/mode controls; frontend sends <code class="scope-code">setFreq:*</code> or <code class="scope-code">setMode:*</code>; server calls <code class="scope-code">radio.set_frequency()</code> or demodulator <code class="scope-code">set_mode()</code>; server returns <code class="scope-code">getFreq:*</code> or <code class="scope-code">getMode:*</code></td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -253,12 +230,12 @@
 </tr>
 <tr>
 <td>Notes</td>
-<td>Mode is software DSP-side in this codebase; hardware remains IQ/mode-agnostic for <code>setMode</code></td>
+<td>Mode is software DSP-side in this codebase; hardware remains IQ/mode-agnostic for <code class="scope-code">setMode</code></td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-004-monitor-spectrum-and-s-meter">UC-004: Monitor Spectrum and S-Meter</h3>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -280,15 +257,15 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Spectrum processor emits FFT (~38 Hz); server derives S estimate and sends <code>getSignalLevel:*</code>; server quantizes the 512-bin spectrum to uint8 and broadcasts <code>/WSspectrum</code>; browser smooths the S-meter and renders the waterfall</td>
+<td>Spectrum processor emits FFT (~38 Hz); server derives S estimate and sends <code class="scope-code">getSignalLevel:*</code>; server quantizes the 512-bin spectrum to uint8 and broadcasts <code class="scope-code">/WSspectrum</code>; browser smooths the S-meter and renders the waterfall</td>
 </tr>
 <tr>
 <td>Waterfall Rendering</td>
-<td>Browser accumulates <code>WF_DECIMATE=10</code> frames and averages them into one row (≈38 Hz → ≈3.8 Hz, slower and smoother); per row it derives an adaptive noise floor (the <code>WF_PCTL=0.30</code> percentile of that row plus <code>WF_HEADROOM=2</code>), subtracts it, adds a blue sea-floor bias (<code>WF_BIAS=52</code>) and applies contrast gain (<code>WF_GAIN=8.0</code>); the resulting byte indexes a black→blue→cyan→yellow→red colour ramp so noise stays an even blue field and signals rise to yellow/red regardless of absolute noise level</td>
+<td>Browser accumulates <code class="scope-code">WF_DECIMATE=10</code> frames and averages them into one row (≈38 Hz → ≈3.8 Hz, slower and smoother); per row it derives an adaptive noise floor (the <code class="scope-code">WF_PCTL=0.30</code> percentile of that row plus <code class="scope-code">WF_HEADROOM=2</code>), subtracts it, adds a blue sea-floor bias (<code class="scope-code">WF_BIAS=52</code>) and applies contrast gain (<code class="scope-code">WF_GAIN=8.0</code>); the resulting byte indexes a black→blue→cyan→yellow→red colour ramp so noise stays an even blue field and signals rise to yellow/red regardless of absolute noise level</td>
 </tr>
 <tr>
 <td>S-Meter Smoothing</td>
-<td>Browser applies an asymmetric exponential filter in <code>updateSMeter</code> — attack α=0.5, release α=0.15 — so the needle jumps up quickly on a new signal and decays slowly, giving a stable, readable reading instead of per-frame jitter</td>
+<td>Browser applies an asymmetric exponential filter in <code class="scope-code">updateSMeter</code> — attack α=0.5, release α=0.15 — so the needle jumps up quickly on a new signal and decays slowly, giving a stable, readable reading instead of per-frame jitter</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -297,7 +274,7 @@
 </tbody>
 </table>
 <h3 id="uc-005-ptt-and-tune-control">UC-005: PTT and Tune Control</h3>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -319,7 +296,7 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User presses PTT or TUNE; frontend sends <code>setPTT:true</code> or <code>tune:true</code>; server calls radio setter and updates demodulator PTT state; user releases; frontend sends false command and expects ack</td>
+<td>User presses PTT or TUNE; frontend sends <code class="scope-code">setPTT:true</code> or <code class="scope-code">tune:true</code>; server calls radio setter and updates demodulator PTT state; user releases; frontend sends false command and expects ack</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -327,16 +304,16 @@
 </tr>
 <tr>
 <td>Safety Flows</td>
-<td>Frontend release ACK retry, backup <code>s:</code> command over TX socket, lock-leak detection, PTT watchdog, backend <code>s</code> handler forces <code>set_ptt(False)</code></td>
+<td>Frontend release ACK retry, backup <code class="scope-code">s:</code> command over TX socket, lock-leak detection, PTT watchdog, backend <code class="scope-code">s</code> handler forces <code class="scope-code">set_ptt(False)</code></td>
 </tr>
 <tr>
 <td>Boundary</td>
-<td>Voice TX audio modulation is not complete; this is currently keying/control, not full microphone transmission</td>
+<td>Full microphone TX modulation is implemented (mic → Hilbert SSB → 24-bit IQ → <code class="scope-code">0xFFFD</code>); see UC-007. This use case covers PTT keying/tune control specifically.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-006-adjust-dsp-and-audio-settings">UC-006: Adjust DSP and Audio Settings</h3>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 65%" />
@@ -358,7 +335,7 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User toggles WDSP, NR2, NB, ANF, NF, AGC or changes filter/gain; frontend sends <code>setWDSP*</code>, <code>setFilter</code>, <code>setAFGain</code>, <code>setRFGain</code>, <code>setPreamp</code>, <code>setAGC</code>; server updates demodulator/radio and broadcasts state</td>
+<td>User toggles WDSP, NR2, NB, ANF, NF, AGC or changes filter/gain; frontend sends <code class="scope-code">setWDSP*</code>, <code class="scope-code">setFilter</code>, <code class="scope-code">setAFGain</code>, <code class="scope-code">setRFGain</code>, <code class="scope-code">setPreamp</code>, <code class="scope-code">setAGC</code>; server updates demodulator/radio and broadcasts state</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -366,12 +343,12 @@
 </tr>
 <tr>
 <td>Exceptions</td>
-<td>WDSP setters are safe no-ops or report unavailable when <code>libwdsp</code> is absent</td>
+<td>WDSP setters are safe no-ops or report unavailable when <code class="scope-code">libwdsp</code> is absent</td>
 </tr>
 </tbody>
 </table>
 <h2 id="extended-and-planned-use-cases">6.3 Extended and Planned Use Cases</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 13%" />
 <col style="width: 34%" />
@@ -388,22 +365,22 @@
 <tr>
 <td>UC-007</td>
 <td>Browser microphone TX audio</td>
-<td>Implemented; mic frames modulated to SunSDR TX IQ and transmitted (on-air verified)</td>
+<td>Verified; mic → SAB ring buffer (zero-main-thread) → Opus (worker-owned WS) → 300 Hz HPF → Python Hilbert SSB (sole path, WDSP C-chain removed) → 24-bit IQ; verified 37 dB SNR, 96% SSB efficiency, zero dropouts; IQ peak ~0.69, RMS ~0.68 at 100% drive; COEP credentialless headers enable SharedArrayBuffer</td>
 </tr>
 <tr>
 <td>UC-008</td>
 <td>Memory channel save/recall</td>
-<td>Implemented; backend <code>/api/mem_channels</code> GET/POST with JSON persistence</td>
+<td>Implemented; backend <code class="scope-code">/api/mem_channels</code> GET/POST with JSON persistence</td>
 </tr>
 <tr>
 <td>UC-013</td>
 <td>Per-band TX power</td>
-<td>Implemented; Menu → Band Power panel + <code>/api/band_power</code>, applied via device DRIVE (<code>0x0017</code>)</td>
+<td>Implemented; Menu → Band Power panel + <code class="scope-code">/api/band_power</code>, applied via device DRIVE (<code class="scope-code">0x0017</code>)</td>
 </tr>
 <tr>
 <td>UC-009</td>
 <td>ATR-1000 power/SWR</td>
-<td>UI placeholders/hooks exist; backend <code>/WSATR1000</code> is transport-only placeholder</td>
+<td>UI placeholders/hooks exist; backend <code class="scope-code">/WSATR1000</code> is transport-only placeholder</td>
 </tr>
 <tr>
 <td>UC-010</td>
@@ -418,36 +395,20 @@
 <tr>
 <td>UC-012</td>
 <td>Recordings</td>
-<td>Implemented; <code>recordings.html</code> + server-side RX MP3 capture/download</td>
+<td>Implemented; <code class="scope-code">recordings.html</code> + server-side RX MP3 capture/download</td>
 </tr>
 </tbody>
 </table>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

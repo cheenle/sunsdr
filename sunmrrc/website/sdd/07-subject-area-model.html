@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -121,7 +98,7 @@
     <main class="sdd-content">
 <h1 id="subject-area-model-app-408">7. Subject Area Model (APP 408)</h1>
 <h2 id="subject-areas">7.1 Subject Areas</h2>
-<pre class="text"><code>ClientSession
+<pre class="scope-code text"><code>ClientSession
   owns WebSocket memberships and UI state
 
 RadioControl
@@ -144,7 +121,7 @@ DSPConfiguration
 OperationalConfig
   owns host/port/TLS/runtime script behavior</code></pre>
 <h2 id="entity-definitions">7.2 Entity Definitions</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 24%" />
 <col style="width: 36%" />
@@ -161,7 +138,7 @@ OperationalConfig
 <tr>
 <td>ClientSession</td>
 <td>websocket, channel_type, connected_at</td>
-<td>Runtime connection in one of <code>ctrl_clients</code>, <code>audio_rx_clients</code>, <code>audio_tx_clients</code>, <code>spectrum_clients</code></td>
+<td>Runtime connection in one of <code class="scope-code">ctrl_clients</code>, <code class="scope-code">audio_rx_clients</code>, <code class="scope-code">audio_tx_clients</code>, <code class="scope-code">spectrum_clients</code></td>
 </tr>
 <tr>
 <td>RadioDevice</td>
@@ -171,12 +148,12 @@ OperationalConfig
 <tr>
 <td>RadioState</td>
 <td>rx_freq, tx_freq, ptt, preamp, rf_gain, agc, filter_low, filter_high</td>
-<td>State mirrored by <code>SunSDR2DXClient</code> and UI responses</td>
+<td>State mirrored by <code class="scope-code">SunSDR2DXClient</code> and UI responses</td>
 </tr>
 <tr>
 <td>IQPacket</td>
 <td>sub_type, counter, payload, sample_count</td>
-<td>UDP stream packet parsed by <code>_process_iq_stream()</code></td>
+<td>UDP stream packet parsed by <code class="scope-code">_process_iq_stream()</code></td>
 </tr>
 <tr>
 <td>IQSample</td>
@@ -186,12 +163,12 @@ OperationalConfig
 <tr>
 <td>DemodulatorState</td>
 <td>mode, ptt, volume, filter, agc_gain</td>
-<td>Software demodulation state inside <code>AudioDemodulator</code></td>
+<td>Software demodulation state inside <code class="scope-code">AudioDemodulator</code></td>
 </tr>
 <tr>
 <td>RXAudioFrame</td>
 <td>pcm_bytes, sample_rate, frame_length</td>
-<td>tagged dual-codec frame (Opus/PCM) broadcast to <code>/WSaudioRX</code> clients</td>
+<td>tagged dual-codec frame (Opus/PCM) broadcast to <code class="scope-code">/WSaudioRX</code> clients</td>
 </tr>
 <tr>
 <td>SpectrumFrame</td>
@@ -201,12 +178,12 @@ OperationalConfig
 <tr>
 <td>WaterfallRenderState</td>
 <td>accum_buffer, accum_count, decimate, noise_pctl, headroom, gain, bias</td>
-<td>Browser-side waterfall rendering state in <code>controls.js</code>: accumulates ~10 frames (38 Hz -&gt; ~3.8 Hz), computes a per-row adaptive noise floor (30th percentile), then stretches contrast with bias/gain over a blue-&gt;cyan-&gt;yellow-&gt;red colour ramp</td>
+<td>Browser-side waterfall rendering state in <code class="scope-code">controls.js</code>: accumulates ~10 frames (38 Hz -&gt; ~3.8 Hz), computes a per-row adaptive noise floor (30th percentile), then stretches contrast with bias/gain over a blue-&gt;cyan-&gt;yellow-&gt;red colour ramp</td>
 </tr>
 <tr>
 <td>SMeterState</td>
 <td>smoothed_value, attack_alpha, release_alpha</td>
-<td>Browser-side S-meter smoothing in <code>updateSMeter</code>: asymmetric exponential filter (attack alpha 0.5, release alpha 0.15) for a stable needle</td>
+<td>Browser-side S-meter smoothing in <code class="scope-code">updateSMeter</code>: asymmetric exponential filter (attack alpha 0.5, release alpha 0.15) for a stable needle</td>
 </tr>
 <tr>
 <td>WDSPConfig</td>
@@ -226,27 +203,27 @@ OperationalConfig
 <tr>
 <td>MemoryChannel</td>
 <td>index, frequency, mode, label</td>
-<td>Memory record persisted server-side via <code>/api/mem_channels</code> (<code>mem_channels.json</code>)</td>
+<td>Memory record persisted server-side via <code class="scope-code">/api/mem_channels</code> (<code class="scope-code">mem_channels.json</code>)</td>
 </tr>
 <tr>
 <td>TXModulationFrame</td>
 <td>pcm_bytes, sample_rate, hilbert_iq</td>
-<td>Browser mic PCM (<code>/WSaudioTX</code>) modulated to 24-bit IQ via Hilbert SSB and queued as <code>0xFFFD</code> TX packets</td>
+<td>Browser mic PCM (<code class="scope-code">/WSaudioTX</code>) modulated to 24-bit IQ via Hilbert SSB and queued as <code class="scope-code">0xFFFD</code> TX packets</td>
 </tr>
 <tr>
 <td>TXDriveConfig</td>
 <td>drive_pct, taper_byte</td>
-<td>TX power level sent as the DRIVE command (<code>0x0017</code>); <code>byte = round(255·√(drive%/100))</code> in the trailing word</td>
+<td>TX power level sent as the DRIVE command (<code class="scope-code">0x0017</code>); <code class="scope-code">byte = round(255·√(drive%/100))</code> in the trailing word</td>
 </tr>
 <tr>
 <td>BandPowerConfig</td>
 <td>bands[low,high,power], default</td>
-<td>Runtime per-band drive %, persisted to <code>band_power.json</code>, served by <code>/api/band_power</code></td>
+<td>Runtime per-band drive %, persisted to <code class="scope-code">band_power.json</code>, served by <code class="scope-code">/api/band_power</code></td>
 </tr>
 </tbody>
 </table>
 <h2 id="relationships">7.3 Relationships</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 35%" />
 <col style="width: 32%" />
@@ -303,7 +280,7 @@ OperationalConfig
 </tbody>
 </table>
 <h2 id="state-ownership">7.4 State Ownership</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 25%" />
 <col style="width: 25%" />
@@ -319,58 +296,58 @@ OperationalConfig
 <tbody>
 <tr>
 <td>Connected WebSockets</td>
-<td><code>server.py</code> global sets</td>
+<td><code class="scope-code">server.py</code> global sets</td>
 <td>Runtime only</td>
 </tr>
 <tr>
 <td>Radio state</td>
-<td><code>SunSDR2DXClient</code> instance</td>
+<td><code class="scope-code">SunSDR2DXClient</code> instance</td>
 <td>Runtime only</td>
 </tr>
 <tr>
 <td>DSP state</td>
-<td><code>AudioDemodulator</code> instance</td>
+<td><code class="scope-code">AudioDemodulator</code> instance</td>
 <td>Runtime only; frontend cookies may replay settings</td>
 </tr>
 <tr>
 <td>Per-band TX power</td>
-<td><code>sunsdr_direct</code> runtime table + <code>band_power.json</code></td>
+<td><code class="scope-code">sunsdr_direct</code> runtime table + <code class="scope-code">band_power.json</code></td>
 <td>Filesystem (JSON)</td>
 </tr>
 <tr>
 <td>Memory channels</td>
-<td><code>/api/mem_channels</code> + <code>mem_channels.json</code></td>
+<td><code class="scope-code">/api/mem_channels</code> + <code class="scope-code">mem_channels.json</code></td>
 <td>Filesystem (JSON)</td>
 </tr>
 <tr>
 <td>UI state</td>
-<td><code>mobileState</code>, DOM, cookies</td>
+<td><code class="scope-code">mobileState</code>, DOM, cookies</td>
 <td>Browser session/cookies</td>
 </tr>
 <tr>
 <td>Waterfall render state</td>
-<td><code>controls.js</code> waterfall module (<code>wfAccum</code>, <code>wfAccumCount</code>, <code>WF_*</code>)</td>
+<td><code class="scope-code">controls.js</code> waterfall module (<code class="scope-code">wfAccum</code>, <code class="scope-code">wfAccumCount</code>, <code class="scope-code">WF_*</code>)</td>
 <td>Browser runtime only</td>
 </tr>
 <tr>
 <td>Smoothed S-meter value</td>
-<td><code>mobileState.currentSMeter</code> via <code>updateSMeter</code></td>
+<td><code class="scope-code">mobileState.currentSMeter</code> via <code class="scope-code">updateSMeter</code></td>
 <td>Browser runtime only</td>
 </tr>
 <tr>
 <td>TLS files</td>
-<td><code>certs/</code></td>
+<td><code class="scope-code">certs/</code></td>
 <td>Filesystem</td>
 </tr>
 <tr>
 <td>Server logs</td>
-<td><code>server.log</code> via <code>restart.sh</code></td>
+<td><code class="scope-code">server.log</code> via <code class="scope-code">restart.sh</code></td>
 <td>Filesystem</td>
 </tr>
 </tbody>
 </table>
 <h2 id="deferred-domain-entities">7.5 Deferred Domain Entities</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 32%" />
 <col style="width: 68%" />
@@ -388,7 +365,7 @@ OperationalConfig
 </tr>
 <tr>
 <td>AuthUser</td>
-<td>No server-side user database or auth routes in current backend</td>
+<td>Shared-password session-token auth is implemented (<code class="scope-code">_auth_tokens</code>, <code class="scope-code">sunmrrc_auth</code> cookie, all routes/WS gated); only per-user identity / user database is deferred</td>
 </tr>
 <tr>
 <td>LogbookEntry</td>
@@ -399,29 +376,13 @@ OperationalConfig
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

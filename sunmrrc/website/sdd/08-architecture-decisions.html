@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -121,7 +98,7 @@
     <main class="sdd-content">
 <h1 id="architecture-decisions-art-0513">8. Architecture Decisions (ART 0513)</h1>
 <h2 id="ad-001-use-fastapiuvicorn-for-sunmrrc-server">AD-001: Use FastAPI/Uvicorn for SunMRRC Server</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -151,7 +128,7 @@
 <p><strong>Rationale</strong>: FastAPI/Uvicorn provides direct async integration and a small code surface. The current backend does not require the older MRRC Tornado structure.</p>
 <p><strong>Consequences</strong>: Documentation, service model, and operational scripts must describe FastAPI/Uvicorn, not Tornado.</p>
 <h2 id="ad-002-control-sunsdr2-dx-directly-over-udp">AD-002: Control SunSDR2 DX Directly over UDP</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -173,7 +150,7 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Use <code>SunSDR2DXClient</code> from <code>../web_control/sunsdr_direct.py</code></td>
+<td>Use <code class="scope-code">SunSDR2DXClient</code> from <code class="scope-code">../web_control/sunsdr_direct.py</code></td>
 </tr>
 </tbody>
 </table>
@@ -181,7 +158,7 @@
 <p><strong>Rationale</strong>: The shared direct client contains verified command IDs, packet builders, boot sequence, and radio setters.</p>
 <p><strong>Consequences</strong>: The app is SunSDR2 DX oriented. It is not currently a generic Hamlib application.</p>
 <h2 id="ad-003-treat-mode-as-software-dsp-state">AD-003: Treat Mode as Software DSP State</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -203,15 +180,15 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td><code>setMode</code> updates the demodulator; hardware remains IQ/mode-agnostic in this path</td>
+<td><code class="scope-code">setMode</code> updates the demodulator; hardware remains IQ/mode-agnostic in this path</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Problem</strong>: The hardware stream provides IQ; demodulation mode is selected in software.</p>
 <p><strong>Rationale</strong>: Keeping mode in the demodulator gives immediate browser RX behavior without depending on a hardware mode command.</p>
-<p><strong>Consequences</strong>: UI <code>getMode</code> reflects DSP state, not necessarily a persistent hardware-side mode.</p>
+<p><strong>Consequences</strong>: UI <code class="scope-code">getMode</code> reflects DSP state, not necessarily a persistent hardware-side mode.</p>
 <h2 id="ad-004-tagged-dual-codec-audio-transport-opus-int16-pcm-rx-and-tx">AD-004: Tagged Dual-Codec Audio Transport (Opus + Int16 PCM, RX and TX)</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -233,15 +210,15 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Both <code>/WSaudioRX</code> (server→client) and <code>/WSaudioTX</code> (client→server) carry a 1-byte codec tag per frame: <code>0x00</code> = 16 kHz Int16 PCM, <code>0x01</code> = Opus (16 kHz mono). Default Opus; runtime-switchable via <code>setOpus:</code> (Audio Codec menu).</td>
+<td>Both <code class="scope-code">/WSaudioRX</code> (server→client) and <code class="scope-code">/WSaudioTX</code> (client→server) carry a 1-byte codec tag per frame: <code class="scope-code">0x00</code> = 16 kHz Int16 PCM, <code class="scope-code">0x01</code> = Opus (16 kHz mono). Default Opus; runtime-switchable via <code class="scope-code">setOpus:</code> (Audio Codec menu).</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Problem</strong>: (RX) Int16 PCM is reliable but costs ~256 kbit/s — heavy on mobile links. Opus cuts that to ~18–24 kbit/s (&gt;10×). (TX) The Opus→PCM transition in the TX uplink introduced ambiguity without a tag. A 1-byte per-frame codec tag removes all negotiation races — the receiver inspects the tag and decodes accordingly, so PCM and Opus can be switched mid-stream with no handshake.</p>
-<p><strong>Rationale</strong>: Unified codec-tagging for both RX and TX paths. Server-side RX encoder uses <code>web_control/opus_rx.py</code> (direct ctypes libopus bindings, bitrate via <code>max_data_bytes</code> cap on <code>opus_encode()</code> to avoid arm64 variadic <code>opus_encoder_ctl</code> issues). Server-side TX decoder uses the same libopus for <code>opus_decode()</code>. Frontend RX uses WASM <code>OpusDecoder</code> for decode; frontend TX uses WASM <code>OpusEncoder</code> with tag-byte prepended.</p>
-<p><strong>Consequences</strong>: Both RX and TX bandwidth drop &gt;10× on mobile. Adds a libopus dependency on the server (optional — degrades gracefully to PCM). Codec is user-selectable per session. <code>AUDIO_TAG_PCM</code> / <code>AUDIO_TAG_OPUS</code> are global constants in the frontend, shared by RX decode and TX encode paths.</p>
+<p><strong>Rationale</strong>: Unified codec-tagging for both RX and TX paths. Server-side RX encoder uses <code class="scope-code">web_control/opus_rx.py</code> (direct ctypes libopus bindings, bitrate via <code class="scope-code">max_data_bytes</code> cap on <code class="scope-code">opus_encode()</code> to avoid arm64 variadic <code class="scope-code">opus_encoder_ctl</code> issues). Server-side TX decoder uses the same libopus for <code class="scope-code">opus_decode()</code>. Frontend RX uses WASM <code class="scope-code">OpusDecoder</code> for decode; frontend TX uses WASM <code class="scope-code">OpusEncoder</code> with tag-byte prepended.</p>
+<p><strong>Consequences</strong>: Both RX and TX bandwidth drop &gt;10× on mobile. Adds a libopus dependency on the server (optional — degrades gracefully to PCM). Codec is user-selectable per session. <code class="scope-code">AUDIO_TAG_PCM</code> / <code class="scope-code">AUDIO_TAG_OPUS</code> are global constants in the frontend, shared by RX decode and TX encode paths.</p>
 <h2 id="ad-005-quantize-spectrum-frames-server-side">AD-005: Quantize Spectrum Frames Server-Side</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -263,7 +240,7 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Convert dB spectrum to uint8 bytes before <code>/WSspectrum</code> broadcast</td>
+<td>Convert dB spectrum to uint8 bytes before <code class="scope-code">/WSspectrum</code> broadcast</td>
 </tr>
 </tbody>
 </table>
@@ -271,7 +248,7 @@
 <p><strong>Rationale</strong>: A 512-bin uint8 row is small and simple for canvas rendering.</p>
 <p><strong>Consequences</strong>: Browser receives display-oriented data, not high-precision spectrum values.</p>
 <h2 id="ad-006-prefer-httpswss-by-default-for-mobile">AD-006: Prefer HTTPS/WSS by Default for Mobile</h2>
-<table>
+<table class="scope-table">
 <thead>
 <tr>
 <th>Attribute</th>
@@ -295,9 +272,9 @@
 </table>
 <p><strong>Problem</strong>: iOS Safari does not expose reliable microphone and AudioContext behavior to non-secure origins.</p>
 <p><strong>Rationale</strong>: HTTPS is required for the real mobile operating environment.</p>
-<p><strong>Consequences</strong>: Local HTTP is explicitly a debug mode via missing certs or <code>DISABLE_SSL=1</code>.</p>
+<p><strong>Consequences</strong>: Local HTTP is explicitly a debug mode via missing certs or <code class="scope-code">DISABLE_SSL=1</code>.</p>
 <h2 id="ad-007-build-ptt-release-as-safety-critical-flow">AD-007: Build PTT Release as Safety-Critical Flow</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -323,11 +300,11 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: A lost <code>setPTT:false</code> can leave the radio transmitting.</p>
+<p><strong>Problem</strong>: A lost <code class="scope-code">setPTT:false</code> can leave the radio transmitting.</p>
 <p><strong>Rationale</strong>: Release is more safety-critical than keying. Multiple paths reduce stuck-TX risk.</p>
 <p><strong>Consequences</strong>: Frontend PTT logic is more complex, but deliberately so.</p>
 <h2 id="ad-008-keep-wdsp-optional-and-runtime-toggled">AD-008: Keep WDSP Optional and Runtime-Toggled</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -353,11 +330,11 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: <code>libwdsp</code> availability varies by machine.</p>
+<p><strong>Problem</strong>: <code class="scope-code">libwdsp</code> availability varies by machine.</p>
 <p><strong>Rationale</strong>: RX should still work without WDSP; UI can query availability.</p>
 <p><strong>Consequences</strong>: Some DSP controls are conditional and must be reflected in UI/status.</p>
 <h2 id="ad-009-preserve-frontend-hooks-but-document-missing-backends">AD-009: Preserve Frontend Hooks but Document Missing Backends</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -385,9 +362,9 @@
 </table>
 <p><strong>Problem</strong>: The frontend contains inherited/planned hooks from broader MRRC work.</p>
 <p><strong>Rationale</strong>: Removing them may be premature, but overstating them causes design drift.</p>
-<p><strong>Consequences</strong>: SDD explicitly separates implemented, transport-only, and planned capabilities. As of 2026-06, TX voice modulation and <code>/api/mem_channels</code> graduated from gated to implemented; ATR backend and CW/FT8/recording pages remain the only outstanding gated hooks.</p>
+<p><strong>Consequences</strong>: SDD explicitly separates implemented, transport-only, and planned capabilities. As of 2026-06, TX voice modulation and <code class="scope-code">/api/mem_channels</code> graduated from gated to implemented; ATR backend and CW/FT8/recording pages remain the only outstanding gated hooks.</p>
 <h2 id="ad-010-control-tx-power-via-the-device-drive-command-0x0017">AD-010: Control TX Power via the Device DRIVE Command (0x0017)</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -409,15 +386,15 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Set TX output power with the device DRIVE command (<code>0x0017</code>), not software IQ amplitude. Drive % is runtime-configurable per band and persisted.</td>
+<td>Set TX output power with the device DRIVE command (<code class="scope-code">0x0017</code>), not software IQ amplitude. Drive % is runtime-configurable per band and persisted.</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Problem</strong>: Early TX produced very low output. Root cause: software scaled IQ amplitude for “power” while the drive byte was either never sent or placed in the wrong packet field (payload instead of the trailing word), so the device received drive=0.</p>
-<p><strong>Rationale</strong>: SunSDR2 firmware does not support ALC, so per-band drive is the only real power lever. The drive byte uses a square-root taper (<code>round(255·√(drive%/100))</code>) and must sit in the packet <strong>trailing word</strong> (verified byte-for-byte against an ExpertSDR3 TCI capture). The device resets drive to a per-band calibration value on every QSY, so it is re-sent on frequency change and before each PTT assert.</p>
-<p><strong>Consequences</strong>: Software IQ gain stays gentle (clean SSB envelope only); power is owned by the device. Per-band power is user-editable via <code>/api/band_power</code> (persisted to <code>band_power.json</code>) and the Band Power menu panel. On-air verified: Tune ~12 W, voice 30–40 W PEP. Device telemetry (<code>0x1F00</code>) reports off30 f32 = forward watts, off16 u16/10 = supply volts, off18 f32 = PA temp °C (no reverse-power / SWR field — see AD-011).</p>
+<p><strong>Rationale</strong>: SunSDR2 firmware does not support ALC, so per-band drive is the only real power lever. The drive byte uses a square-root taper (<code class="scope-code">round(255·√(drive%/100))</code>) and must sit in the packet <strong>trailing word</strong> (verified byte-for-byte against an ExpertSDR3 TCI capture). The device resets drive to a per-band calibration value on every QSY, so it is re-sent on frequency change and before each PTT assert.</p>
+<p><strong>Consequences</strong>: Software IQ gain stays gentle (clean SSB envelope only); power is owned by the device. Per-band power is user-editable via <code class="scope-code">/api/band_power</code> (persisted to <code class="scope-code">band_power.json</code>) and the Band Power menu panel. On-air verified: Tune ~12 W, voice 30–40 W PEP. Device telemetry (<code class="scope-code">0x1F00</code>) reports off30 f32 = forward watts, off16 u16/10 = supply volts, off18 f32 = PA temp °C (no reverse-power / SWR field — see AD-011).</p>
 <h2 id="ad-011-read-tx-telemetry-from-0x1f00-verified-field-offsets">AD-011: Read TX Telemetry from 0x1F00 Verified Field Offsets</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -439,15 +416,15 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Read <code>0x1F00</code> telemetry from verified field offsets reverse-engineered from a real 40m drive sweep (<code>device/captures/expert_40m_drive.pcap</code>, cross-checked against external wattmeter + ExpertSDR3’s own power readout): off30 f32 = forward power (W PEP), off16 u16 = supply voltage ×10, off18 f32 = PA temperature °C. The device exposes NO reverse-power field → SWR cannot be computed from device telemetry.</td>
+<td>Read <code class="scope-code">0x1F00</code> telemetry from verified field offsets reverse-engineered from a real 40m drive sweep (<code class="scope-code">device/captures/expert_40m_drive.pcap</code>, cross-checked against external wattmeter + ExpertSDR3’s own power readout): off30 f32 = forward power (W PEP), off16 u16 = supply voltage ×10, off18 f32 = PA temperature °C. The device exposes NO reverse-power field → SWR cannot be computed from device telemetry.</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Problem</strong>: Prior SDD versions documented off16 u16/100 as SWR and off14 u16 as power_raw with a cubic fit. Both were wrong: - <strong>off30 f32 = forward power in WATTS</strong> (PEP envelope). Monotonic with drive: 28%→3W, 71%→54W, 88%→83W, 100%→101W. Matches ExpertSDR3’s ~95W self-readout at 100%. Direct float watts — no fit needed. - <strong>off16 u16 = supply voltage ×10</strong> (NOT SWR). Reads ~136 (13.6V) at idle, sags as power rises (0W→13.6, 30-50W→13.1, 80-110W→12.9V); correlation with forward power = -0.79 — a textbook PSU sag curve. Volts = off16 / 10. - <strong>off18 f32 = PA temperature °C</strong> (~42°C, barely moves with drive). - <strong>off22 f32</strong> = average forward power (ratio to off30 ≈ the 3:1 SSB crest factor), not reverse power. - <strong>off26 f32</strong> = always 1.0000 (device placeholder). - The device sends NO reverse-power field, so it cannot compute SWR at all.</p>
 <p><strong>Rationale</strong>: Field offsets cross-validated against a complete 40m drive sweep (10 power levels, 100 packets each) with simultaneous external wattmeter readings and ExpertSDR3’s own power readout. The monotonicity of off30 with drive and the PSU-sag pattern of off16 (correlation -0.79 with forward power) are textbook-confirming.</p>
-<p><strong>Consequences</strong>: Frontend <code>getTXTelem</code> carries <code>watts,volts,temp</code> (not SWR). The UI VOLT field replaces the former SWR field. The old off14-based cubic fit and off16/100 “SWR” computation are removed. The external ATR-1000 tuner is the only available SWR source; device telemetry provides forward power, supply voltage, and PA temperature only.</p>
+<p><strong>Consequences</strong>: Frontend <code class="scope-code">getTXTelem</code> carries <code class="scope-code">watts,volts,temp</code> (not SWR). The UI VOLT field replaces the former SWR field. The old off14-based cubic fit and off16/100 “SWR” computation are removed. The external ATR-1000 tuner is the only available SWR source; device telemetry provides forward power, supply voltage, and PA temperature only.</p>
 <h2 id="ad-012-client-to-server-tx-audio-gain-staging-with-soft-limiter">AD-012: Client-to-Server TX Audio Gain Staging with Soft Limiter</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -469,22 +446,173 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Stage TX audio gain across client and server so the server-side tanh soft limiter at <code>TX_IQ_PEAK</code> (1.0) engages lightly (~4% peak reduction) rather than serving as the primary gain-control element. Client preamp ×1.5 (+3.5dB) provides headroom; server <code>TX_DRIVE_GAIN</code> ×3.0 lifts the Hilbert-transformed SSB into the tanh knee. Device drive (<code>0x0017</code>) remains the sole RF power control.</td>
+<td>Stage TX audio gain across client and server so the server-side tanh soft limiter at <code class="scope-code">TX_IQ_PEAK</code> (1.0) engages lightly (~4% peak reduction) rather than serving as the primary gain-control element. Client preamp ×1.5 (+3.5dB) provides headroom; server <code class="scope-code">TX_DRIVE_GAIN</code> ×3.0 lifts the Hilbert-transformed SSB into the tanh knee. Device drive (<code class="scope-code">0x0017</code>) remains the sole RF power control.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: On 2026-06-25, voice TX was heavily distorted despite adequate power. Server log level probes (<code>TX chain in/drv/lim</code>) revealed the root cause: the client preamp was ×3.0 (+9.5dB), which drove the AudioWorklet Int16 output to full scale (peak=1.0). After Hilbert SSB (+~30% peak from analytic-phase construction) and server drive gain (×3.0), peaks reached 3.95 — the tanh limiter at 1.0 had to squash 75% of peak amplitude, producing heavy saturation distortion on every loud syllable.</p>
-<p>Tune mode was unaffected because it bypasses the entire client audio chain and server gain path, using a pre-computed IQ signal with <code>TX_TUNE_SCALE</code> = 0.35.</p>
-<p><strong>Rationale</strong>: - <strong>Client preamp 3.0→1.5</strong> (-6dB): Gives the server input headroom. Peaks now arrive at ~0.5 (not 1.0). After Hilbert → ~0.65, drive ×3.0 → ~1.95, tanh(1.95) → ~0.96 — only a ~4% peak reduction. - <strong>Server <code>TX_DRIVE_GAIN</code> = 3.0</strong>: Fixed make-up gain to compensate for phone mic’s naturally low level (~0.1-0.3 peak). Not a power control — device drive is the power lever. - <strong>Tanh at ceiling 1.0</strong>: Smooth saturation rounds transients without the wideband splatter of a hard IQ-magnitude clip (see CLAUDE.md). Acts as a safety net for residual transients, not the primary limiter. - <strong>Device drive (<code>0x0017</code>) sets actual RF power</strong>: Square-root taper byte in trailing word, per-band configurable via <code>/api/band_power</code>, re-sent on QSY and PTT.</p>
-<p><strong>Level-probe diagnostics</strong> (logged at 1 Hz in <code>server.log</code> during TX):</p>
-<pre><code>TX chain in : rms, peak — post-decode PCM (before Hilbert, scaled by 1/gain for comparison)
+<p><strong>Problem</strong>: On 2026-06-25, voice TX was heavily distorted despite adequate power. Server log level probes (<code class="scope-code">TX chain in/drv/lim</code>) revealed the root cause: the client preamp was ×3.0 (+9.5dB), which drove the AudioWorklet Int16 output to full scale (peak=1.0). After Hilbert SSB (+~30% peak from analytic-phase construction) and server drive gain (×3.0), peaks reached 3.95 — the tanh limiter at 1.0 had to squash 75% of peak amplitude, producing heavy saturation distortion on every loud syllable.</p>
+<p>Tune mode was unaffected because it bypasses the entire client audio chain and server gain path, using a pre-computed IQ signal with <code class="scope-code">TX_TUNE_SCALE</code> = 0.35.</p>
+<p><strong>Rationale</strong>: - <strong>Client preamp 3.0→1.5</strong> (-6dB): Gives the server input headroom. Peaks now arrive at ~0.5 (not 1.0). After Hilbert → ~0.65, drive ×3.0 → ~1.95, tanh(1.95) → ~0.96 — only a ~4% peak reduction. - <strong>Server <code class="scope-code">TX_DRIVE_GAIN</code> = 3.0</strong>: Fixed make-up gain to compensate for phone mic’s naturally low level (~0.1-0.3 peak). Not a power control — device drive is the power lever. - <strong>Tanh at ceiling 1.0</strong>: Smooth saturation rounds transients without the wideband splatter of a hard IQ-magnitude clip (see CLAUDE.md). Acts as a safety net for residual transients, not the primary limiter. - <strong>Device drive (<code class="scope-code">0x0017</code>) sets actual RF power</strong>: Square-root taper byte in trailing word, per-band configurable via <code class="scope-code">/api/band_power</code>, re-sent on QSY and PTT.</p>
+<p><strong>Level-probe diagnostics</strong> (logged at 1 Hz in <code class="scope-code">server.log</code> during TX):</p>
+<pre class="scope-code"><code>TX chain in : rms, peak — post-decode PCM (before Hilbert, scaled by 1/gain for comparison)
 TX chain an : rms, peak — after Hilbert analytic signal (same gain normalization)
 TX chain drv: rms, peak — after TX_DRIVE_GAIN × drive (pre-tanh, full scale)
 TX chain lim: rms, peak — after tanh(TX_IQ_PEAK=1.0), final IQ envelope</code></pre>
-<p>Healthy gain staging shows <code>in</code> peak ~0.5, <code>drv</code> peak ~2.0, <code>lim</code> peak ~0.96. If <code>in</code> peak = 1.0 and <code>drv</code> peak &gt; 3.5, the tanh is oversaturated — voice will sound distorted.</p>
+<p>Healthy gain staging shows <code class="scope-code">in</code> peak ~0.5, <code class="scope-code">drv</code> peak ~2.0, <code class="scope-code">lim</code> peak ~0.96. If <code class="scope-code">in</code> peak = 1.0 and <code class="scope-code">drv</code> peak &gt; 3.5, the tanh is oversaturated — voice will sound distorted.</p>
 <p><strong>Consequences</strong>: Client gain staging is now documented as a design decision, not an implementation detail. The level probes provide continuous observability. TX power adjustment is done via device drive %, not by changing TX_DRIVE_GAIN (which would upset the gain staging).</p>
+<h2 id="ad-013-remove-wdsp-tx-c-chain-python-hilbert-overlap-save-is-the-sole-ssb-modulator">AD-013: Remove WDSP TX C-Chain — Python Hilbert Overlap-Save is the Sole SSB Modulator</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Remove the <code class="scope-code">WDSPTXProcessor</code> class, its 82 TX symbol bindings, and all <code class="scope-code">set_wdsp_tx_*</code> control methods. Python Hilbert overlap-save (in <code class="scope-code">dsp.py</code>) is the sole SSB modulation path. Remove the TX PROC frontend UI panel.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Channel 2 <code class="scope-code">fexchange0</code> WDSP calls produced zero IQ output on TXA mode — the WDSP TX C-chain is designed for a different filter-exchange topology than SunSDR2 DX IQ streaming. Server startup took one extra <code class="scope-code">OpenChannel</code> call (~5s) to initialize a chain that never worked.</p>
+<p><strong>Rationale</strong>: The Python-native Hilbert overlap-save modulator (already working and on-air verified) handles SSB modulation with full control over gain staging, DC blocking, and the tanh soft limiter. Removing the dead WDSP TX path simplifies the codebase, speeds startup, and eliminates non-functional frontend controls.</p>
+<p><strong>Consequences</strong>: <code class="scope-code">WDSPProcessor</code> now handles RX only (channel 0). Server startup ~5s faster. The TX PROC menu panel is removed from the frontend. All <code class="scope-code">set_wdsp_tx_*</code> and <code class="scope-code">get_wdsp_tx_status</code> server control methods are deleted. 82 ctypes symbol bindings freed from <code class="scope-code">wdsp_wrapper.py</code>.</p>
+<h2 id="ad-014-sharedarraybuffer-ring-buffer-for-tx-audio-zero-main-thread-path">AD-014: SharedArrayBuffer Ring Buffer for TX Audio — Zero Main-Thread Path</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architecture</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>TX audio capture uses a <code class="scope-code">SharedArrayBuffer</code>-backed lock-free ring buffer between the <code class="scope-code">AudioWorklet</code> (producer: writes float32 samples) and a dedicated Opus Worker (consumer: polls, encodes, sends via its own WebSocket). The main thread never touches audio samples.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: The original TX path ran all audio processing on the main thread — <code class="scope-code">getUserMedia</code> → <code class="scope-code">ScriptProcessorNode</code> → encode → <code class="scope-code">WebSocket.send()</code>. Main-thread garbage collection pauses caused audio dropouts and timing jitter that corrupted the SSB envelope.</p>
+<p><strong>Rationale</strong>: Moving the entire TX audio pipeline off the main thread eliminates GC-pause-induced stalls. The <code class="scope-code">AudioWorklet</code> (real-time priority) writes samples to a <code class="scope-code">SharedArrayBuffer</code> ring. A dedicated Web Worker polls the ring, runs the Opus WASM encoder, and sends frames via its own <code class="scope-code">WebSocket</code> (Workers can own WebSocket connections directly). The main thread only manages UI state and <code class="scope-code">WSCTRX</code> control — it never touches audio sample data. Ring size: 16384 float32 samples @ 16 kHz = 1.024 s buffer, enough to absorb transient scheduling jitter without overrun.</p>
+<p><strong>Consequences</strong>: Requires <code class="scope-code">Cross-Origin-Opener-Policy: same-origin</code> and <code class="scope-code">Cross-Origin-Embedder-Policy: credentialless</code> response headers to enable <code class="scope-code">SharedArrayBuffer</code> in the browser (see AD-016). The <code class="scope-code">AudioWorklet</code> and Opus Worker communicate exclusively through the SAB ring — no <code class="scope-code">postMessage</code> audio copies. The main-thread <code class="scope-code">ScriptProcessorNode</code> path is removed entirely. Module files: <code class="scope-code">tx_sab_ring.js</code> (ring buffer protocol), <code class="scope-code">tx_opus_worker.js</code> (consumer), <code class="scope-code">tx_capture_worklet.js</code> (producer, updated to SAB path).</p>
+<h2 id="ad-015-300-hz-highpass-filter-for-ssb-voice-efficiency">AD-015: 300 Hz Highpass Filter for SSB Voice Efficiency</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Insert a 4th-order Butterworth highpass filter at 300 Hz between the DC-blocking filter and the anti-alias LPF in the TX <code class="scope-code">feed_audio</code> chain. Cutoff chosen to reject the energy band that SSB suppresses by design (&lt;300 Hz), directing PA power into the voice band (300–2800 Hz).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: SDR waterfall analysis of the TX signal showed 38.7% of microphone energy falling below 300 Hz. SSB suppresses the lower sideband and carrier, so energy below 300 Hz contributes negligible intelligibility but consumes PA headroom — it is effectively wasted transmitter power. Every watt spent on sub-300 Hz content is a watt not available for the voice band.</p>
+<p><strong>Rationale</strong>: A 4th-order Butterworth IIR (24 dB/octave) at 300 Hz provides steep rejection of the useless band with minimal phase distortion in the passband. Placed between the DC blocker and anti-alias LPF in the server-side <code class="scope-code">feed_audio()</code> chain, it filters every audio path uniformly. Verified improvement from SDR waterfall analysis before/after: - Energy below 300 Hz: 30.4% → 3.7% of total TX envelope power - SSB voice band (300–2800 Hz): 69% → 96% of total TX envelope power - Net effect: ~27 percentage-point shift of PA energy from the suppressed band into the usable voice band.</p>
+<p><strong>Consequences</strong>: The HPF is always active — no user toggle (there is no legitimate use case for transmitting sub-300 Hz energy in SSB). Filter coefficients are computed at server startup via <code class="scope-code">scipy.signal.butter</code>. The anti-alias LPF that follows can be gentler since low-frequency energy no longer dominates the input. On-air voice reports show improved punch and clarity at the same drive setting, consistent with the higher in-band power fraction.</p>
+<h2 id="ad-016-coep-credentialless-enables-sharedarraybuffer-without-breaking-worker-importscripts">AD-016: COEP credentialless — Enables SharedArrayBuffer Without Breaking Worker importScripts()</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Operational</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Use <code class="scope-code">Cross-Origin-Embedder-Policy: credentialless</code> instead of <code class="scope-code">require-corp</code>. This enables <code class="scope-code">SharedArrayBuffer</code> (required for AD-014) while allowing Web Workers to call <code class="scope-code">importScripts()</code> for Opus WASM modules without requiring <code class="scope-code">Cross-Origin-Resource-Policy</code> headers on subresources.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: The <code class="scope-code">require-corp</code> COEP value, while sufficient to enable <code class="scope-code">SharedArrayBuffer</code>, silently blocks <code class="scope-code">importScripts()</code> inside Web Workers on Safari when loading Opus WASM decoder/encoder modules. Safari requires CORP headers (<code class="scope-code">Cross-Origin-Resource-Policy: cross-origin</code>) on every script fetched by <code class="scope-code">importScripts()</code> when COEP is <code class="scope-code">require-corp</code>. These headers are not set by the FastAPI <code class="scope-code">StaticFiles</code> mount, so the Opus Worker would fail to load its WASM module with no visible error (Safari suppresses cross-origin script errors in Workers).</p>
+<p><strong>Rationale</strong>: <code class="scope-code">credentialless</code> is the newer COEP value designed specifically for this scenario. It enables <code class="scope-code">SharedArrayBuffer</code> (satisfying the browser’s cross-origin isolation requirement) but strips credentials (cookies, auth headers) from cross-origin subresource requests rather than requiring explicit CORP headers. Since all Opus WASM assets are same-origin (served from <code class="scope-code">/static/</code>), credential stripping has no effect. The main downside of <code class="scope-code">require-corp</code> — breaking innocent <code class="scope-code">importScripts()</code> — is avoided entirely.</p>
+<p><strong>Consequences</strong>: Response headers are <code class="scope-code">Cross-Origin-Opener-Policy: same-origin</code> + <code class="scope-code">Cross-Origin-Embedder-Policy: credentialless</code>. This pair enables <code class="scope-code">SharedArrayBuffer</code> and allows Worker <code class="scope-code">importScripts()</code> on all browsers (Chrome, Firefox, Safari). No <code class="scope-code">Cross-Origin-Resource-Policy</code> headers are needed on static assets. If the app later loads cross-origin resources (e.g., CDN scripts), they will load without credentials, which may require CORS configuration on the CDN side. For the current same-origin architecture, this is a strict improvement over <code class="scope-code">require-corp</code>.</p>
+<h2 id="ad-017-spectrum-frequency-marker-accuracy-exact-sample-rate-pixel-alignment-buffer-reset">AD-017: Spectrum Frequency Marker Accuracy — Exact Sample Rate, Pixel Alignment, Buffer Reset</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>UX / Data Accuracy</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Frontend uses exact <code class="scope-code">EXACT_SAMPLE_RATES</code> lookup table (39062/78125/156250/312500 Hz) matching server <code class="scope-code">SAMPLE_RATES</code> dict; FFT canvas uses <code class="scope-code">xScale=W/n</code> (bin k→pixel k) for pixel alignment with frequency grid; <code class="scope-code">SpectrumProcessor.reset()</code> clears FFT accumulation buffer on sample rate change; frontend <code class="scope-code">setSampleRate</code> handler resets FFT EMA buffer and clears waterfall canvas; FFT display uses noise-floor-relative height with gamma 0.65 (no absolute dB labels).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: The frequency markers on the spectrum waterfall/FFT display had accuracy issues at all sample rates, with the error growing proportionally: - Frontend used <code class="scope-code">parseInt('78k',10)*1000 = 78000 Hz</code> approximation, but actual IQ rate is 78125 Hz (0.16% error). At 312k, labels were off by 500 Hz. - FFT curve used <code class="scope-code">xScale=W/(n-1)</code> which stretched bins 0..511 to pixels 0..512, causing bin 256 (VFO center) to fall at pixel 257 instead of 256 (1px offset). - Sample rate changes left stale FFT EMA data and waterfall pixels from the previous rate, causing transient smearing and misalignment with the new frequency grid. - FFT dB labels showed “0/-40/-80/-120” absolute dB, but the curve used noise-floor-relative + gamma 0.65 nonlinear mapping, so labels didn’t match displayed data. - Remote clients (other browser tabs/devices) didn’t receive the <code class="scope-code">setSampleRate</code> broadcast, so their frequency scale stayed stale.</p>
+<p><strong>Rationale</strong>: The exact sample rates are non-round values (39062 = 78125/2, 156250 = 78125×2, 312500 = 78125×4) based on 5^7 = 78125 Hz. Using the integer approximation <code class="scope-code">parseInt()*1000</code> introduces a systematic error that grows with rate. The FFT pixel mapping should be consistent with the waterfall and frequency grid (both use <code class="scope-code">bin k = pixel k</code>). The spectrum buffer must be cleared on rate change to avoid mixing old-rate and new-rate IQ samples in the same FFT. The FFT display is relative (noise-floor-referenced) for visual clarity, so absolute dB labels are misleading and should be removed.</p>
+<p><strong>Consequences</strong>: - Frontend: <code class="scope-code">EXACT_SAMPLE_RATES</code> lookup table in <code class="scope-code">controls.js</code> ensures frequency labels match the actual IQ rate at all sample rates. - FFT canvas: <code class="scope-code">xScale = W/n</code> aligns bin 256 with pixel 256 (VFO center), eliminating the 1px offset. - Server: <code class="scope-code">SpectrumProcessor.reset()</code> clears the FFT accumulation buffer on rate change, preventing garbage frames from mixed-rate IQ data. - Frontend: <code class="scope-code">setSampleRate</code> handler resets FFT EMA buffer, clears waterfall canvas, and redraws frequency scale. This also syncs remote clients when the server broadcasts <code class="scope-code">setSampleRate:&lt;rate&gt;</code>. - FFT display: removed misleading dB number labels; kept faint horizontal gridlines as visual texture. The S-meter shows absolute signal level. - Multi-client: remote clients now receive and apply the <code class="scope-code">setSampleRate</code> broadcast, keeping their frequency scale in sync.</p>
+<p><strong>Verification</strong>: Switch sample rates (78k↔︎312k) and verify: 1. Frequency labels span the exact range (e.g., 312k left edge = VFO - 156250 Hz, not VFO - 156000 Hz) 2. VFO red line aligns with FFT curve center (no 1px offset) 3. Waterfall clears immediately on rate change (no stale pixels) 4. Second browser tab’s frequency scale updates when first tab changes rate</p>
 <h2 id="decision-summary">8.11 Decision Summary</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 21%" />
 <col style="width: 36%" />
@@ -558,34 +686,63 @@ TX chain lim: rms, peak — after tanh(TX_IQ_PEAK=1.0), final IQ envelope</code>
 <td>TX audio gain staging: client preamp ×1.5, server TX_DRIVE_GAIN ×3.0, TX_IQ_PEAK 1.0, tanh soft limiter with light engagement</td>
 <td>Implemented</td>
 </tr>
+<tr>
+<td>AD-013</td>
+<td>Remove WDSP TX C-chain — Python Hilbert overlap-save is sole SSB modulator</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-014</td>
+<td>SharedArrayBuffer ring buffer for TX audio — zero main-thread path</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-015</td>
+<td>300 Hz highpass filter for SSB voice efficiency (~96% power utilization)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-016</td>
+<td>COEP credentialless — enables SharedArrayBuffer without breaking Worker importScripts()</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-017</td>
+<td>Spectrum frequency marker accuracy — exact sample rate lookup, FFT pixel alignment, buffer reset on rate change</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-013</td>
+<td>WDSP TX C-chain removal — Python Hilbert overlap-save is the sole SSB modulator</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-014</td>
+<td>SharedArrayBuffer ring buffer for TX audio — zero main-thread path</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-015</td>
+<td>300 Hz highpass filter for SSB voice efficiency</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-016</td>
+<td>COEP credentialless — enables SAB without breaking Worker importScripts()</td>
+<td>Implemented</td>
+</tr>
 </tbody>
 </table>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

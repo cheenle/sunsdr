@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -125,7 +102,7 @@
 <h2 id="mission">2.2 Mission</h2>
 <p>Deliver a pragmatic, browser-native remote radio control surface for HAM operation that favors direct SunSDR integration, mobile ergonomics, low latency, and field maintainability over heavyweight framework or native-app complexity.</p>
 <h2 id="business-goals">2.3 Business Goals</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 17%" />
 <col style="width: 26%" />
@@ -167,7 +144,7 @@
 </tbody>
 </table>
 <h2 id="objectives">2.4 Objectives</h2>
-<table style="width:100%;">
+<table class="scope-table" style="width:100%;">
 <colgroup>
 <col style="width: 10%" />
 <col style="width: 28%" />
@@ -192,13 +169,13 @@
 <tr>
 <td>O2</td>
 <td>RX audio availability</td>
-<td>Browser receives continuous Int16 PCM</td>
+<td>Browser receives continuous tagged dual-codec audio (Opus default, Int16 PCM fallback)</td>
 <td>Implemented</td>
 </tr>
 <tr>
 <td>O3</td>
 <td>Control-plane liveness</td>
-<td><code>PING</code>/<code>PONG</code>, state query and command response</td>
+<td><code class="scope-code">PING</code>/<code class="scope-code">PONG</code>, state query and command response</td>
 <td>Implemented</td>
 </tr>
 <tr>
@@ -228,13 +205,13 @@
 <tr>
 <td>O8</td>
 <td>TX power control</td>
-<td>Per-band drive (<code>0x0017</code>) configurable from UI</td>
+<td>Per-band drive (<code class="scope-code">0x0017</code>) configurable from UI</td>
 <td>Implemented (on-air verified)</td>
 </tr>
 </tbody>
 </table>
 <h2 id="strategy">2.5 Strategy</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 37%" />
@@ -276,7 +253,7 @@
 </tbody>
 </table>
 <h2 id="tactics">2.6 Tactics</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -293,17 +270,17 @@
 <tr>
 <td>T1</td>
 <td>HTTPS by default</td>
-<td><code>_find_ssl()</code> selects cert/key, <code>DISABLE_SSL=1</code> only for local HTTP</td>
+<td><code class="scope-code">_find_ssl()</code> selects cert/key, <code class="scope-code">DISABLE_SSL=1</code> only for local HTTP</td>
 </tr>
 <tr>
 <td>T2</td>
 <td>WSS auto-selection</td>
-<td>Frontend uses <code>location.protocol</code> to choose <code>wss://</code> or <code>ws://</code></td>
+<td>Frontend uses <code class="scope-code">location.protocol</code> to choose <code class="scope-code">wss://</code> or <code class="scope-code">ws://</code></td>
 </tr>
 <tr>
 <td>T3</td>
 <td>Direct IQ demodulation</td>
-<td>UDP <code>50002</code> IQ packets feed <code>StreamProcessor</code></td>
+<td>UDP <code class="scope-code">50002</code> IQ packets feed <code class="scope-code">StreamProcessor</code></td>
 </tr>
 <tr>
 <td>T4</td>
@@ -313,41 +290,25 @@
 <tr>
 <td>T5</td>
 <td>PTT release ACK loop</td>
-<td>Frontend retries <code>setPTT:false</code> and uses backup <code>s:</code> command</td>
+<td>Frontend retries <code class="scope-code">setPTT:false</code> and uses backup <code class="scope-code">s:</code> command</td>
 </tr>
 <tr>
 <td>T6</td>
 <td>Optional WDSP</td>
-<td>Runtime setters are no-op safe when <code>libwdsp</code> is unavailable</td>
+<td>Runtime setters are no-op safe when <code class="scope-code">libwdsp</code> is unavailable</td>
 </tr>
 </tbody>
 </table>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

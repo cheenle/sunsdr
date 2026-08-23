@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -121,13 +98,13 @@
     <main class="sdd-content">
 <h1 id="operational-model-art-0522">12. Operational Model (ART 0522)</h1>
 <h2 id="runtime-topology">12.1 Runtime Topology</h2>
-<pre class="text"><code>Client Browser
-  -&gt; https://radio.vlsc.net:8080
+<pre class="scope-code text"><code>Client Browser
+  -&gt; https://radio.vlsc.net:8889
   -&gt; WSS endpoints on same host/port
 
 SunMRRC Host
   -&gt; python3 server.py under ../venv when available
-  -&gt; Uvicorn on 0.0.0.0:$WEB_PORT
+  -&gt; Uvicorn on [::]:$WEB_PORT (IPv6 dual-stack, all interfaces)
   -&gt; UDP bind 192.168.16.100:50001 for control client
   -&gt; UDP bind 192.168.16.100:50002 for IQ loop
   -&gt; logs to server.log when started by restart.sh
@@ -137,7 +114,7 @@ SunSDR2 DX
   -&gt; control UDP :50001
   -&gt; stream UDP :50002</code></pre>
 <h2 id="configuration">12.2 Configuration</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 25%" />
 <col style="width: 37%" />
@@ -152,44 +129,44 @@ SunSDR2 DX
 </thead>
 <tbody>
 <tr>
-<td><code>DEVICE_HOST</code></td>
-<td><code>192.168.16.200</code></td>
-<td>SunSDR2 DX control host for <code>SunSDR2DXClient</code></td>
+<td><code class="scope-code">DEVICE_HOST</code></td>
+<td><code class="scope-code">192.168.16.200</code></td>
+<td>SunSDR2 DX control host for <code class="scope-code">SunSDR2DXClient</code></td>
 </tr>
 <tr>
-<td><code>WEB_PORT</code></td>
-<td><code>8081</code> in <code>start.sh</code>, <code>8080</code> in <code>restart.sh</code>, <code>8081</code> in <code>server.py</code> default</td>
+<td><code class="scope-code">WEB_PORT</code></td>
+<td><code class="scope-code">8889</code> in <code class="scope-code">restart.sh</code> and <code class="scope-code">server.py</code> default</td>
 <td>Uvicorn listen port</td>
 </tr>
 <tr>
-<td><code>DISABLE_SSL</code></td>
+<td><code class="scope-code">DISABLE_SSL</code></td>
 <td>unset</td>
-<td>Set to <code>1</code> to force HTTP even when certs exist</td>
+<td>Set to <code class="scope-code">1</code> to force HTTP even when certs exist</td>
 </tr>
 <tr>
-<td><code>BACKEND</code></td>
-<td><code>direct</code> in scripts</td>
-<td>Operational marker; current <code>server.py</code> uses direct client path</td>
+<td><code class="scope-code">BACKEND</code></td>
+<td><code class="scope-code">direct</code> in scripts</td>
+<td>Operational marker; current <code class="scope-code">server.py</code> uses direct client path</td>
 </tr>
 <tr>
-<td><code>NO_PROXY</code></td>
-<td><code>127.0.0.1,localhost</code> in <code>restart.sh</code></td>
+<td><code class="scope-code">NO_PROXY</code></td>
+<td><code class="scope-code">127.0.0.1,localhost</code> in <code class="scope-code">restart.sh</code></td>
 <td>Avoid local proxy interference</td>
 </tr>
 <tr>
-<td><code>band_power.json</code></td>
+<td><code class="scope-code">band_power.json</code></td>
 <td>per-band defaults</td>
-<td>Runtime per-band TX drive %; created/edited via <code>/api/band_power</code> (Band Power panel). Git-ignored runtime data.</td>
+<td>Runtime per-band TX drive %; created/edited via <code class="scope-code">/api/band_power</code> (Band Power panel). Git-ignored runtime data.</td>
 </tr>
 <tr>
-<td><code>mem_channels.json</code></td>
+<td><code class="scope-code">mem_channels.json</code></td>
 <td>empty</td>
-<td>Runtime memory-channel store written by <code>/api/mem_channels</code>. Git-ignored runtime data.</td>
+<td>Runtime memory-channel store written by <code class="scope-code">/api/mem_channels</code>. Git-ignored runtime data.</td>
 </tr>
 </tbody>
 </table>
 <h2 id="startup-modes">12.3 Startup Modes</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 24%" />
 <col style="width: 36%" />
@@ -204,29 +181,29 @@ SunSDR2 DX
 </thead>
 <tbody>
 <tr>
-<td>Simple start</td>
-<td><code>./start.sh</code></td>
-<td>Activates <code>../venv</code> if present, defaults <code>WEB_PORT=8081</code>, execs <code>python3 server.py</code></td>
-</tr>
-<tr>
 <td>Background restart</td>
-<td><code>./restart.sh</code></td>
-<td>Defaults <code>WEB_PORT=8080</code>, kills old cwd-matched server, clears listen port, writes <code>server.log</code></td>
+<td><code class="scope-code">./restart.sh</code></td>
+<td>Defaults <code class="scope-code">WEB_PORT=8889</code>, activates <code class="scope-code">../venv</code> if present, kills old cwd-matched server, clears listen port, writes <code class="scope-code">server.log</code></td>
 </tr>
 <tr>
 <td>Foreground restart</td>
-<td><code>./restart.sh -f</code></td>
+<td><code class="scope-code">./restart.sh -f</code></td>
 <td>Same cleanup, then runs foreground for live logs</td>
 </tr>
 <tr>
+<td>Custom port</td>
+<td><code class="scope-code">WEB_PORT=8889 ./restart.sh</code></td>
+<td>Override the listen port via environment</td>
+</tr>
+<tr>
 <td>HTTP debug</td>
-<td><code>DISABLE_SSL=1 ./restart.sh</code></td>
+<td><code class="scope-code">DISABLE_SSL=1 ./restart.sh</code></td>
 <td>Forces HTTP; not suitable for iOS mic/audio validation</td>
 </tr>
 </tbody>
 </table>
 <h2 id="tls-operation">12.4 TLS Operation</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 28%" />
 <col style="width: 71%" />
@@ -240,19 +217,19 @@ SunSDR2 DX
 <tbody>
 <tr>
 <td>Certificate</td>
-<td><code>certs/fullchain.pem</code></td>
+<td><code class="scope-code">certs/fullchain.pem</code></td>
 </tr>
 <tr>
 <td>Private key</td>
-<td><code>certs/radio.vlsc.net.key</code></td>
+<td><code class="scope-code">certs/radio.vlsc.net.key</code></td>
 </tr>
 <tr>
 <td>Auto-detection</td>
-<td><code>_find_ssl()</code> returns cert/key when both files exist</td>
+<td><code class="scope-code">_find_ssl()</code> returns cert/key when both files exist</td>
 </tr>
 <tr>
 <td>HTTPS log</td>
-<td><code>sunmrrc https://0.0.0.0:&lt;port&gt;</code> and <code>TLS: &lt;cert&gt;</code></td>
+<td><code class="scope-code">sunmrrc https://[::]:&lt;port&gt;  password=&lt;...&gt;</code> and <code class="scope-code">TLS: &lt;cert&gt;</code></td>
 </tr>
 <tr>
 <td>HTTP fallback log</td>
@@ -260,12 +237,12 @@ SunSDR2 DX
 </tr>
 <tr>
 <td>Expiry support</td>
-<td><code>certs/check_ssl_expiry.sh</code>, <code>certs/expiry_check.log</code></td>
+<td><code class="scope-code">certs/check_ssl_expiry.sh</code>, <code class="scope-code">certs/expiry_check.log</code></td>
 </tr>
 </tbody>
 </table>
 <h2 id="connection-matrix">12.5 Connection Matrix</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 16%" />
 <col style="width: 16%" />
@@ -287,76 +264,76 @@ SunSDR2 DX
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>HTTPS</td>
-<td><code>$WEB_PORT</code></td>
+<td><code class="scope-code">$WEB_PORT</code></td>
 <td>Static UI</td>
 </tr>
 <tr>
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>WSS/WS</td>
-<td><code>/WSCTRX</code></td>
+<td><code class="scope-code">/WSCTRX</code></td>
 <td>Control</td>
 </tr>
 <tr>
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>WSS/WS</td>
-<td><code>/WSaudioRX</code></td>
+<td><code class="scope-code">/WSaudioRX</code></td>
 <td>RX audio</td>
 </tr>
 <tr>
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>WSS/WS</td>
-<td><code>/WSaudioTX</code></td>
-<td>TX mic uplink (Int16 PCM → SSB modulation)</td>
+<td><code class="scope-code">/WSaudioTX</code></td>
+<td>TX mic uplink (tagged Opus/PCM → SSB modulation)</td>
 </tr>
 <tr>
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>WSS/WS</td>
-<td><code>/WSspectrum</code></td>
+<td><code class="scope-code">/WSspectrum</code></td>
 <td>Waterfall</td>
 </tr>
 <tr>
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>HTTPS</td>
-<td><code>/api/band_power</code></td>
+<td><code class="scope-code">/api/band_power</code></td>
 <td>Per-band power get/set</td>
 </tr>
 <tr>
 <td>Browser</td>
 <td>SunMRRC</td>
 <td>HTTPS</td>
-<td><code>/api/mem_channels</code></td>
+<td><code class="scope-code">/api/mem_channels</code></td>
 <td>Memory channel get/set</td>
 </tr>
 <tr>
 <td>SunMRRC</td>
 <td>SunSDR2 DX</td>
 <td>UDP</td>
-<td><code>:50001</code></td>
-<td>Control protocol (incl. DRIVE <code>0x0017</code>)</td>
+<td><code class="scope-code">:50001</code></td>
+<td>Control protocol (incl. DRIVE <code class="scope-code">0x0017</code>)</td>
 </tr>
 <tr>
 <td>SunMRRC</td>
 <td>SunSDR2 DX</td>
 <td>UDP</td>
-<td><code>:50002</code></td>
-<td>TX IQ stream (<code>0xFFFD</code>) when keyed</td>
+<td><code class="scope-code">:50002</code></td>
+<td>TX IQ stream (<code class="scope-code">0xFFFD</code>) when keyed</td>
 </tr>
 <tr>
 <td>SunSDR2 DX</td>
 <td>SunMRRC</td>
 <td>UDP</td>
-<td>local <code>:50002</code></td>
+<td>local <code class="scope-code">:50002</code></td>
 <td>RX IQ stream</td>
 </tr>
 </tbody>
 </table>
 <h2 id="operational-procedures">12.6 Operational Procedures</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 61%" />
 <col style="width: 38%" />
@@ -370,19 +347,19 @@ SunSDR2 DX
 <tbody>
 <tr>
 <td>Verify HTTPS startup</td>
-<td>Run <code>./restart.sh</code>; inspect <code>server.log</code> for HTTPS and TLS lines</td>
+<td>Run <code class="scope-code">./restart.sh</code>; inspect <code class="scope-code">server.log</code> for HTTPS and TLS lines</td>
 </tr>
 <tr>
 <td>Verify radio connect</td>
-<td>Inspect <code>server.log</code> for <code>SunSDR2DX: True</code> and <code>IQ: port 50002</code></td>
+<td>Inspect <code class="scope-code">server.log</code> for <code class="scope-code">SunSDR2DX: True</code> and <code class="scope-code">IQ: port 50002</code></td>
 </tr>
 <tr>
 <td>Verify mobile entry</td>
-<td>Open <code>https://radio.vlsc.net:8080</code> from iPhone with correct DNS/LAN routing</td>
+<td>Open <code class="scope-code">https://radio.vlsc.net:8889</code> from iPhone with correct DNS/LAN routing</td>
 </tr>
 <tr>
 <td>Verify RX</td>
-<td>Power on UI, confirm <code>/WSaudioRX</code> connected and audio/bitrate active</td>
+<td>Power on UI, confirm <code class="scope-code">/WSaudioRX</code> connected and audio/bitrate active</td>
 </tr>
 <tr>
 <td>Verify control</td>
@@ -390,24 +367,24 @@ SunSDR2 DX
 </tr>
 <tr>
 <td>Verify PTT safety</td>
-<td>Press/release PTT; confirm <code>getPTT:false</code> after release</td>
+<td>Press/release PTT; confirm <code class="scope-code">getPTT:false</code> after release</td>
 </tr>
 <tr>
 <td>Verify TX voice/power</td>
-<td>Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (Tune ~12 W, voice 30–40 W PEP). Device telemetry: <code>W=</code> in <code>server.log</code> from <code>0x1F00</code> off30 f32 forward watts; <code>V=</code> from off16 u16/10 supply voltage; <code>T=</code> from off18 f32 PA temp °C. Telemetry arrives in RX and TX. No device SWR field — use ATR-1000.</td>
+<td>Key PTT and speak; confirm RF output on a wattmeter / ATR-1000 (voice 30–40 W PEP at 100% drive). Device telemetry: <code class="scope-code">W=</code> in <code class="scope-code">server.log</code> from <code class="scope-code">0x1F00</code> off30 f32 forward watts; <code class="scope-code">V=</code> from off16 u16/10 supply voltage; <code class="scope-code">T=</code> from off18 f32 PA temp °C. Telemetry arrives in RX and TX. No device SWR field — use ATR-1000. IQ peak ~0.69, RMS ~0.68 at 100% drive (TX_DRIVE_GAIN=2.8).</td>
 </tr>
 <tr>
 <td>Verify TX audio quality</td>
-<td>Check <code>server.log</code> for “TX chain” level-probe lines at 1 Hz. Healthy gain staging: <code>in</code> peak ~0.5 (not 1.0 — that saturates the tanh), <code>lim</code> peak ~0.96 (~4% tanh reduction). Underruns should be 0 or near 0 after initial prime. If underruns are frequent (&gt;1/sec), check WiFi latency and the <code>/tmp/tx_probe.csv</code> pacer log.</td>
+<td>Check <code class="scope-code">server.log</code> for “TX chain” level-probe lines at 1 Hz. Healthy gain staging: voice produces <code class="scope-code">in</code> peak ~0.3–0.5, <code class="scope-code">lim</code> peak ~0.69 (&lt;4% tanh duty). The 300 Hz HPF (4th-order Butterworth) reclaims ~15% PA headroom from sub-300 Hz waste band. Underruns should be 0 (SAB ring buffer eliminates main-thread jitter, the dominant dropout cause). Verified 37 dB SNR at far end, 96% SSB efficiency, zero dropouts.</td>
 </tr>
 <tr>
 <td>Adjust per-band power</td>
-<td>Menu → Band Power; set each band’s drive %, save (POST <code>/api/band_power</code>), confirm immediate re-apply on the current frequency</td>
+<td>Menu → Band Power; set each band’s drive %, save (POST <code class="scope-code">/api/band_power</code>), confirm immediate re-apply on the current frequency</td>
 </tr>
 </tbody>
 </table>
 <h2 id="logs-and-artifacts">12.7 Logs and Artifacts</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 52%" />
 <col style="width: 47%" />
@@ -420,33 +397,33 @@ SunSDR2 DX
 </thead>
 <tbody>
 <tr>
-<td><code>server.log</code></td>
+<td><code class="scope-code">server.log</code></td>
 <td>Runtime logs when background-started</td>
 </tr>
 <tr>
-<td><code>band_power.json</code></td>
-<td>Persisted per-band TX drive % (created on first <code>/api/band_power</code> POST)</td>
+<td><code class="scope-code">band_power.json</code></td>
+<td>Persisted per-band TX drive % (created on first <code class="scope-code">/api/band_power</code> POST)</td>
 </tr>
 <tr>
-<td><code>mem_channels.json</code></td>
-<td>Persisted memory channels (created on first <code>/api/mem_channels</code> POST)</td>
+<td><code class="scope-code">mem_channels.json</code></td>
+<td>Persisted memory channels (created on first <code class="scope-code">/api/mem_channels</code> POST)</td>
 </tr>
 <tr>
-<td><code>STATUS.md</code></td>
+<td><code class="scope-code">STATUS.md</code></td>
 <td>Current debugging/status notes</td>
 </tr>
 <tr>
-<td><code>certs/backup/</code></td>
+<td><code class="scope-code">certs/backup/</code></td>
 <td>Timestamped certificate backups</td>
 </tr>
 <tr>
-<td><code>certs/expiry_check.log</code></td>
+<td><code class="scope-code">certs/expiry_check.log</code></td>
 <td>Certificate expiry check output</td>
 </tr>
 </tbody>
 </table>
 <h2 id="operational-risks">12.8 Operational Risks</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 33%" />
 <col style="width: 66%" />
@@ -459,8 +436,8 @@ SunSDR2 DX
 </thead>
 <tbody>
 <tr>
-<td>Wrong port default between scripts</td>
-<td>Treat <code>restart.sh</code> as production path and set <code>WEB_PORT</code> explicitly when needed</td>
+<td>Single listen port</td>
+<td><code class="scope-code">restart.sh</code> and <code class="scope-code">server.py</code> both default to <code class="scope-code">8889</code>; set <code class="scope-code">WEB_PORT</code> to override consistently</td>
 </tr>
 <tr>
 <td>iOS loaded over HTTP</td>
@@ -468,44 +445,28 @@ SunSDR2 DX
 </tr>
 <tr>
 <td>Fixed local UDP bind IP does not match host</td>
-<td>Update <code>server.py</code> or host network before deployment</td>
+<td>Update <code class="scope-code">server.py</code> or host network before deployment</td>
 </tr>
 <tr>
 <td>Old JS cached</td>
-<td><code>sw.js</code> bypasses JS/HTML; version query strings also used on scripts</td>
+<td><code class="scope-code">sw.js</code> bypasses JS/HTML; version query strings also used on scripts</td>
 </tr>
 <tr>
 <td>Stuck TX</td>
-<td>PTT release ACK retry, watchdog, backend <code>s</code> command</td>
+<td>PTT release ACK retry, watchdog, backend <code class="scope-code">s</code> command</td>
 </tr>
 </tbody>
 </table>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

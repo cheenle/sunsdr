@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -120,7 +97,7 @@
     </aside>
     <main class="sdd-content">
 <h1 id="version-history">14. Version History</h1>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 28%" />
 <col style="width: 18%" />
@@ -164,25 +141,25 @@
 <td>SDD V3.0</td>
 <td>2026-06-21</td>
 <td>OpenCode</td>
-<td>Re-baselined entire SDD to current <code>sunmrrc</code> codebase: FastAPI/Uvicorn, SunSDR2 DX direct UDP, mobile RX/control, HTTPS/WSS, explicit gaps</td>
+<td>Re-baselined entire SDD to current <code class="scope-code">sunmrrc</code> codebase: FastAPI/Uvicorn, SunSDR2 DX direct UDP, mobile RX/control, HTTPS/WSS, explicit gaps</td>
 </tr>
 <tr>
 <td>SDD V3.1</td>
 <td>2026-06-21</td>
 <td>OpenCode</td>
-<td>Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate <code>/WSspectrum</code> route</td>
+<td>Waterfall rendering (frame accumulation + adaptive noise floor), S-meter exponential smoothing, PING→PONG latency fix, removed duplicate <code class="scope-code">/WSspectrum</code> route</td>
 </tr>
 <tr>
 <td>SDD V3.2</td>
 <td>2026-06-23</td>
 <td>Claude</td>
-<td>TX voice modulation and TX power control documented as implemented: device DRIVE (<code>0x0017</code>) per-band power, <code>/api/band_power</code> + Band Power UI, <code>/api/mem_channels</code> graduated to implemented, AD-010 added, CW/FT8 dead links removed</td>
+<td>TX voice modulation and TX power control documented as implemented: device DRIVE (<code class="scope-code">0x0017</code>) per-band power, <code class="scope-code">/api/band_power</code> + Band Power UI, <code class="scope-code">/api/mem_channels</code> graduated to implemented, AD-010 added, CW/FT8 dead links removed</td>
 </tr>
 <tr>
 <td>SDD V3.3</td>
 <td>2026-06-24</td>
 <td>Claude</td>
-<td>Tagged dual-codec audio transport (RX Opus/PCM + TX Opus uplink); corrected <code>0x1F00</code> telemetry field offsets (SWR = off16 u16/100, not off26 f32); AD-004 expanded to cover TX path; AD-011 added for SWR field correction; ATT/sample-rate controls documented; TXPLAN phased roadmap marked complete</td>
+<td>Tagged dual-codec audio transport (RX Opus/PCM + TX Opus uplink); corrected <code class="scope-code">0x1F00</code> telemetry field offsets (SWR = off16 u16/100, not off26 f32); AD-004 expanded to cover TX path; AD-011 added for SWR field correction; ATT/sample-rate controls documented; TXPLAN phased roadmap marked complete</td>
 </tr>
 <tr>
 <td>SDD V3.4</td>
@@ -191,15 +168,190 @@
 <td><strong>TX telemetry field correction</strong>: off30 f32 = forward watts (not off14 cubic fit), off16 u16 = supply volts ×10 (NOT SWR), off18 f32 = PA temp °C. Device has NO reverse-power → no SWR. AD-011 completely rewritten. <strong>TX gain staging (AD-012)</strong>: client preamp 3.0→1.5, server TX_DRIVE_GAIN=3.0, TX_IQ_PEAK=1.0 with tanh soft limiter. 9.5.2 TX signal chain architecture + level-probe diagnostics added. SVG architecture diagrams (system, TX gain staging, telemetry flow). <strong>Ch 15 PTT Safety Architecture</strong>: comprehensive 8-layer defense-in-depth model, full component coverage, SVG diagram.</td>
 </tr>
 <tr>
+<td>SDD V3.5</td>
+<td>2026-06-26</td>
+<td>Claude</td>
+<td><strong>Code-sync pass</strong> — reconciled SDD with current source. <strong>Port corrected</strong> to <code class="scope-code">8889</code> (server.py default + restart.sh) across all chapters (was <code class="scope-code">8080</code>/<code class="scope-code">8081</code>). <strong>Bind host</strong> is <code class="scope-code">[::]</code> IPv6 dual-stack, not <code class="scope-code">0.0.0.0</code>. <strong><code class="scope-code">start.sh</code> removed</strong> — only <code class="scope-code">restart.sh</code> exists; ch11 StartScript and ch13 I7 dropped, ch12 startup modes rewritten. <strong>Session auth documented as implemented</strong> (was “no server-side auth”): shared-password <code class="scope-code">_auth_tokens</code> + <code class="scope-code">sunmrrc_auth</code> cookie + <code class="scope-code">?token=</code> WS gating; ch5 NFR-023, ch7, ch11 updated. <strong>Audio transport</strong> reframed as tagged dual-codec (Opus default, Int16 PCM fallback) in the older chapters 2/3/4/5/10 that still said Int16-only. <strong>TX voice</strong> marked High/on-air-verified in ch6 UC-005 and ch13 (was “unresolved”/“not complete”). <strong>Recordings</strong> moved from out-of-scope to implemented (ch3).</td>
+</tr>
+<tr>
 <td><strong>SunMRRC V1.0</strong></td>
 <td><strong>2026-06-24</strong></td>
 <td><strong>Claude</strong></td>
 <td><strong>🎉 Initial production release.</strong> RX audio (tagged dual-codec Opus/PCM), TX voice modulation (Hilbert SSB, device DRIVE power control), real-time waterfall, HTTPS/WSS mobile-first, per-band power panel, memory channels, sample-rate selector, WDSP NR2. SDD V3.4 baseline.</td>
 </tr>
+<tr>
+<td>SDD V3.6</td>
+<td>2026-06-30</td>
+<td>Claude</td>
+<td>TX architecture improvements: WDSP TX C-chain removed (AD-013), SharedArrayBuffer ring buffer for TX audio (AD-014), 300 Hz HPF for SSB efficiency (AD-015), COEP credentialless (AD-016); continuous DC blocker, pre-bound IQ socket, dedicated keep-alive thread, TX pacer de-prime removal</td>
+</tr>
+<tr>
+<td>SDD V3.7</td>
+<td>2026-07-03</td>
+<td>Claude</td>
+<td>Spectrum frequency marker accuracy: frontend uses exact <code class="scope-code">EXACT_SAMPLE_RATES</code> lookup table (39062/78125/156250/312500) instead of <code class="scope-code">parseInt()*1000</code> approximation; FFT <code class="scope-code">xScale=W/n</code> (not <code class="scope-code">W/(n-1)</code>) for pixel alignment with frequency grid; <code class="scope-code">SpectrumProcessor.reset()</code> clears FFT buffer on sample rate change; frontend <code class="scope-code">setSampleRate</code> handler resets FFT EMA + clears waterfall; FFT dB labels removed (display is relative, not absolute); multi-client sync via <code class="scope-code">setSampleRate</code> broadcast; stale “only 78k calibrated” warnings removed; comprehensive PROTOCOL.md update (REST APIs §19, missing commands §20, boot corrections §21, implementation notes §22); sunmrrc/README.md rewritten with directory structure and features</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sdd-v3.7">Key Changes in SDD V3.7</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8</td>
+<td>AD-017 added: spectrum frequency marker accuracy — exact sample rate lookup, FFT pixel alignment, sample rate reset protocol</td>
+</tr>
+<tr>
+<td>9</td>
+<td>9.5.1 Spectrum pipeline: <code class="scope-code">SpectrumProcessor.reset()</code> clears FFT accumulation buffer on rate change; frontend FFT uses <code class="scope-code">xScale=W/n</code> (bin k→pixel k) for VFO center alignment; adaptive noise floor contrast stretch documented</td>
+</tr>
+<tr>
+<td>11</td>
+<td>ControlsJS component: <code class="scope-code">EXACT_SAMPLE_RATES</code> lookup table, <code class="scope-code">setSampleRate</code> handler with EMA/waterfall reset, FFT relative display (no dB labels), click-to-tune with flash indicator</td>
+</tr>
+<tr>
+<td>13</td>
+<td>I12 resolved: frequency marker accuracy across sample rates (39k/78k/156k/312k) — frontend exact lookup, FFT pixel mapping, buffer reset protocol</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Added this V3.7 changelog</td>
+</tr>
+<tr>
+<td>PROTOCOL.md</td>
+<td>§19 REST APIs (band_power, mem_channels, recordings, status, auth); §20 missing commands (setATT, setOpusBitrate, setSpectrumFps, setTXDriveGain, extended WDSP); §21 boot corrections (SET_PARAM_5/HW_INIT/STREAM_CTRL trailing values); §22 implementation notes</td>
+</tr>
+<tr>
+<td>CLAUDE.md</td>
+<td>Exact sample rate values, FFT bin-to-pixel mapping, FFT relative display, sample rate change resets, recording API, status API, TX diagnostic captures</td>
+</tr>
+<tr>
+<td>STATUS.md</td>
+<td>2026-07-03 changelog: 7 issues identified and fixed (frequency span miscalculation, FFT pixel misalignment, EMA smear, waterfall stale pixels, misleading dB labels, multi-client sync, stale warnings)</td>
+</tr>
+<tr>
+<td>sunmrrc/README.md</td>
+<td>Rewritten: directory structure, quick start, key features, authentication</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sdd-v3.6">Key Changes in SDD V3.6</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4</td>
+<td>TX audio data flow updated: AudioWorklet → SAB ring → Opus Worker → own WebSocket; zero main-thread path</td>
+</tr>
+<tr>
+<td>8</td>
+<td>AD-013 (WDSP TX C-chain removal), AD-014 (SAB ring buffer TX audio), AD-015 (300 Hz HPF SSB efficiency), AD-016 (COEP credentialless) added</td>
+</tr>
+<tr>
+<td>9</td>
+<td>TX signal chain: WDSP TX block removed; 300 Hz Butterworth HPF inserted between DC blocker and anti-alias LPF; dedicated keep-alive thread for IQ socket; pre-bound IQ socket for faster TX start; TX pacer de-prime removed (blocking read eliminated)</td>
+</tr>
+<tr>
+<td>11</td>
+<td>TXModulator simplified: WDSPTXProcessor class deleted (82 symbol bindings freed); WDSPProcessor is RX-only (channel 0); TX PROC UI panel removed; new modules: <code class="scope-code">tx_sab_ring.js</code> (ring buffer), <code class="scope-code">tx_opus_worker.js</code> (consumer), <code class="scope-code">tx_capture_worklet.js</code> (SAB producer)</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Server startup ~5s faster (one less WDSP <code class="scope-code">OpenChannel</code>); TX audio path — main thread no longer touches audio samples; COOP/COEP headers set to <code class="scope-code">credentialless</code> for Safari importScripts() compat</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Added this V3.6 changelog</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-changes-in-sdd-v3.5">Key Changes in SDD V3.5</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Mobile entry port <code class="scope-code">8080</code>→<code class="scope-code">8889</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>O2 RX audio availability reworded to tagged dual-codec (Opus default)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>RX channel + SC3 reworded to dual-codec; out-of-scope auth narrowed to multi-tenant/per-user (shared-password auth is implemented); recordings moved out of the out-of-scope list</td>
+</tr>
+<tr>
+<td>4</td>
+<td>RX/TX audio WebSocket rows + TX voice flow reworded to tagged dual-codec</td>
+</tr>
+<tr>
+<td>5</td>
+<td>NFR-004 bandwidth = Opus ~18–24 kbps default / PCM ~256 kbps fallback; NFR-060 decode path covers both codecs; NFR-023 rewritten from “no false claim of auth” to documenting the implemented session auth; port refs fixed</td>
+</tr>
+<tr>
+<td>6</td>
+<td>UC-001 entry port fixed; UC-005 boundary line updated — TX voice is implemented and on-air verified</td>
+</tr>
+<tr>
+<td>7</td>
+<td>AuthUser deferred-entity reworded — shared-password session auth exists; only per-user identity is deferred</td>
+</tr>
+<tr>
+<td>10</td>
+<td>RXAudioService / TXAudioIngressService interface rows reworded to tagged dual-codec</td>
+</tr>
+<tr>
+<td>11</td>
+<td>StartScript component row removed (<code class="scope-code">start.sh</code> absent); RestartScript description expanded; ops mapping drops <code class="scope-code">start.sh</code>; AuthBackend gap reworded to per-user identity; RecordingsPage removed from missing list</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Operational model resynced: port <code class="scope-code">8889</code>, bind <code class="scope-code">[::]</code>, startup modes rewritten around <code class="scope-code">restart.sh</code> only, HTTPS log format <code class="scope-code">https://[::]:&lt;port&gt;</code>, connection-matrix TX row dual-codec, port-mismatch risk replaced</td>
+</tr>
+<tr>
+<td>13</td>
+<td>TX voice feasibility High/verified; I7 (<code class="scope-code">start.sh</code>) removed as obsolete; mobile-entry port fixed</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Added this V3.5 changelog</td>
+</tr>
+<tr>
+<td>README</td>
+<td>SDD version bumped; runtime-facts source list drops <code class="scope-code">start.sh</code>; default entry port <code class="scope-code">8889</code></td>
+</tr>
 </tbody>
 </table>
 <h2 id="key-changes-in-sdd-v3.4">Key Changes in SDD V3.4</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 52%" />
 <col style="width: 47%" />
@@ -249,7 +401,7 @@
 </tr>
 <tr>
 <td>New</td>
-<td><code>diagrams/system-architecture.svg</code>, <code>diagrams/tx-gain-staging.svg</code>, <code>diagrams/telemetry-flow.svg</code></td>
+<td><code class="scope-code">diagrams/system-architecture.svg</code>, <code class="scope-code">diagrams/tx-gain-staging.svg</code>, <code class="scope-code">diagrams/telemetry-flow.svg</code></td>
 </tr>
 <tr>
 <td>CLAUDE.md</td>
@@ -258,7 +410,7 @@
 </tbody>
 </table>
 <h2 id="key-changes-in-sunmrrc-v1.0-sdd-v3.3">Key Changes in SunMRRC V1.0 (SDD V3.3)</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 52%" />
 <col style="width: 47%" />
@@ -313,7 +465,7 @@
 </tbody>
 </table>
 <h2 id="key-changes-in-sdd-v3.2">Key Changes in SDD V3.2</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 52%" />
 <col style="width: 47%" />
@@ -335,11 +487,11 @@
 </tr>
 <tr>
 <td>3</td>
-<td>In-scope adds TX uplink, DRIVE power, <code>/api/band_power</code>, <code>/api/mem_channels</code>; out-of-scope drops TX modulation; SC8 + milestones updated</td>
+<td>In-scope adds TX uplink, DRIVE power, <code class="scope-code">/api/band_power</code>, <code class="scope-code">/api/mem_channels</code>; out-of-scope drops TX modulation; SC8 + milestones updated</td>
 </tr>
 <tr>
 <td>4</td>
-<td><code>/WSaudioTX</code> interface re-described as active mic uplink; added TX modulation + DRIVE data flows</td>
+<td><code class="scope-code">/WSaudioTX</code> interface re-described as active mic uplink; added TX modulation + DRIVE data flows</td>
 </tr>
 <tr>
 <td>5</td>
@@ -359,7 +511,7 @@
 </tr>
 <tr>
 <td>9</td>
-<td>WS table + command architecture add setDrive/<code>/api/band_power</code>; known gaps trimmed</td>
+<td>WS table + command architecture add setDrive/<code class="scope-code">/api/band_power</code>; known gaps trimmed</td>
 </tr>
 <tr>
 <td>10</td>
@@ -380,7 +532,7 @@
 </tbody>
 </table>
 <h2 id="key-changes-in-sdd-v3.1">Key Changes in SDD V3.1</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 52%" />
 <col style="width: 47%" />
@@ -394,7 +546,7 @@
 <tbody>
 <tr>
 <td>6</td>
-<td>UC-004 expanded: waterfall frame accumulation (10 frames → ~3.8 Hz), adaptive per-row noise floor (30th percentile), blue-sea bias + contrast gain, asymmetric S-meter smoothing; UC-001 notes <code>Waterfall_start/stop</code> on power on/off</td>
+<td>UC-004 expanded: waterfall frame accumulation (10 frames → ~3.8 Hz), adaptive per-row noise floor (30th percentile), blue-sea bias + contrast gain, asymmetric S-meter smoothing; UC-001 notes <code class="scope-code">Waterfall_start/stop</code> on power on/off</td>
 </tr>
 <tr>
 <td>5</td>
@@ -402,16 +554,16 @@
 </tr>
 <tr>
 <td>9</td>
-<td>Frontend architecture notes the <code>controls.js</code> waterfall render module and <code>updateSMeter</code> smoothing</td>
+<td>Frontend architecture notes the <code class="scope-code">controls.js</code> waterfall render module and <code class="scope-code">updateSMeter</code> smoothing</td>
 </tr>
 <tr>
 <td>13</td>
-<td>I6 (duplicate <code>/WSspectrum</code> route) marked resolved; PING→PONG latency <code>--ms</code> bug noted resolved</td>
+<td>I6 (duplicate <code class="scope-code">/WSspectrum</code> route) marked resolved; PING→PONG latency <code class="scope-code">--ms</code> bug noted resolved</td>
 </tr>
 </tbody>
 </table>
 <h2 id="key-changes-in-sdd-v3.0">Key Changes in SDD V3.0</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 52%" />
 <col style="width: 47%" />
@@ -473,7 +625,7 @@
 </tr>
 <tr>
 <td>12</td>
-<td>Rebuilt operational model around <code>restart.sh</code>, TLS, fixed LAN addresses, logs, and procedures</td>
+<td>Rebuilt operational model around <code class="scope-code">restart.sh</code>, TLS, fixed LAN addresses, logs, and procedures</td>
 </tr>
 <tr>
 <td>13</td>
@@ -487,38 +639,22 @@
 </table>
 <h2 id="design-baseline-notes">Design Baseline Notes</h2>
 <ul>
-<li>Current implemented baseline is mobile RX/control <strong>plus TX voice</strong> for SunSDR2 DX: mic uplink → Hilbert SSB → 24-bit IQ → <code>0xFFFD</code> TX stream, with device DRIVE (<code>0x0017</code>) per-band power control (on-air verified: Tune ~12 W, voice 30–40 W PEP).</li>
-<li>Memory-channel backend (<code>/api/mem_channels</code>) and per-band power (<code>/api/band_power</code>) are implemented and persisted.</li>
-<li>ATR-1000 backend (<code>/WSATR1000</code>) and CW/FT8/recording menu targets remain the only outstanding gated hooks. CW/FT8 dead menu links were removed; Recordings remains.</li>
+<li>Current implemented baseline is mobile RX/control <strong>plus TX voice</strong> for SunSDR2 DX: mic uplink → Hilbert SSB → 24-bit IQ → <code class="scope-code">0xFFFD</code> TX stream, with device DRIVE (<code class="scope-code">0x0017</code>) per-band power control (on-air verified: Tune ~12 W, voice 30–40 W PEP).</li>
+<li>Memory-channel backend (<code class="scope-code">/api/mem_channels</code>) and per-band power (<code class="scope-code">/api/band_power</code>) are implemented and persisted.</li>
+<li>ATR-1000 backend (<code class="scope-code">/WSATR1000</code>) and CW/FT8/recording menu targets remain the only outstanding gated hooks. CW/FT8 dead menu links were removed; Recordings remains.</li>
 <li>This SDD should be updated whenever a planned frontend hook gains a real backend implementation or is intentionally removed.</li>
 </ul>
 <p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-SUNMRRC-2026-001</em></p>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

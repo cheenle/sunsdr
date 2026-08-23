@@ -7,91 +7,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
         .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky; top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem); overflow-y: auto;
+            background: var(--scope-surface); border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius); padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary); padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
-        .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
-        }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
+        }
         @media (max-width: 900px) {
             .sdd-layout { flex-direction: column; padding: 0 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body>
+<body data-site="sunmrrc" class="fx-grid scope-gn-on">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow" style="font-family:var(--scope-font-mono);font-weight:700;color:var(--scope-text);">
+            <i class="fas fa-satellite-dish" style="color:var(--scope-primary);margin-right:0.4rem;"></i>SunMRRC
         </a>
-        <ul class="nav-links">
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -121,7 +98,7 @@
     <main class="sdd-content">
 <h1 id="component-model-art-0515">11. Component Model (ART 0515)</h1>
 <h2 id="component-inventory">11.1 Component Inventory</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 28%" />
 <col style="width: 15%" />
@@ -140,237 +117,292 @@
 <tr>
 <td>FastAPIApp</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td>Route registration, startup, static serving, WebSockets</td>
+<td><code class="scope-code">server.py</code></td>
+<td>Route registration, startup, COOP/COEP middleware, static serving, WebSockets</td>
+</tr>
+<tr>
+<td>COOPCOEPMiddleware</td>
+<td>Backend support</td>
+<td><code class="scope-code">server.py</code></td>
+<td>Sets COOP:same-origin / COEP:credentialless / CORP:cross-origin headers required for SharedArrayBuffer</td>
 </tr>
 <tr>
 <td>RadioClient</td>
 <td>Shared backend</td>
-<td><code>../web_control/sunsdr_direct.py</code></td>
+<td><code class="scope-code">../web_control/sunsdr_direct.py</code></td>
 <td>SunSDR2 DX UDP protocol, boot sequence, state setters</td>
 </tr>
 <tr>
 <td>IQLoop</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td>UDP IQ socket, packet validation, PTT stream handling, DSP feed</td>
+<td><code class="scope-code">server.py</code></td>
+<td>UDP IQ socket (pre-bound before boot), packet validation, PTT stream handling, DSP feed</td>
+</tr>
+<tr>
+<td>IQKeepAliveThread</td>
+<td>Backend core</td>
+<td><code class="scope-code">server.py</code></td>
+<td>Dedicated OS thread: sends 0xFFFE keep-alive every 0.5s to port 50002, independent of asyncio event loop</td>
 </tr>
 <tr>
 <td>StreamProcessor</td>
 <td>Shared DSP</td>
-<td><code>../web_control/dsp.py</code></td>
+<td><code class="scope-code">../web_control/dsp.py</code></td>
 <td>Coordinates spectrum and audio demodulation</td>
 </tr>
 <tr>
 <td>SpectrumProcessor</td>
 <td>Shared DSP</td>
-<td><code>../web_control/dsp.py</code></td>
+<td><code class="scope-code">../web_control/dsp.py</code></td>
 <td>FFT accumulation and dB spectrum generation</td>
 </tr>
 <tr>
 <td>AudioDemodulator</td>
 <td>Shared DSP</td>
-<td><code>../web_control/dsp.py</code></td>
-<td>SSB/AM/FM demodulation, filter/volume/PTT, optional WDSP</td>
+<td><code class="scope-code">../web_control/dsp.py</code></td>
+<td>SSB/AM/FM demodulation, filter/volume/PTT, optional WDSP (IQ-rate path for NR2/AI/SNB)</td>
 </tr>
 <tr>
-<td>WDSPWrapper</td>
+<td>WDSPProcessor</td>
 <td>Shared DSP</td>
-<td><code>../web_control/wdsp_wrapper.py</code></td>
-<td>Optional libwdsp integration</td>
+<td><code class="scope-code">../web_control/wdsp_wrapper.py</code></td>
+<td>Optional libwdsp integration — RX only (audio-rate NR2/AGC/NB/ANF fallback)</td>
+</tr>
+<tr>
+<td>WDSPIQProcessor</td>
+<td>Shared DSP</td>
+<td><code class="scope-code">../web_control/wdsp_wrapper.py</code></td>
+<td>Optional libwdsp integration — RX only (IQ-rate NR2/ANF/SNB primary path)</td>
 </tr>
 <tr>
 <td>StaticServer</td>
 <td>Backend support</td>
-<td><code>server.py</code></td>
-<td>Serves files from <code>static/</code> with MIME map</td>
+<td><code class="scope-code">server.py</code></td>
+<td>Serves files from <code class="scope-code">static/</code> with MIME map</td>
 </tr>
 <tr>
 <td>ControlWebSocket</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td><code>/WSCTRX</code> command loop</td>
+<td><code class="scope-code">server.py</code></td>
+<td><code class="scope-code">/WSCTRX</code> command loop</td>
 </tr>
 <tr>
 <td>RXAudioWebSocket</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td><code>/WSaudioRX</code> tagged dual-codec fan-out (Opus/PCM)</td>
+<td><code class="scope-code">server.py</code></td>
+<td><code class="scope-code">/WSaudioRX</code> tagged dual-codec fan-out (Opus/PCM)</td>
 </tr>
 <tr>
 <td>TXAudioWebSocket</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td><code>/WSaudioTX</code> tagged mic-frame ingress → codec decode → <code>TXModulator.feed_audio()</code></td>
+<td><code class="scope-code">server.py</code></td>
+<td><code class="scope-code">/WSaudioTX</code> tagged mic-frame ingress → codec decode → <code class="scope-code">TXModulator.feed_audio()</code></td>
 </tr>
 <tr>
 <td>RxOpusEncoder</td>
 <td>Shared DSP</td>
-<td><code>../web_control/opus_rx.py</code></td>
+<td><code class="scope-code">../web_control/opus_rx.py</code></td>
 <td>Server-side Opus encode for RX broadcast; direct ctypes libopus</td>
 </tr>
 <tr>
 <td>TxOpusDecoder</td>
 <td>Shared DSP</td>
-<td><code>../web_control/opus_rx.py</code></td>
+<td><code class="scope-code">../web_control/opus_rx.py</code></td>
 <td>Server-side Opus decode for TX mic uplink</td>
 </tr>
 <tr>
 <td>TXModulator</td>
 <td>Shared DSP</td>
-<td><code>../web_control/dsp.py</code></td>
-<td>Mic PCM → fractional resampler → overlap-save Hilbert SSB → drive gain (×3.0) → tanh soft limiter @ TX_IQ_PEAK (1.0) → 24-bit IQ packing → jitter-buffered 0xFFFD packet queue. See AD-012 for gain staging.</td>
+<td><code class="scope-code">../web_control/dsp.py</code></td>
+<td>Mic PCM → continuous DC blocker (20 Hz IIR, cross-frame state) → 300 Hz 4th-order Butterworth HPF → anti-alias LPF (3.6 kHz) → fractional resampler (16k→15625 Hz) → overlap-save Python Hilbert SSB (sole modulation path) → drive gain (×2.8) → tanh soft limiter @ TX_IQ_PEAK (1.0) → 24-bit IQ packing → jitter-buffered 0xFFFD packet queue. See AD-012 for gain staging.</td>
 </tr>
 <tr>
 <td>TXPacer</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td>Drains queued TX IQ at 5.12 ms/pkt (adaptive ±15% pacing); sends <code>0xFFFD</code> to device:50002</td>
+<td><code class="scope-code">server.py</code></td>
+<td>Dedicated OS thread: drains queued TX IQ at 5.12 ms/pkt (adaptive ±25% pacing); sends <code class="scope-code">0xFFFD</code> to device:50002</td>
 </tr>
 <tr>
 <td>BandPowerAPI</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td><code>/api/band_power</code> GET/POST; persists to <code>band_power.json</code>; applies per-band DRIVE via sunsdr_direct</td>
+<td><code class="scope-code">server.py</code></td>
+<td><code class="scope-code">/api/band_power</code> GET/POST; persists to <code class="scope-code">band_power.json</code>; applies per-band DRIVE via sunsdr_direct</td>
 </tr>
 <tr>
 <td>SpectrumWebSocket</td>
 <td>Backend core</td>
-<td><code>server.py</code></td>
-<td><code>/WSspectrum</code> binary fan-out</td>
+<td><code class="scope-code">server.py</code></td>
+<td><code class="scope-code">/WSspectrum</code> binary fan-out</td>
 </tr>
 <tr>
 <td>TLSLocator</td>
 <td>Backend support</td>
-<td><code>server.py</code></td>
+<td><code class="scope-code">server.py</code></td>
 <td>Cert/key discovery and HTTP fallback</td>
 </tr>
 <tr>
 <td>MobileHTML</td>
 <td>Frontend core</td>
-<td><code>static/index.html</code></td>
+<td><code class="scope-code">static/index.html</code></td>
 <td>UI structure and script composition</td>
 </tr>
 <tr>
 <td>MobileStyles</td>
 <td>Frontend core</td>
-<td><code>static/mobile.css</code></td>
+<td><code class="scope-code">static/mobile.css</code></td>
 <td>Mobile layout and visual controls</td>
 </tr>
 <tr>
 <td>ControlsJS</td>
 <td>Frontend core</td>
-<td><code>static/controls.js</code></td>
-<td>WebSocket setup, tagged RX audio decode (Opus/PCM), TX audio encode + tag, control handlers, waterfall rendering</td>
+<td><code class="scope-code">static/controls.js</code></td>
+<td>WebSocket setup, tagged RX audio decode (Opus/PCM), SAB ring buffer creation, TX Worker/Worklet orchestration, control handlers, waterfall rendering</td>
 </tr>
 <tr>
 <td>MobileJS</td>
 <td>Frontend core</td>
-<td><code>static/mobile.js</code></td>
+<td><code class="scope-code">static/mobile.js</code></td>
 <td>Mobile UX, state, menus, DSP panel, frontend service hooks</td>
+</tr>
+<tr>
+<td>SABRingBuffer</td>
+<td>Frontend audio</td>
+<td><code class="scope-code">controls.js</code> (creation), <code class="scope-code">tx_capture_worklet.js</code> (producer), <code class="scope-code">tx_opus_worker.js</code> (consumer)</td>
+<td>16384-sample float32 SharedArrayBuffer ring: word[0]=write_pos (Uint32), word[1]=read_pos (Uint32), word[2+]=sample data. Lock-free SPSC via Atomics — AudioWorklet writes, Opus Worker reads, main thread never touches audio samples</td>
 </tr>
 <tr>
 <td>PTTManager</td>
 <td>Frontend safety</td>
-<td><code>static/modules/ptt_manager.js</code></td>
+<td><code class="scope-code">static/modules/ptt_manager.js</code></td>
 <td>PTT state, release ack retry, status sync</td>
 </tr>
 <tr>
 <td>TXButton</td>
 <td>Frontend safety</td>
-<td><code>static/tx_button.js</code></td>
+<td><code class="scope-code">static/tx_button.js</code></td>
 <td>Touch PTT flow, lock handling, watchdog, warm-up frames</td>
 </tr>
 <tr>
 <td>TuneCQ</td>
 <td>Frontend UX</td>
-<td><code>static/modules/tune_cq.js</code></td>
+<td><code class="scope-code">static/modules/tune_cq.js</code></td>
 <td>Tune/CQ button state and commands</td>
 </tr>
 <tr>
 <td>TXAudioEQ</td>
 <td>Frontend audio</td>
-<td><code>static/modules/tx_audio_eq.js</code></td>
+<td><code class="scope-code">static/modules/tx_audio_eq.js</code></td>
 <td>TX EQ presets (DEFAULT/MEDIUM/STRONG/RAGCHEW), preamp ×1.5, compressor 3:1, anti-alias lowpass 4.5 kHz. Gain-staged for clean SSB envelope (see AD-012).</td>
 </tr>
 <tr>
 <td>SettingsManager</td>
 <td>Frontend support</td>
-<td><code>static/modules/settings_manager.js</code></td>
+<td><code class="scope-code">static/modules/settings_manager.js</code></td>
 <td>Cookie preferences and saved frequency helpers</td>
 </tr>
 <tr>
 <td>OpusCodec</td>
 <td>Frontend audio</td>
-<td><code>static/modules/opus_codec.js</code>, <code>opus_wasm.js</code></td>
-<td>Browser-side WASM Opus encoder/decoder for TX pipeline (28 kbps, VBR, FEC, DTX)</td>
+<td><code class="scope-code">static/modules/opus_codec.js</code>, <code class="scope-code">opus_wasm.js</code></td>
+<td>Browser-side WASM Opus encoder/decoder</td>
 </tr>
 <tr>
 <td>RxWorklet</td>
 <td>Frontend audio</td>
-<td><code>static/rx_worklet_processor.js</code></td>
+<td><code class="scope-code">static/rx_worklet_processor.js</code></td>
 <td>Queue-based AudioWorklet playback processor</td>
 </tr>
 <tr>
 <td>TxCaptureWorklet</td>
 <td>Frontend audio</td>
-<td><code>static/tx_capture_worklet.js</code></td>
-<td>Dedicated-thread mic capture AudioWorklet: 48k→16k box-average downsample, 20ms Int16 frame output, ScriptProcessor fallback</td>
+<td><code class="scope-code">static/tx_capture_worklet.js</code></td>
+<td>AudioWorklet mic capture: 48k→16k box-average downsample, float32 samples → SAB ring buffer write (zero-main-thread path) or Int16 → postMessage (legacy fallback). Dedicated audio-thread, no main-thread involvement when SAB is active.</td>
+</tr>
+<tr>
+<td>TxOpusWorker</td>
+<td>Frontend audio</td>
+<td><code class="scope-code">static/tx_opus_worker.js</code></td>
+<td>Dedicated Worker thread: SAB ring buffer consumer (poll every 3 ms), Opus encoder (28 kbps CBR), owns its own <code class="scope-code">/WSaudioTX</code> WebSocket connection. Reads float32 samples from SAB, encodes 20 ms frames, sends tagged binary frames directly. Manages its own WS reconnect lifecycle.</td>
 </tr>
 <tr>
 <td>ServiceWorker</td>
 <td>Frontend support</td>
-<td><code>static/sw.js</code></td>
+<td><code class="scope-code">static/sw.js</code></td>
 <td>Static asset cache with JS/HTML bypass</td>
 </tr>
 <tr>
 <td>RestartScript</td>
 <td>Operations</td>
-<td><code>restart.sh</code></td>
-<td>Safe restart, port cleanup, log redirection</td>
-</tr>
-<tr>
-<td>StartScript</td>
-<td>Operations</td>
-<td><code>start.sh</code></td>
-<td>Simple foreground launcher with default port</td>
+<td><code class="scope-code">restart.sh</code></td>
+<td>Safe restart, cwd-matched process kill, port cleanup, foreground (<code class="scope-code">-f</code>) or background launch, log redirection</td>
 </tr>
 </tbody>
 </table>
 <h2 id="backend-component-collaboration">11.2 Backend Component Collaboration</h2>
-<pre class="text"><code>FastAPIApp.startup()
+<pre class="scope-code text"><code>FastAPIApp.startup()
+  -&gt; IQ socket pre-bound (port 50002, before device boot)
+  -&gt; IQKeepAliveThread started (dedicated OS thread, survives blocking WDSP init)
   -&gt; RadioClient.connect()
   -&gt; StreamProcessor(SpectrumProcessor, AudioDemodulator)
+  -&gt; create_task(_heartbeat_task) — 0x0018 to port 50001 every 0.5s
   -&gt; create_task(IQLoop)
 
-IQLoop
+IQLoop (RX)
   -&gt; decode IQ payload
   -&gt; StreamProcessor.feed_iq()
   -&gt; ControlWebSocket broadcast S-meter
   -&gt; SpectrumWebSocket broadcast FFT rows
-  -&gt; RXAudioWebSocket broadcast PCM
+  -&gt; RXAudioWebSocket broadcast tagged audio (Opus/PCM)
+
+IQLoop (TX — PTT active)
+  -&gt; TXPacer thread started (dedicated OS thread, 5.12 ms adaptive pacing)
+  -&gt; TXModulator.reset_mic() + reset_tx_ramp()
+  -&gt; TX keep-alive (0xFFFE) sent during TX alongside pacer
+  -&gt; Telemetry (0x1F00) processed during TX
 
 ControlWebSocket
   -&gt; RadioClient setters
   -&gt; AudioDemodulator setters
   -&gt; ControlWebSocket broadcasts</code></pre>
 <h2 id="frontend-component-collaboration">11.3 Frontend Component Collaboration</h2>
-<pre class="text"><code>index.html
-  -&gt; controls.js initializes power/control/audio sockets
-  -&gt; modules provide PTT, settings, TX EQ, tune/CQ
-  -&gt; mobile.js binds mobile-specific UI and DSP panel
-  -&gt; tx_button.js owns touch PTT behavior
+<h3 id="tx-audio-flow-sab-path-primary">11.3.1 TX Audio Flow (SAB Path — Primary)</h3>
+<pre class="scope-code text"><code>controls.js (setup only)
+  -&gt; Creates SharedArrayBuffer ring (16384 samples, ~1.024 s)
+  -&gt; Creates TxOpusWorker (Worker thread)
+  -&gt; Loads TxCaptureWorklet (AudioWorklet on audio thread)
 
-controls.js + tx_audio_eq.js + tx_capture_worklet.js
-  -&gt; MediaHandler.callback() builds the Web Audio TX EQ chain:
-     micSource → preamp(×1.5) → antiAlias(×2) → eqLow → eqMid → eqHigh →
-     midCut → presence → compressor(3:1) → makeup(×1.6) → noiseGate → gain_node →
-     AudioWorklet (tx-capture) or ScriptProcessor
-  -&gt; AudioWorklet downsamples 48k→16k, accumulates 20ms Int16 frames
-  -&gt; OpusEncoderProcessor.onWorkletFrame() tags+encodes (Opus 0x01 or PCM 0x00)
-  -&gt; wsAudioTX.send() binary frames
+TxCaptureWorklet (audio thread — producer)
+  -&gt; Mic input: 48 kHz → box-average downsample → 16 kHz float32
+  -&gt; SAB ring write: lock-free Atomics.store write_pos
+  -&gt; Zero main-thread involvement
 
-controls.js RX
+TxOpusWorker (Worker thread — consumer)
+  -&gt; SAB ring read: poll every 3 ms, Atomics.load write_pos/read_pos
+  -&gt; Batch 320 samples (20 ms) per frame
+  -&gt; Opus encode (28 kbps CBR, OpusEncoder WASM)
+  -&gt; Owns /WSaudioTX WebSocket connection
+  -&gt; Sends tagged binary frames (0x01 Opus / 0x00 PCM)
+  -&gt; Manages reconnect lifecycle independently
+
+Server (dsp.py TXModulator)
+  -&gt; TxOpusDecoder (if Opus) or Int16→float
+  -&gt; Continuous DC blocker → 300 Hz HPF → anti-alias LPF
+  -&gt; Fractional resampler → Python Hilbert SSB
+  -&gt; Drive gain (×2.8) → tanh limiter → 24-bit IQ packing
+  -&gt; Jitter-buffered queue → TXPacer → 0xFFFD to device</code></pre>
+<h3 id="tx-audio-flow-legacy-postmessage-path-fallback">11.3.2 TX Audio Flow (Legacy postMessage Path — Fallback)</h3>
+<pre class="scope-code text"><code>TxCaptureWorklet (audio thread)
+  -&gt; 48k→16k downsample, 20ms Int16 frame accumulation
+  -&gt; postMessage Int16 frame to main thread
+
+controls.js (main thread)
+  -&gt; onWorkletFrame() receives Int16 frame
+  -&gt; wsAudioTX.send() binary frame to /WSaudioTX
+
+Legacy path used when SharedArrayBuffer is unavailable (no COOP/COEP headers,
+older browsers, or iOS &lt;15.2).</code></pre>
+<h3 id="rx-audio-ui">11.3.3 RX Audio + UI</h3>
+<pre class="scope-code text"><code>controls.js RX
   -&gt; WSaudioRX receives tagged dual-codec frames
   -&gt; tag byte 0x00=PCM → decodeInt16Audio(), 0x01=Opus → WASM OpusDecoder
   -&gt; AudioContext/Worklet or ScriptProcessor playback
@@ -379,7 +411,7 @@ controls.js RX
   -&gt; updateSMeter applies asymmetric exponential smoothing (attack 0.5 / release 0.15)
   -&gt; S-meter/waterfall/status UI updates</code></pre>
 <h2 id="file-to-capability-mapping">11.4 File-to-Capability Mapping</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 44%" />
 <col style="width: 55%" />
@@ -392,57 +424,61 @@ controls.js RX
 </thead>
 <tbody>
 <tr>
-<td>HTTPS startup</td>
-<td><code>server.py</code>, <code>certs/fullchain.pem</code>, <code>certs/radio.vlsc.net.key</code></td>
+<td>HTTPS startup + COOP/COEP</td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">certs/fullchain.pem</code>, <code class="scope-code">certs/radio.vlsc.net.key</code></td>
 </tr>
 <tr>
 <td>Static UI</td>
-<td><code>static/index.html</code>, <code>static/mobile.css</code>, <code>static/mobile.js</code></td>
+<td><code class="scope-code">static/index.html</code>, <code class="scope-code">static/mobile.css</code>, <code class="scope-code">static/mobile.js</code></td>
 </tr>
 <tr>
 <td>RX audio</td>
-<td><code>server.py</code>, <code>../web_control/dsp.py</code>, <code>static/controls.js</code></td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">../web_control/dsp.py</code>, <code class="scope-code">static/controls.js</code></td>
 </tr>
 <tr>
 <td>Spectrum</td>
-<td><code>server.py</code>, <code>../web_control/dsp.py</code>, <code>static/controls.js</code> (server quantizes; <code>controls.js</code> accumulates/contrast-stretches the waterfall)</td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">../web_control/dsp.py</code>, <code class="scope-code">static/controls.js</code> (server quantizes; <code class="scope-code">controls.js</code> accumulates/contrast-stretches the waterfall)</td>
 </tr>
 <tr>
 <td>Frequency/mode/control</td>
-<td><code>server.py</code>, <code>../web_control/sunsdr_direct.py</code>, <code>static/controls.js</code>, <code>static/mobile.js</code></td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">../web_control/sunsdr_direct.py</code>, <code class="scope-code">static/controls.js</code>, <code class="scope-code">static/mobile.js</code></td>
 </tr>
 <tr>
 <td>PTT safety</td>
-<td><code>server.py</code>, <code>static/modules/ptt_manager.js</code>, <code>static/tx_button.js</code></td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">static/modules/ptt_manager.js</code>, <code class="scope-code">static/tx_button.js</code></td>
 </tr>
 <tr>
 <td>TX voice modulation</td>
-<td><code>server.py</code>, <code>../web_control/dsp.py</code> (<code>TXModulator</code>), <code>static/controls.js</code>, <code>static/tx_capture_worklet.js</code></td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">../web_control/dsp.py</code> (<code class="scope-code">TXModulator</code>, Python Hilbert SSB), <code class="scope-code">static/tx_capture_worklet.js</code> (AudioWorklet), <code class="scope-code">static/tx_opus_worker.js</code> (Opus Worker + WS), <code class="scope-code">static/controls.js</code> (SAB creation + orchestration)</td>
+</tr>
+<tr>
+<td>TX SAB ring buffer</td>
+<td><code class="scope-code">static/controls.js</code> (creation), <code class="scope-code">static/tx_capture_worklet.js</code> (producer write), <code class="scope-code">static/tx_opus_worker.js</code> (consumer read)</td>
 </tr>
 <tr>
 <td>TX power / per-band drive</td>
-<td><code>server.py</code> (<code>/api/band_power</code>), <code>../web_control/sunsdr_direct.py</code> (<code>0x0017</code>), <code>static/mobile.js</code> (Band Power panel), <code>band_power.json</code></td>
+<td><code class="scope-code">server.py</code> (<code class="scope-code">/api/band_power</code>), <code class="scope-code">../web_control/sunsdr_direct.py</code> (<code class="scope-code">0x0017</code>), <code class="scope-code">static/mobile.js</code> (Band Power panel), <code class="scope-code">band_power.json</code></td>
 </tr>
 <tr>
-<td>WDSP controls</td>
-<td><code>server.py</code>, <code>../web_control/dsp.py</code>, <code>../web_control/wdsp_wrapper.py</code>, <code>static/mobile.js</code></td>
+<td>WDSP controls (RX only)</td>
+<td><code class="scope-code">server.py</code>, <code class="scope-code">../web_control/dsp.py</code>, <code class="scope-code">../web_control/wdsp_wrapper.py</code>, <code class="scope-code">static/mobile.js</code></td>
 </tr>
 <tr>
 <td>Browser TX EQ</td>
-<td><code>static/modules/tx_audio_eq.js</code>, <code>static/controls.js</code>, <code>static/tx_capture_worklet.js</code></td>
+<td><code class="scope-code">static/modules/tx_audio_eq.js</code>, <code class="scope-code">static/controls.js</code></td>
 </tr>
 <tr>
 <td>TX gain staging</td>
-<td>AD-012, <code>../web_control/dsp.py</code> (<code>TXModulator</code>, <code>TX_DRIVE_GAIN</code>, <code>TX_IQ_PEAK</code>), <code>static/modules/tx_audio_eq.js</code> (<code>AudioTX_preamp</code>)</td>
+<td>AD-012, <code class="scope-code">../web_control/dsp.py</code> (<code class="scope-code">TXModulator</code>, <code class="scope-code">TX_DRIVE_GAIN</code>, <code class="scope-code">TX_IQ_PEAK</code>, 300 Hz HPF, DC blocker), <code class="scope-code">static/modules/tx_audio_eq.js</code> (<code class="scope-code">AudioTX_preamp</code>)</td>
 </tr>
 <tr>
 <td>Restart/ops</td>
-<td><code>restart.sh</code>, <code>start.sh</code>, <code>server.log</code></td>
+<td><code class="scope-code">restart.sh</code>, <code class="scope-code">server.log</code></td>
 </tr>
 </tbody>
 </table>
 <h2 id="component-gaps">11.5 Component Gaps</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 54%" />
 <col style="width: 45%" />
@@ -456,44 +492,47 @@ controls.js RX
 <tbody>
 <tr>
 <td>ATRWebSocketHandler</td>
-<td>Implement <code>/WSATR1000</code> for power/SWR and tuner control</td>
+<td>Implement <code class="scope-code">/WSATR1000</code> for power/SWR and tuner control</td>
 </tr>
 <tr>
-<td>CWPage/FT8Page/RecordingsPage</td>
-<td>Provide targets currently linked by menu</td>
+<td>CWPage/FT8Page</td>
+<td>Provide targets currently linked by menu (recordings page is implemented)</td>
 </tr>
 <tr>
 <td>AuthBackend</td>
-<td>Replace cookie-only callsign prompt with real server-side identity if required</td>
+<td>Upgrade the shared-password session-token auth to per-user server-side identity if multi-user is required</td>
+</tr>
+</tbody>
+</table>
+<h2 id="removed-components">11.6 Removed Components</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 57%" />
+<col style="width: 42%" />
+</colgroup>
+<thead>
+<tr>
+<th>Component</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WDSPTXProcessor (WDSP TX C-chain)</td>
+<td>Removed. TX modulation is exclusively Python Hilbert SSB — no WDSP processing in the TX path. WDSP is RX-only (IQ-rate NR2/ANF/SNB + audio-rate fallback). The TX C-chain was never functional in this codebase and added unnecessary complexity to the architecture.</td>
 </tr>
 </tbody>
 </table>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
-    <div class="container">
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project · SDD V3.4 · <a href="https://github.com/cheenle/sunsdr" style="color:var(--accent);">GitHub</a></p>
-        </div>
+<footer class="scope-footer" style="border-top:1px solid var(--scope-border);background:var(--scope-surface);padding:2rem 0;margin-top:0;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <p style="margin:0;color:var(--scope-text-muted);font-size:0.875rem;">&copy; 2026 SunMRRC Project · SDD V3.4</p>
+        <a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener" style="color:var(--scope-primary);"><i class="fab fa-github"></i> GitHub</a>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>
