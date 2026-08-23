@@ -3,360 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="SunMRRC — SunSDR2 DX Mobile Radio Control. Web-based SDR control with real-time waterfall, dual-codec audio, and TX voice modulation. V1.0 Production Release.">
-    <meta name="keywords" content="SunSDR2 DX, SDR, Remote Control, HAM Radio, WebSDR, Shortwave, Amateur Radio">
+    <meta name="description" content="SunMRRC — SunSDR2 DX server route in the VLSC ecosystem. FastAPI backend with IQ demodulation, real-time FFT waterfall, and stable WebSocket APIs.">
+    <meta name="keywords" content="SunSDR2 DX, SunMRRC, SDR remote control, FastAPI, WebSocket, IQ demodulation, HAM radio">
     <meta name="author" content="BG1SB">
     <meta name="theme-color" content="#000000">
 
-    <title>SunMRRC — SunSDR2 DX Mobile Radio Control</title>
+    <title>SunMRRC — SunSDR2 DX Server | VLSC Ecosystem</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/octen.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2322d3ee' width='100' height='100' rx='20'/><text y='.9em' x='50%' text-anchor='middle' font-size='60'>📡</text></svg>">
-</head>
-<body>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<!-- Navigation -->
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="#" class="logo">
-            <span class="logo-icon">📡</span>
-            <span>SunMRRC</span>
-        </a>
-        <ul class="nav-links">
-            <li><a href="#features">Features</a></li>
-            <li><a href="#architecture">Architecture</a></li>
-            <li><a href="#quickstart">Quick Start</a></li>
-            <li><a href="sdd/index.html">Docs</a></li>
-            <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener">
-                <i class="fab fa-github"></i> GitHub
-            </a></li>
-        </ul>
-        <div class="nav-actions">
-            <a href="zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
-        </div>
+    <link rel="stylesheet" href="css/scope.css?v=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2300ff41' width='100' height='100' rx='20'/><text y='.9em' x='50%' text-anchor='middle' font-size='60'>📡</text></svg>">
+</head>
+<body data-site="sunmrrc" class="fx-grid">
+
+<nav class="scope-site-nav">
+  <div class="container scope-site-nav-inner">
+    <a href="#" class="scope-site-brand fx-glow">SunMRRC</a>
+    <ul class="scope-site-nav-links">
+      <li><a href="#ecosystem">Ecosystem</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="sdd/index.html">SDD</a></li>
+      <li><a href="/mrrc_modern/">Modern</a></li>
+      <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i></a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <a href="zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+      <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
     </div>
+  </div>
 </nav>
 
-<!-- Hero -->
-<section class="hero">
-    <div class="hero-content">
-        <div class="hero-badge">
-            <i class="fas fa-satellite-dish"></i>
-            <span>V1.0 · Production Ready</span>
-        </div>
-        <h1 class="hero-title">
-            Your SunSDR2 DX<br>
-            <span class="gradient">Anywhere</span>
-        </h1>
-        <p class="hero-subtitle">
-            SunMRRC is a mobile-first web control server for the SunSDR2 DX transceiver.
-            HTTPS/WSS secure access from any browser — real-time waterfall spectrum, tagged
-            dual-codec Opus/PCM audio, TX SSB voice modulation, device DRIVE power control,
-            and full telemetry. Optimized for iPhone/iOS Safari.
+<section class="scope-hero" style="position:relative;padding:calc(var(--scope-gn-h) + 6rem) 0 6rem;background:radial-gradient(circle at 70% 30%, rgba(0,255,65,0.08), transparent 40%), var(--scope-bg);overflow:hidden;">
+  <div class="container" style="position:relative;z-index:1;">
+    <div class="section-label">VLSC Ecosystem · SunSDR2 DX</div>
+    <h1 class="fx-glow" style="font-family:var(--scope-font-mono);font-size:clamp(2.2rem,6vw,4rem);font-weight:700;margin:0 0 1rem;line-height:1.1;">
+      SunSDR2 DX<br>Remote Control Server
+    </h1>
+    <p style="color:var(--scope-text-2);font-size:1.15rem;max-width:640px;margin:0 0 2rem;">
+      SunMRRC is the SunSDR2 DX server route in the VLSC remote radio ecosystem. Server-side IQ demodulation,
+      real-time 512-bin FFT waterfall, dual-codec Opus/PCM audio, TX SSB voice modulation via Hilbert transform,
+      and 5 WebSocket endpoints for web and native clients.
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:2.5rem;">
+      <a href="https://github.com/cheenle/sunsdr" class="scope-btn scope-btn-primary" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a>
+      <a href="#features" class="scope-btn"><i class="fas fa-arrow-down"></i> Explore Features</a>
+      <a href="#community" class="scope-btn"><i class="fas fa-qrcode"></i> Join WeChat Group</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;max-width:720px;">
+      <div class="scope-card" style="text-align:center;padding:1rem;">
+        <div style="font-family:var(--scope-font-mono);font-size:1.5rem;font-weight:700;color:var(--scope-primary);">5</div>
+        <div style="color:var(--scope-text-2);font-size:0.8rem;">WebSocket Endpoints</div>
+      </div>
+      <div class="scope-card" style="text-align:center;padding:1rem;">
+        <div style="font-family:var(--scope-font-mono);font-size:1.5rem;font-weight:700;color:var(--scope-primary);">4 days</div>
+        <div style="color:var(--scope-text-2);font-size:0.8rem;">First Commit → V1.0</div>
+      </div>
+      <div class="scope-card" style="text-align:center;padding:1rem;">
+        <div style="font-family:var(--scope-font-mono);font-size:1.5rem;font-weight:700;color:var(--scope-primary);">512-bin</div>
+        <div style="color:var(--scope-text-2);font-size:0.8rem;">IQ FFT Waterfall</div>
+      </div>
+      <div class="scope-card" style="text-align:center;padding:1rem;">
+        <div style="font-family:var(--scope-font-mono);font-size:1.5rem;font-weight:700;color:var(--scope-primary);">0</div>
+        <div style="color:var(--scope-text-2);font-size:0.8rem;">Server Changes for iOS</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="scope-section scope-section-alt" id="ecosystem">
+  <div class="container">
+    <div class="section-label">Ecosystem</div>
+    <h2 class="section-title">Where SunMRRC Fits</h2>
+    <p class="section-subtitle">Use SunMRRC when your hardware is SunSDR2 DX and you need server-side UDP IQ demodulation with stable client APIs.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+      <a href="/mrrc/" class="scope-card" style="text-decoration:none;">
+        <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">MRRC</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">General CAT HF route<br><small>Hamlib/rigctld based</small></p>
+      </a>
+      <a href="/mrrc_ft710/" class="scope-card" style="text-decoration:none;">
+        <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">FT-710</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">FT-710 direct USB route<br><small>CAT + FT4222 SPI</small></p>
+      </a>
+      <a href="/sunmrrc/" class="scope-card" style="text-decoration:none;">
+        <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">SunMRRC</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">SunSDR2 DX route<br><small>UDP IQ + server demodulation</small></p>
+      </a>
+      <a href="/sunsdrmobile/" class="scope-card" style="text-decoration:none;">
+        <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">iOS</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">SunsdrMobile route<br><small>Native iPhone client</small></p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="scope-section" id="features">
+  <div class="container">
+    <div class="section-label">Features</div>
+    <h2 class="section-title">Complete SDR Server</h2>
+    <p class="section-subtitle">From UDP IQ streaming to browser-based FFT waterfall — every layer reverse-engineered and rebuilt.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;">
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-microchip" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">IQ Demodulation</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0 0 0.75rem;">Server-side IQ demodulation via numpy/scipy. DDC + fractional resampler + overlap-save Hilbert SSB modulator. WFM hi-fi mode with cubic resampling.</p>
+        <ul style="color:var(--scope-text-2);font-size:0.85rem;margin:0;padding-left:1.25rem;">
+          <li>numpy/scipy DSP pipeline</li>
+          <li>Hilbert SSB modulator</li>
+          <li>48kHz RX audio pipeline</li>
+        </ul>
+      </div>
+
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-chart-bar" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">512-bin FFT Waterfall</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0 0 0.75rem;">Real-time spectrum from IQ samples. 512-bin FFT with dynamic frequency scale (39k/78k/156k/312k IQ bandwidth). Exact sample rate lookup for pixel alignment.</p>
+        <ul style="color:var(--scope-text-2);font-size:0.85rem;margin:0;padding-left:1.25rem;">
+          <li>39k-312k IQ bandwidth options</li>
+          <li>xScale = W/n pixel alignment</li>
+          <li>Multi-client state sync</li>
+        </ul>
+      </div>
+
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-headphones" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">Dual-Codec Audio</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0 0 0.75rem;">Tagged dual-codec transport: Opus 64kbps + Int16 PCM fallback. WDSP NR2/ANF/SNB at IQ level (before demodulation). Full WDSP settings panel with persistence.</p>
+        <ul style="color:var(--scope-text-2);font-size:0.85rem;margin:0;padding-left:1.25rem;">
+          <li>Opus/PCM tagged binary transport</li>
+          <li>WDSP IQ-level processing</li>
+          <li>NR2/AGC/NB/ANF panel + persistence</li>
+        </ul>
+      </div>
+
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-network-wired" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">5 WebSocket Endpoints</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0 0 0.75rem;">/WSCTRX (bidirectional cmd:val), /WSaudioRX (tagged Opus/PCM), /WSaudioTX (mic uplink), /WSspectrum (512-bin binary), /WSATR1000 (tuner). Protocol-as-contract enabled SunsdrMobile with zero server changes.</p>
+        <ul style="color:var(--scope-text-2);font-size:0.85rem;margin:0;padding-left:1.25rem;">
+          <li>cmd:val JSON protocol</li>
+          <li>Tagged dual-codec audio transport</li>
+          <li>Stable contract → SunsdrMobile V1.0 in single commit</li>
+        </ul>
+      </div>
+
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-bolt" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">Reverse-Engineered Protocol</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0 0 0.75rem;">100% unknown protocol surface. 40+ Wireshark sessions to decode 12 command types, 30-packet boot sequence, and proprietary binary UDP protocol. PROTOCOL.md with 22 sections.</p>
+        <ul style="color:var(--scope-text-2);font-size:0.85rem;margin:0;padding-left:1.25rem;">
+          <li>12 decoded command types</li>
+          <li>PROTOCOL.md (22 sections)</li>
+          <li>0x0017 DRIVE + 0x1F00 telemetry</li>
+        </ul>
+      </div>
+
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-shield-halved" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">8 MRRC Assets Reused</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0 0 0.75rem;">PTT safety model (ACK × 3, watchdog), WDSP integration pattern, multi-instance architecture, design tokens, AudioWorklet RX pipeline — inherited from MRRC, not re-solved.</p>
+        <ul style="color:var(--scope-text-2);font-size:0.85rem;margin:0;padding-left:1.25rem;">
+          <li>PTT ACK × 3 + watchdog + touch-move release</li>
+          <li>WDSP integration + multi-instance architecture</li>
+          <li>COEP credentialless for SharedArrayBuffer</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="scope-section scope-section-alt" id="architecture">
+  <div class="container">
+    <div class="section-label">Documentation</div>
+    <h2 class="section-title">Software Design Description</h2>
+    <p class="section-subtitle">15-chapter SDD covering business direction, system context, architecture decisions, service model, component model, operational model, and PTT safety architecture.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:2rem;">
+      <div class="scope-card" style="text-align:center;">
+        <div style="font-family:var(--scope-font-mono);font-size:2rem;font-weight:700;color:var(--scope-primary);">15</div>
+        <div style="color:var(--scope-text-2);font-size:0.85rem;">SDD Chapters<br><small>Verified against live code</small></div>
+      </div>
+      <div class="scope-card" style="text-align:center;">
+        <div style="font-family:var(--scope-font-mono);font-size:2rem;font-weight:700;color:var(--scope-primary);">40+</div>
+        <div style="color:var(--scope-text-2);font-size:0.85rem;">Git Commits<br><small>Jun 21 – Jul 3, 2026</small></div>
+      </div>
+      <div class="scope-card" style="text-align:center;">
+        <div style="font-family:var(--scope-font-mono);font-size:2rem;font-weight:700;color:var(--scope-primary);">4 days</div>
+        <div style="color:var(--scope-text-2);font-size:0.85rem;">V1.0 Speed<br><small>First commit → production</small></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center;">
+      <a href="sdd/index.html" class="scope-btn scope-btn-primary"><i class="fas fa-book"></i> Read the SDD</a>
+      <a href="https://github.com/cheenle/sunsdr" class="scope-btn" target="_blank" rel="noopener"><i class="fab fa-github"></i> View Source</a>
+    </div>
+  </div>
+</section>
+
+<section class="scope-section" id="community">
+  <div class="container" style="text-align:center;">
+    <div class="section-label">Community</div>
+    <h2 class="section-title">Join the Conversation</h2>
+    <p class="section-subtitle" style="margin-left:auto;margin-right:auto;">Scan the QR code with WeChat to join the MRRC-HAM group.</p>
+    <div class="scope-card" style="display:inline-block;padding:1.25rem;max-width:280px;">
+      <img src="images/qr-wechat-group.jpg" alt="WeChat QR code for MRRC-HAM group" style="border-radius:var(--scope-radius);">
+    </div>
+    <p style="color:var(--scope-text-muted);font-size:0.85rem;margin-top:1rem;">QR code valid until Aug 29, 2026. Will be updated when refreshed.</p>
+  </div>
+</section>
+
+<footer class="scope-section" style="padding:2.5rem 0;border-top:1px solid var(--scope-border);">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:2rem;margin-bottom:2rem;">
+      <div>
+        <h4 style="font-family:var(--scope-font-mono);margin:0 0 0.75rem;color:var(--scope-text);">SunMRRC</h4>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">
+          SunSDR2 DX Remote Control Server<br>
+          Reverse-engineered · Rebuilt · Open Source<br>
+          V1.0 · GPLv3 License
         </p>
-        <div class="hero-actions">
-            <a href="https://radio.vlsc.net:8889" class="btn btn-primary btn-large" target="_blank">
-                <i class="fas fa-play"></i> Try Live
-            </a>
-            <a href="https://github.com/cheenle/sunsdr" class="btn btn-secondary btn-large" target="_blank" rel="noopener">
-                <i class="fab fa-github"></i> Source
-            </a>
-        </div>
-        <div class="hero-stats">
-            <div class="stat-item">
-                <span class="stat-value">~18 kbps</span>
-                <span class="stat-label">Opus Audio</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">512 bins</span>
-                <span class="stat-label">Waterfall FFT</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">12 W</span>
-                <span class="stat-label">Tune Output</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">10+ ADs</span>
-                <span class="stat-label">Design Docs</span>
-            </div>
-        </div>
+      </div>
+      <div>
+        <h4 style="font-family:var(--scope-font-mono);margin:0 0 0.75rem;color:var(--scope-text);">Links</h4>
+        <ul style="list-style:none;margin:0;padding:0;font-size:0.9rem;">
+          <li><a href="#">Home</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#architecture">Architecture</a></li>
+          <li><a href="sdd/index.html">SDD</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="font-family:var(--scope-font-mono);margin:0 0 0.75rem;color:var(--scope-text);">Resources</h4>
+        <ul style="list-style:none;margin:0;padding:0;font-size:0.9rem;">
+          <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="/sunsdrmobile/">SunsdrMobile iOS App</a></li>
+          <li><a href="https://radio.vlsc.net:8889" target="_blank" rel="noopener">Live System</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="font-family:var(--scope-font-mono);margin:0 0 0.75rem;color:var(--scope-text);">Language</h4>
+        <ul style="list-style:none;margin:0;padding:0;font-size:0.9rem;">
+          <li><a href="zh/index.html">中文</a></li>
+        </ul>
+      </div>
     </div>
-</section>
-
-<!-- Features -->
-<section class="section" id="features">
-    <div class="container">
-        <div class="section-header">
-            <span class="section-label">Core Features</span>
-            <h2 class="section-title">Built for SunSDR2 DX</h2>
-        </div>
-
-        <div class="features-grid">
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-mobile-alt"></i></div>
-                <h3 class="card-title">Mobile First</h3>
-                <p class="card-text">
-                    Touch-optimized UI with safe-area adaptation, PWA manifest, and service worker.
-                    HTTPS/WSS secure context required for iOS Safari microphone and AudioContext.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-water"></i></div>
-                <h3 class="card-title">Real-Time Waterfall</h3>
-                <p class="card-text">
-                    512-bin FFT spectrum at ~38 Hz. Adaptive per-row noise floor (30th percentile),
-                    blue-sea baseline bias, contrast gain stretching, and black→blue→cyan→yellow→red colour ramp.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-headphones"></i></div>
-                <h3 class="card-title">Dual-Codec RX Audio</h3>
-                <p class="card-text">
-                    Tagged dual-codec transport: <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">0x00</code> = Int16 PCM (~256 kbps),
-                    <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">0x01</code> = Opus 16 kHz mono (~18-24 kbps, >10× bandwidth savings).
-                    Runtime-switchable via Audio Codec menu. Falls back to PCM if libopus unavailable.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-microphone-alt"></i></div>
-                <h3 class="card-title">TX Voice Modulation</h3>
-                <p class="card-text">
-                    Browser microphone → AudioWorklet 48k→16k downsample → Opus/PCM tagged uplink →
-                    fractional resampler → overlap-save Hilbert SSB (USB/LSB) → 24-bit IQ → 0xFFFD TX stream.
-                    On-air verified: Tune ~12 W, SSB voice 30–40 W PEP.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-bolt"></i></div>
-                <h3 class="card-title">Per-Band TX Power</h3>
-                <p class="card-text">
-                    Device DRIVE command (<code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">0x0017</code>) with square-root taper.
-                    Drive byte in trailing word. Per-band power panel → <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">/api/band_power</code> →
-                    <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">band_power.json</code>. Re-sent on every QSY and PTT assert.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-chart-line"></i></div>
-                <h3 class="card-title">TX Telemetry (0x1F00)</h3>
-                <p class="card-text">
-                    Device sends 0x1F00 (34B) continuously in RX and TX.
-                    off30 f32 = forward watts (PEP, direct float — no fit needed),
-                    off16 u16/10 = supply volts, off18 f32 = PA temp °C.
-                    Device has NO reverse-power field — use external tuner for SWR.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented (corrected 2026-06-25)</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-shield-alt"></i></div>
-                <h3 class="card-title">PTT Safety System</h3>
-                <p class="card-text">
-                    ACK retry with 3× redundancy, backup <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">s:</code> force-RX command,
-                    frontend watchdog timer, backend forced-RX handler on stop.
-                    Touch-move auto-release on mobile.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-sliders-h"></i></div>
-                <h3 class="card-title">WDSP Noise Reduction</h3>
-                <p class="card-text">
-                    Optional libwdsp.dylib integration: NR2 spectral noise reduction, AGC (4 modes),
-                    ANF auto-notch, NB noise blanker. Runtime-toggled — RX works without it.
-                    UI queries availability via <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">getWDSPStatus:</code>.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented (optional)</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-wave-square"></i></div>
-                <h3 class="card-title">Sample Rate Selector</h3>
-                <p class="card-text">
-                    IQ bandwidth: 39 / 78 / 156 / 312 kHz. Set via 0x0001 HW_INIT word[11] = rate index.
-                    Full re-boot sequence on rate change. Frontend menu + backend <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">setSampleRate:</code>.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-
-            <article class="card">
-                <div class="card-icon"><i class="fas fa-microchip"></i></div>
-                <h3 class="card-title">ATT / Preamp Control</h3>
-                <p class="card-text">
-                    Hardware attenuator: 0=-20dB, 1=-10dB, 2=0dB, 3=+10dB.
-                    Memory channels with JSON persistence. AGC, filter, and mode controls
-                    via <code style="background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;">/WSCTRX</code> command protocol.
-                </p>
-                <span class="card-status ok"><i class="fas fa-check-circle"></i> Implemented</span>
-            </article>
-        </div>
+    <div style="border-top:1px solid var(--scope-border);padding-top:1.5rem;text-align:center;color:var(--scope-text-muted);font-size:0.85rem;">
+      <p style="margin:0;">&copy; 2026 SunMRRC Project. Open Source under GPLv3 License. · SunSDR2 DX is a product of <a href="https://eesdr.com/">Expert Electronics</a>.</p>
     </div>
-</section>
-
-<!-- Architecture -->
-<section class="section" id="architecture" style="background: var(--bg-secondary);">
-    <div class="container">
-        <div class="section-header">
-            <span class="section-label">System Architecture</span>
-            <h2 class="section-title">How It Works</h2>
-        </div>
-
-        <div class="arch-diagram">
-<span class="dim">┌─────────────────────────────────────────────────────────┐</span>
-<span class="dim">│</span>  <span class="hl">iPhone / Desktop Browser</span>                                <span class="dim">│</span>
-<span class="dim">│</span>  index.html · controls.js · mobile.js · tx_button.js    <span class="dim">│</span>
-<span class="dim">│</span>  Web Audio API · Opus WASM · AudioWorklet · Canvas       <span class="dim">│</span>
-<span class="dim">│</span>  TX EQ (DEFAULT/MEDIUM/STRONG/RAGCHEW) · PTT Safety     <span class="dim">│</span>
-<span class="dim">└────────────┬────────────────────┬───────────────────────┘</span>
-<span class="dim">             │</span>  HTTPS/WSS       <span class="dim">│</span>
-<span class="dim">     ┌───────┴────────────────────┴───────┐</span>
-<span class="dim">     │</span>  <span class="hl">FastAPI / Uvicorn</span> (sunmrrc/server.py)  <span class="dim">│</span>
-<span class="dim">     │</span>  /WSCTRX  ·  /WSaudioRX  ·  /WSaudioTX       <span class="dim">│</span>
-<span class="dim">     │</span>  /WSspectrum  ·  /WSATR1000  ·  /api/*        <span class="dim">│</span>
-<span class="dim">     │</span>  Auth middleware · TLS · TX Pacer thread       <span class="dim">│</span>
-<span class="dim">     └───────┬────────────────────┬───────┘</span>
-<span class="dim">             │</span>  imports          <span class="dim">│</span>  UDP
-<span class="dim">     ┌───────┴────────┐    ┌──────┴──────────┐</span>
-<span class="dim">     │</span>  web_control/    <span class="dim">│    │</span>  <span class="hl">SunSDR2 DX</span>       <span class="dim">│</span>
-<span class="dim">     │</span>  sunsdr_direct   <span class="dim">│    │</span>  Ctrl :50001     <span class="dim">│</span>
-<span class="dim">     │</span>  dsp.py          <span class="dim">│    │</span>  IQ   :50002     <span class="dim">│</span>
-<span class="dim">     │</span>  opus_rx.py      <span class="dim">│    │</span>  192.168.16.200  <span class="dim">│</span>
-<span class="dim">     │</span>  wdsp_wrapper    <span class="dim">│    │</span>  DRIVE(0x0017)   <span class="dim">│</span>
-<span class="dim">     └────────────────┘    │</span>  Telemetry 0x1F00<span class="dim">│</span>
-<span class="dim">                            └─────────────────┘</span>
-        </div>
-
-        <div style="margin-top: 2rem; text-align: center; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-            <a href="sdd/index.html" class="btn btn-secondary">
-                <i class="fas fa-book"></i> SDD Design Docs (V3.4)
-            </a>
-            <a href="sdd/SunMRRC-Architecture-SDD-V3.4.pptx" class="btn btn-secondary">
-                <i class="fas fa-file-powerpoint"></i> Download PPTX (13 Slides)
-            </a>
-            <a href="sdd/diagrams/system-architecture.svg" class="btn btn-secondary" target="_blank">
-                <i class="fas fa-project-diagram"></i> SVG Architecture Diagram
-            </a>
-            <a href="https://github.com/cheenle/sunsdr/blob/main/SDD/08-architecture-decisions.md" class="btn btn-secondary" target="_blank">
-                <i class="fas fa-check-circle"></i> Architecture Decisions (12 ADs)
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- Quick Start -->
-<section class="section" id="quickstart">
-    <div class="container">
-        <div class="section-header">
-            <span class="section-label">Quick Start</span>
-            <h2 class="section-title">Deploy in 5 Minutes</h2>
-        </div>
-        <div style="max-width: 640px; margin: 0 auto;">
-            <div class="arch-diagram" style="white-space: normal; line-height: 1.8;">
-<span class="dim"># 1. Clone &amp; install dependencies</span>
-git clone https://github.com/cheenle/sunsdr.git
-<span class="hl">cd</span> sunmrrc
-../venv/bin/pip install fastapi uvicorn numpy scipy
-
-<span class="dim"># 2. Place TLS certs (or use DISABLE_SSL=1 for HTTP dev)</span>
-<span class="dim">#    certs/fullchain.pem + certs/radio.vlsc.net.key</span>
-
-<span class="dim"># 3. Start</span>
-./restart.sh               <span class="dim"># background, https://localhost:8889</span>
-WEB_PORT=8080 ./restart.sh  <span class="dim"># custom port</span>
-./restart.sh -f              <span class="dim"># foreground (live logs)</span>
-
-<span class="dim"># 4. Open in browser</span>
-<span class="hl">https://radio.vlsc.net:8889</span>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- CTA -->
-<section class="section section-cta">
-    <div class="container" style="text-align: center;">
-        <h2 class="section-title" style="margin-bottom: 1rem;">Ready to Go?</h2>
-        <p class="section-subtitle" style="margin-bottom: 3rem;">
-            V1.0 production release. SDD V3.4 baseline, 12 architecture decisions, 3 SVG system diagrams, full protocol documentation.
-        </p>
-        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-            <a href="https://radio.vlsc.net:8889" class="btn btn-primary btn-large" target="_blank">
-                <i class="fas fa-play"></i> Try Live
-            </a>
-            <a href="https://github.com/cheenle/sunsdr" class="btn btn-secondary btn-large" target="_blank">
-                <i class="fab fa-github"></i> GitHub
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- Footer -->
-<footer class="footer">
-    <div class="container">
-        <div class="footer-grid">
-            <div class="footer-section">
-                <h4>SunMRRC</h4>
-                <p>
-                    SunSDR2 DX Mobile Radio Control<br>
-                    Your SunSDR2 DX, Anywhere<br>
-                    V1.0 · SDD V3.4 · GPL-3.0
-                </p>
-            </div>
-            <div class="footer-section">
-                <h4>Links</h4>
-                <ul>
-                    <li><a href="#">Home</a></li>
-                    <li><a href="#features">Features</a></li>
-                    <li><a href="#architecture">Architecture</a></li>
-                    <li><a href="#quickstart">Quick Start</a></li>
-                </ul>
-            </div>
-            <div class="footer-section">
-                <h4>Resources</h4>
-                <ul>
-                    <li><a href="https://github.com/cheenle/sunsdr" target="_blank">GitHub</a></li>
-                    <li><a href="https://github.com/cheenle/sunsdr/blob/main/PROTOCOL.md" target="_blank">Protocol Docs</a></li>
-                    <li><a href="https://github.com/cheenle/sunsdr/tree/main/SDD" target="_blank">SDD Design Docs</a></li>
-                    <li><a href="https://radio.vlsc.net:8889" target="_blank">Live System</a></li>
-                </ul>
-            </div>
-        </div>
-        <div class="footer-bottom">
-            <p>&copy; 2026 SunMRRC Project. Open Source under GPL-3.0 License. · SunSDR2 DX is a product of <a href="https://eesdr.com/" style="color:var(--accent);">Expert Electronics</a>.</p>
-        </div>
-    </div>
+  </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
+<script src="js/scope.js?v=1" defer></script>
 </body>
 </html>
