@@ -4,6 +4,19 @@
 
 set -e
 
+# ── Merged guard ───────────────────────────────────────────────────────────
+# 2026-09-12: this app became SunMRRC's native iOS client. The page now ships
+# with the sunmrrc site at /sunmrrc/ios/, /sunsdrmobile/ 301-redirects there,
+# and the server directory has been removed. Deploying the standalone site
+# would resurrect a page nothing links to.
+echo "This site was merged into SunMRRC on 2026-09-12."
+echo "  Live page: https://www.vlsc.net/sunmrrc/ios/"
+echo ""
+echo "Deployment from here is disabled; the page ships with the sunmrrc site."
+exit 1
+# ──────────────────────────────────────────────────────────────────────────
+
+
 # Configuration
 LOCAL_WEBSITE_DIR="/Users/cheenle/HAM/sunsdr/SunsdrMobile/website"
 REMOTE_HOST="www.vlsc.net"
