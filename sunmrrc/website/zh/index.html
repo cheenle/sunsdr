@@ -28,6 +28,7 @@
       <li><a href="#ecosystem">生态</a></li>
       <li><a href="#features">功能</a></li>
       <li><a href="#architecture">架构</a></li>
+      <li><a href="#ios">iOS</a></li>
       <li><a href="../sdd/index.html">SDD</a></li>
       <li><a href="/mrrc_modern/">Modern</a></li>
       <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i></a></li>
@@ -85,7 +86,7 @@
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">MRRC</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">通用 CAT HF 路线<br><small>基于 Hamlib/rigctld</small></p>
       </a>
-      <a href="/mrrc_ft710/" class="scope-card" style="text-decoration:none;">
+      <a href="/mrrc_modern/" class="scope-card" style="text-decoration:none;">
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">FT-710</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">FT-710 直连 USB 路线<br><small>CAT + FT4222 SPI</small></p>
       </a>
@@ -93,7 +94,7 @@
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">SunMRRC</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">SunSDR2 DX 路线<br><small>UDP IQ + 服务端解调</small></p>
       </a>
-      <a href="/sunsdrmobile/" class="scope-card" style="text-decoration:none;">
+      <a href="ios/" class="scope-card" style="text-decoration:none;">
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">iOS</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">SunsdrMobile 路线<br><small>原生 iPhone 客户端</small></p>
       </a>
@@ -205,6 +206,35 @@
   </div>
 </section>
 
+<section class="scope-section" id="ios">
+  <div class="container">
+    <div class="section-label">iOS 客户端</div>
+    <h2 class="section-title">它是一个原生 app，不是第二个产品</h2>
+    <p class="section-subtitle">SunsdrMobile 是本服务端的原生 iOS 客户端。它打开的是浏览器所用的同四条 WebSocket 连接——控制、RX 音频、TX 音频、频谱——只是用 SwiftUI 而不是 HTML 渲染。</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;">
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-mobile-screen-button" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">同一协议，原生客户端</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">四条 WebSocket 通道，一个服务端。它不是服务端的分支，而是它的第二个前端——所以两者现在同处一个仓库。</p>
+      </div>
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-wave-square" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">真机纪律</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">App Store 上架与每一条实机音频路径的判断都留在人手里。模拟器输出永远不会被当作上机证据——本生态所有声明的同一规则。</p>
+      </div>
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-code-branch" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">同一个仓库</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">自 2026-09-12 起，app 位于本项目仓库的 <code>SunsdrMobile/</code>，完整提交历史已导入。它不再作为独立项目被跟踪。</p>
+      </div>
+    </div>
+    <div style="margin-top:2rem;">
+      <a href="ios/" class="scope-btn scope-btn-primary">打开 iOS 页面</a>
+    </div>
+  </div>
+</section>
+
+
 <section class="scope-section" id="community">
   <div class="container" style="text-align:center;">
     <div class="section-label">社区</div>
@@ -266,7 +296,7 @@
         <h4 style="font-family:var(--scope-font-mono);margin:0 0 0.75rem;color:var(--scope-text);">资源</h4>
         <ul style="list-style:none;margin:0;padding:0;font-size:0.9rem;">
           <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener">GitHub</a></li>
-          <li><a href="/sunsdrmobile/">SunsdrMobile iOS 应用</a></li>
+          <li><a href="ios/">SunsdrMobile iOS 应用</a></li>
           <li><a href="https://radio.vlsc.net:8889" target="_blank" rel="noopener">在线系统</a></li>
         </ul>
       </div>

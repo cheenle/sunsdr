@@ -28,6 +28,7 @@
       <li><a href="#ecosystem">Ecosystem</a></li>
       <li><a href="#features">Features</a></li>
       <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#ios">iOS</a></li>
       <li><a href="sdd/index.html">SDD</a></li>
       <li><a href="/mrrc_modern/">Modern</a></li>
       <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener"><i class="fab fa-github"></i></a></li>
@@ -86,7 +87,7 @@
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">MRRC</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">General CAT HF route<br><small>Hamlib/rigctld based</small></p>
       </a>
-      <a href="/mrrc_ft710/" class="scope-card" style="text-decoration:none;">
+      <a href="/mrrc_modern/" class="scope-card" style="text-decoration:none;">
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">FT-710</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">FT-710 direct USB route<br><small>CAT + FT4222 SPI</small></p>
       </a>
@@ -94,7 +95,7 @@
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">SunMRRC</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">SunSDR2 DX route<br><small>UDP IQ + server demodulation</small></p>
       </a>
-      <a href="/sunsdrmobile/" class="scope-card" style="text-decoration:none;">
+      <a href="ios/" class="scope-card" style="text-decoration:none;">
         <h3 style="margin:0 0 0.5rem;color:var(--scope-primary);">iOS</h3>
         <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">SunsdrMobile route<br><small>Native iPhone client</small></p>
       </a>
@@ -206,6 +207,35 @@
   </div>
 </section>
 
+<section class="scope-section" id="ios">
+  <div class="container">
+    <div class="section-label">iOS Client</div>
+    <h2 class="section-title">A native app, not a second product</h2>
+    <p class="section-subtitle">SunsdrMobile is this server's native iOS client. It opens the same four WebSocket connections the browser does — ctrl, RX audio, TX audio and spectrum — and renders them in SwiftUI instead of HTML.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;">
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-mobile-screen-button" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">Same protocol, native client</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">Four WebSocket channels, one server. The app is not a fork of the server — it is a second front end for it, which is why the two now live in one repository.</p>
+      </div>
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-wave-square" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">Real-device discipline</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">App Store submission and every audio-path judgement on a real handset stay with a human. Simulator output is never presented as on-air evidence — the same rule that governs every claim in this ecosystem.</p>
+      </div>
+      <div class="scope-card scope-reveal">
+        <i class="fas fa-code-branch" style="color:var(--scope-primary);font-size:1.5rem;margin-bottom:0.75rem;"></i>
+        <h3 style="margin:0 0 0.5rem;">One repository</h3>
+        <p style="color:var(--scope-text-2);font-size:0.9rem;margin:0;">As of 2026-09-12 the app lives at <code>SunsdrMobile/</code> inside this project's repository, with its full commit history imported. It is no longer tracked as a separate project.</p>
+      </div>
+    </div>
+    <div style="margin-top:2rem;">
+      <a href="ios/" class="scope-btn scope-btn-primary">Open the iOS app page</a>
+    </div>
+  </div>
+</section>
+
+
 <section class="scope-section" id="community">
   <div class="container" style="text-align:center;">
     <div class="section-label">Community</div>
@@ -267,7 +297,7 @@
         <h4 style="font-family:var(--scope-font-mono);margin:0 0 0.75rem;color:var(--scope-text);">Resources</h4>
         <ul style="list-style:none;margin:0;padding:0;font-size:0.9rem;">
           <li><a href="https://github.com/cheenle/sunsdr" target="_blank" rel="noopener">GitHub</a></li>
-          <li><a href="/sunsdrmobile/">SunsdrMobile iOS App</a></li>
+          <li><a href="ios/">SunsdrMobile iOS App</a></li>
           <li><a href="https://radio.vlsc.net:8889" target="_blank" rel="noopener">Live System</a></li>
         </ul>
       </div>
