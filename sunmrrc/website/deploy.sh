@@ -59,7 +59,13 @@ echo ""
 # Create deployment package
 echo "Creating deployment package..."
 DEPLOY_PACKAGE="/tmp/sunmrrc_website_$(date +%Y%m%d_%H%M%S).tar.gz"
-tar -czf "$DEPLOY_PACKAGE" -C "$LOCAL_WEBSITE_DIR" .
+# Build-time tooling must not be in the package at all: the DocumentRoot is
+# world-readable. Until 2026-09-13 this tar excluded nothing, so /sunmrrc/deploy.sh
+# and /sunmrrc/build_sdd.py both served HTTP 200.
+tar -czf "$DEPLOY_PACKAGE" \
+    --exclude='deploy.sh' --exclude='build_sdd.py' \
+    --exclude='.DS_Store' --exclude='__pycache__' \
+    -C "$LOCAL_WEBSITE_DIR" .
 echo -e "${GREEN}✓${NC} Package created: $DEPLOY_PACKAGE"
 echo ""
 
@@ -108,6 +114,10 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << EOF
     echo "Extracting files..."
     sudo tar -xzf "$DEPLOY_PACKAGE" -C "$REMOTE_WEBROOT" --overwrite
 
+    # tar -x never deletes: retire the tooling an earlier package published.
+    sudo rm -f "$REMOTE_WEBROOT/deploy.sh" "$REMOTE_WEBROOT/build_sdd.py"
+    echo "Pruned tooling that older versions of this script published."
+
     echo "Setting ownership..."
     sudo chown -R www-data:www-data "$REMOTE_WEBROOT"
     sudo chmod -R 755 "$REMOTE_WEBROOT"
@@ -120,11 +130,14 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << EOF
     # Clean up remote temp
     sudo rm -f "/tmp/$(basename $DEPLOY_PACKAGE)"
 
-    echo "Testing Apache configuration..."
-    sudo apache2ctl configtest || true
+    # The server migrated from Apache to nginx; these two lines kept validating
+    # and reloading a service that no longer exists, both silenced with `|| true`,
+    # so a broken nginx config shipped here unnoticed.
+    echo "Testing nginx configuration..."
+    sudo nginx -t
 
-    echo "Reloading Apache..."
-    sudo systemctl reload apache2 || sudo service apache2 reload || true
+    echo "Reloading nginx..."
+    sudo systemctl reload nginx
 
     echo ""
     echo "Deployment completed successfully!"
